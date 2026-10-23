@@ -30,35 +30,57 @@ class XgramUpdateNotes private constructor(
   /** The whole text, when it has no "• " lines. */
   val body: String?
 ) {
+  /** What a section is, from its title or emoji: the screen gives each its own icon, shape and colors. */
+  enum class Kind { NEW, IMPROVED, FIXED, KNOWN_ISSUES, TESTERS, OTHER }
+
   /** "🧪 For testers: members of …": [emoji] "🧪", [title] "For testers", [description] the rest. */
   class Section(val emoji: String?, val title: String, val description: String?, val notes: List<Note>, val paragraphs: List<String>) {
+    val kind: Kind = kindOf(emoji, title)
+
     /** "✨ New": the screen's top features come from it. */
     val isNew: Boolean
-      get() = title.equals("New", ignoreCase = true) || title.startsWith("New ", ignoreCase = true) || emoji?.contains('✨') == true
+      get() = kind == Kind.NEW
   }
 
   /**
-   * One "• " line: "Popup menu (Message menu → Popup menu, off by default): a long press opens …" is the [title]
-   * "Popup menu", [where] "Message menu → Popup menu · off by default" and the [detail] "a long press opens …".
+   * One "• " line. "Popup menu (Message menu → Popup menu, off by default): a long press opens …" has the [name]
+   * "Popup menu", [where] "Message menu → Popup menu · off by default" and the [detail] "A long press opens …" (its
+   * first letter capitalized). A line without a short "Name:" before its text ("Chats slide open more smoothly", or
+   * one with brackets but no colon) has no name: it is all [body].
    */
   class Note(val text: String) {
-    val title: String
+    val name: String?
     val where: String?
     val detail: String?
 
+    /** What the line says: the [detail] after a name, else the whole line. */
+    val body: String
+      get() = detail ?: capitalized(text)
+
     init {
       val colon = colonOutsideBrackets(text)
-      val head = if (colon >= 0) text.substring(0, colon) else text
-      detail = if (colon >= 0) text.substring(colon + 1).trim().ifEmpty { null } else null
-      val open = head.indexOf('(')
-      val close = if (open >= 0) closingBracket(head, open) else -1
-      if (open >= 0 && close > open) {
-        where = head.substring(open + 1, close).split(',').map { it.trim() }.filter { it.isNotEmpty() }.joinToString(" · ").ifEmpty { null }
-        title = (head.substring(0, open) + head.substring(close + 1)).replace(SPACES, " ").trim().ifEmpty { text }
-      } else {
-        where = null
-        title = head.trim().ifEmpty { text }
+      val head = if (colon > 0) text.substring(0, colon).trim() else ""
+      val rest = if (colon > 0) text.substring(colon + 1).trim() else ""
+      var noteName: String? = null
+      var noteWhere: String? = null
+      if (head.isNotEmpty() && rest.isNotEmpty()) {
+        val open = head.indexOf('(')
+        val close = if (open >= 0) closingBracket(head, open) else -1
+        val bracketed = open >= 0 && close > open
+        val candidate = if (bracketed) (head.substring(0, open) + head.substring(close + 1)).replace(SPACES, " ").trim() else head
+        // A sentence with a colon in it is not a name
+        if (candidate.isNotEmpty() && candidate.length <= NAME_MAX) {
+          noteName = candidate
+          noteWhere = if (bracketed) {
+            head.substring(open + 1, close).split(',').map { it.trim() }.filter { it.isNotEmpty() }.joinToString(" · ").ifEmpty { null }
+          } else {
+            null
+          }
+        }
       }
+      name = noteName
+      where = noteWhere
+      detail = if (noteName != null) capitalized(rest) else null
     }
   }
 
@@ -70,12 +92,14 @@ class XgramUpdateNotes private constructor(
   val topNotes: List<Note>
     get() = topSection?.notes?.take(TOP_COUNT) ?: emptyList()
 
-  /** The lines of [section] that "See all changes" shows: all but the top features. */
-  fun moreNotes(section: Section): List<Note> = if (section === topSection) section.notes.drop(TOP_COUNT) else section.notes
+  /** Every "• " line of every section: "See all changes (14)". */
+  val count: Int
+    get() = sections.sumOf { it.notes.size }
 
-  /** Whether "See all changes" has anything to show. */
+  /** Whether "See all changes" shows more than the top features: other lines, headers' text, the intro or the footer. */
   val hasMore: Boolean
-    get() = intro.isNotEmpty() || footer != null || sections.any { moreNotes(it).isNotEmpty() || it.paragraphs.isNotEmpty() }
+    get() = count > topNotes.size || intro.isNotEmpty() || footer != null ||
+      sections.any { it.paragraphs.isNotEmpty() || it.description != null }
 
   companion object {
     const val TOP_COUNT = 3
@@ -154,50 +178,121 @@ class XgramUpdateNotes private constructor(
       return XgramUpdateNotes(intro.toList(), sections.map { it.build() }, pending.joinToString("\n").ifEmpty { null }, null)
     }
 
-    /** An icon for a top feature, from the words of its title (then the rest of it): a sparkle when nothing fits. */
+    /**
+     * An icon for a line from its words: for a name (and where it is) the first keyword of the table that fits, so
+     * "Message menu" is a menu, not a chat; else the keyword its text mentions first, so "Swipe … on a message to
+     * reply, quote, translate" is a swipe. [fallback] when nothing fits.
+     */
     @DrawableRes
     @JvmStatic
-    fun iconFor(note: Note): Int {
-      val name = (note.title + " " + (note.where ?: "")).lowercase()
-      ICONS.firstOrNull { it.first.containsMatchIn(name) }?.let { return it.second }
-      val all = note.text.lowercase()
-      ICONS.firstOrNull { it.first.containsMatchIn(all) }?.let { return it.second }
-      return R.drawable.baseline_auto_awesome_24
+    fun iconFor(note: Note, @DrawableRes fallback: Int = R.drawable.baseline_auto_awesome_24): Int {
+      val name = note.name
+      if (name != null) {
+        val head = (name + " " + (note.where ?: "")).lowercase()
+        ICONS.firstOrNull { it.first.containsMatchIn(head) }?.let { return it.second }
+      }
+      return firstMentioned(note.body.lowercase()) ?: fallback
     }
   }
 }
 
 private val SPACES = Regex("\\s+")
 
+/** A name longer than this ("Name: text") is a sentence with a colon in it. */
+private const val NAME_MAX = 48
+
 private val CAPTION_LABELS = arrayOf("Size:", "Commit:", "SHA-256:", "Source:")
 
-/** Keywords of a top feature and their icon, the first match wins (so "Message menu" is a menu, not a chat). */
+/**
+ * Keywords of a line and their icon, the specific ones first: for a name the first one that fits wins, for a text the
+ * one it mentions first (see [XgramUpdateNotes.iconFor]).
+ */
 private val ICONS: List<Pair<Regex, Int>> = listOf(
-  Regex("\\b(popup|pop-up|menu)") to R.drawable.baseline_more_vert_24,
+  Regex("\\b(popup|pop-up|menus?)\\b") to R.drawable.baseline_more_vert_24,
   Regex("\\bbots?\\b") to R.drawable.deproko_baseline_bots_24,
-  Regex("\\b(camera|lens)") to R.drawable.baseline_camera_alt_24,
-  Regex("\\b(xdrive|drive|cloud)") to R.drawable.baseline_cloud_24,
-  Regex("\\b(lock|passcode|auto-lock)") to R.drawable.baseline_lock_24,
-  Regex("\\b(avatar|profile photo)") to R.drawable.baseline_account_circle_24,
+  Regex("\\b(camera|lens|selfie)") to R.drawable.baseline_camera_alt_24,
+  Regex("\\b(xdrive|drive|cloud|upload)") to R.drawable.baseline_cloud_24,
+  Regex("\\b(lock|passcode|auto-lock|fingerprint)") to R.drawable.baseline_lock_24,
+  Regex("\\b(login|log in|qr|password|two-step)") to R.drawable.baseline_vpn_key_24,
+  Regex("\\b(avatar|profile|account)") to R.drawable.baseline_account_circle_24,
   Regex("\\battach") to R.drawable.deproko_baseline_attach_26,
   Regex("\\bsearch") to R.drawable.baseline_search_24,
-  Regex("\\bbookmark") to R.drawable.baseline_bookmark_24,
-  Regex("\\bnotification") to R.drawable.baseline_notifications_24,
-  Regex("\\b(theme|colou?r|icon|palette|wallpaper)") to R.drawable.baseline_palette_24,
+  Regex("\\b(bookmark|saved\\b)") to R.drawable.baseline_bookmark_24,
+  Regex("\\bquot") to R.drawable.baseline_format_quote_close_24,
   Regex("\\btranslat") to R.drawable.baseline_translate_24,
+  Regex("\\b(swipe|gesture|long press|long-press)") to R.drawable.baseline_gesture_24,
+  Regex("\\b(drag|reorder|rearrang)") to R.drawable.baseline_drag_handle_24,
+  Regex("\\bstickers?\\b") to R.drawable.deproko_baseline_stickers_24,
+  Regex("\\b(emoji|emoticon|reaction)") to R.drawable.baseline_emoticon_outline_24,
+  Regex("\\bgifs?\\b") to R.drawable.deproko_baseline_gif_24,
+  Regex("\\b(record|voice|mic|audio)") to R.drawable.baseline_mic_24,
+  Regex("\\b(music|songs?\\b|player|playlist)") to R.drawable.baseline_music_note_24,
+  Regex("\\b(download|boost)") to R.drawable.baseline_file_download_24,
+  Regex("\\b(notification|notify)") to R.drawable.baseline_notifications_24,
+  Regex("\\b(theme|colou?rs?\\b|icon pack|app icon|palette|wallpaper|accent)") to R.drawable.baseline_palette_24,
+  Regex("\\b(font|text size|formatting)") to R.drawable.baseline_format_text_24,
   Regex("\\bcalls?\\b") to R.drawable.baseline_call_24,
   Regex("\\bvideo") to R.drawable.baseline_videocam_24,
-  Regex("\\b(voice|mic)") to R.drawable.baseline_mic_24,
-  Regex("\\b(photo|image|picture|media)") to R.drawable.baseline_image_24,
+  Regex("\\b(photo|image|picture|media|gallery)") to R.drawable.baseline_image_24,
+  Regex("\\b(files?|documents?)\\b") to R.drawable.baseline_insert_drive_file_24,
   Regex("\\bfolder") to R.drawable.baseline_folder_24,
-  Regex("\\b(emoji|sticker|reaction)") to R.drawable.baseline_emoticon_outline_24,
+  Regex("\\barchiv") to R.drawable.baseline_archive_24,
+  Regex("\\b(pin|pinned)\\b") to R.drawable.deproko_baseline_pin_24,
+  Regex("\\b(ghost|read receipts?|unread|incognito)") to R.drawable.baseline_ghost_24,
+  Regex("\\b(privacy|security|secret)") to R.drawable.baseline_security_24,
+  Regex("\\b(delete|deleted|deleting)\\b") to R.drawable.baseline_delete_24,
+  Regex("\\b(links?|urls?)\\b") to R.drawable.baseline_link_24,
+  Regex("\\b(32-bit|64-bit|apks?\\b|arm64|arm32|armeabi)") to R.drawable.baseline_android_24,
+  Regex("\\b(keyboard|typing|message box)") to R.drawable.baseline_keyboard_24,
+  Regex("\\b(reply|replies)\\b") to R.drawable.baseline_reply_24,
+  Regex("\\bforward") to R.drawable.baseline_forward_24,
+  Regex("\\b(copy|copies)\\b") to R.drawable.baseline_content_copy_24,
+  Regex("\\b(language|languages)\\b") to R.drawable.baseline_language_24,
+  Regex("\\b(locations?|maps?)\\b") to R.drawable.baseline_location_on_24,
+  Regex("\\bpolls?\\b") to R.drawable.baseline_poll_24,
+  Regex("\\b(storage|cache)\\b") to R.drawable.baseline_storage_24,
+  Regex("\\b(sessions?|devices?)\\b") to R.drawable.baseline_devices_other_24,
   Regex("\\b(schedul|remind)") to R.drawable.baseline_schedule_24,
-  Regex("\\b(privacy|security|ghost)") to R.drawable.baseline_security_24,
-  Regex("\\b(group|channel|forum|topic)") to R.drawable.baseline_forum_24,
-  Regex("\\b(chat|message)") to R.drawable.baseline_chat_bubble_24,
+  Regex("\\b(timer|auto-delete|self-destruct)") to R.drawable.baseline_auto_delete_24,
+  Regex("\\bcontacts?\\b") to R.drawable.baseline_contact_phone_24,
+  Regex("\\b(groups?|channels?|forums?|topics?)\\b") to R.drawable.baseline_forum_24,
+  Regex("\\b(settings?|options?)\\b") to R.drawable.baseline_settings_24,
+  Regex("\\b(chats?|messages?)\\b") to R.drawable.baseline_chat_bubble_24,
   Regex("\\b(fix|crash|bug)") to R.drawable.baseline_bug_report_24,
   Regex("\\b(update|install)") to R.drawable.baseline_system_update_24
 )
+
+/** The icon of the keyword [text] mentions first (two at the same place: the table's order), or null. */
+private fun firstMentioned(text: String): Int? {
+  var icon: Int? = null
+  var at = Int.MAX_VALUE
+  for ((regex, drawable) in ICONS) {
+    val match = regex.find(text) ?: continue
+    if (match.range.first < at) {
+      at = match.range.first
+      icon = drawable
+    }
+  }
+  return icon
+}
+
+/** "select part of a message" → "Select part of a message". */
+private fun capitalized(text: String): String =
+  text.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+
+/** A section's kind from its title ("Known issues") or, in another language, its emoji ("⚠️"). */
+private fun kindOf(emoji: String?, title: String): XgramUpdateNotes.Kind {
+  val name = title.lowercase()
+  val symbol = emoji ?: ""
+  return when {
+    name == "new" || name.startsWith("new ") || symbol.contains('✨') -> XgramUpdateNotes.Kind.NEW
+    name.startsWith("improv") || name.startsWith("better") || name.startsWith("changed") || symbol.contains("🛠") || symbol.contains("🔧") -> XgramUpdateNotes.Kind.IMPROVED
+    name.startsWith("fix") || symbol.contains("🐞") || symbol.contains("🐛") -> XgramUpdateNotes.Kind.FIXED
+    name.startsWith("known") || symbol.contains('⚠') -> XgramUpdateNotes.Kind.KNOWN_ISSUES
+    name.contains("tester") || symbol.contains("🧪") -> XgramUpdateNotes.Kind.TESTERS
+    else -> XgramUpdateNotes.Kind.OTHER
+  }
+}
 
 private class SectionBuilder(val emoji: String?, val title: String, val description: String?) {
   val notes = ArrayList<String>()

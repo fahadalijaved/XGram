@@ -13,8 +13,11 @@
 
   <!-- What's new -->
   <string name="XgramUpdWhatsNew">What’s new</string>
-  <string name="XgramUpdSeeAll">See all changes</string>
+  <string name="XgramUpdSeeAll">See all changes (%1$s)</string>
   <string name="XgramUpdSeeLess">Show less</string>
+  <!-- A section's count badge, for TalkBack ("New, 6 changes") -->
+  <string name="XgramUpdChangesOne">%1$s change</string>
+  <string name="XgramUpdChangesMany">%1$s changes</string>
 
   <!-- Actions -->
   <string name="XgramUpdInstallNow">Install now</string>

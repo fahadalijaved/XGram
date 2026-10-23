@@ -19,26 +19,27 @@ import android.graphics.drawable.ColorDrawable
 import android.view.ViewGroup
 import android.view.Window
 import android.view.WindowManager
+import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -58,7 +59,9 @@ import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -71,9 +74,12 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearWavyProgressIndicator
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.ListItemShapes
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.WavyProgressIndicatorDefaults
@@ -83,33 +89,46 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -121,6 +140,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.graphics.shapes.Morph
@@ -157,6 +177,7 @@ import org.thunderdog.challegram.util.AppUpdater
 import java.lang.ref.WeakReference
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 private const val SCRIM = .32f
@@ -172,12 +193,26 @@ private val HERO_SPACE = 360.dp
 
 /** The top of the hero kept for the chips: the logo is centered below it. */
 private val HERO_CHIPS = 40.dp
+private val CHIPS_INSET = 16.dp
+
+/** The hero folded as the body scrolls up: a band with the chips, Open post and a small logo in its middle. */
+private val HERO_BAND = 72.dp
+private val BAND_LOGO = 36.dp
+
+/** The decorations are gone by two thirds of the fold. */
+private const val DECOR_FADE = 1.5f
 private const val HERO_PHOTO_SIZE = 1280
 private const val DRIFT_MS = 40_000
 private const val BREATHE_MS = 2_600
 
 private val BIG_BUTTON = 56.dp
 private val FLAT_WAVE: (Float) -> Float = { 0f }
+
+/** See all changes stops What's new this far under the top of the body. */
+private val REVEAL_MARGIN = 16.dp
+
+/** Frames (a quarter to half a second) the reveal follows the new content's own size spring after its glide. */
+private const val REVEAL_FOLLOW_FRAMES = 30
 
 /** A download the updater hasn't started after this long is given up, with an error line. */
 private const val START_TIMEOUT_MS = 15_000L
@@ -191,8 +226,9 @@ private const val PREVIEW_TIMEOUT_MS = 8_000L
 /**
  * XGram's update screen, "Software update": a card over whatever screen is open. On top a hero (the app's icon in a
  * shape morphing between a soft burst and a 12-sided cookie, over Material shapes drifting on the theme's gradient, or
- * the photo of the release notes when the bot posted one), then the version, the top three changes of the notes with
- * "See all changes", and one button that downloads, checks (SHA-256) and installs the update through [AppUpdater]:
+ * the photo of the release notes when the bot posted one; it folds to a band as the notes scroll up), then the version,
+ * the top three changes of the notes with "See all changes" (every change, grouped by section, in their place), and one
+ * button that downloads, checks (SHA-256) and installs the update through [AppUpdater]:
  * the download's progress, Continue in background and Cancel, then "Checking the file…" and the installer, without a
  * second tap. Later, the scrim and Back close it; the update is offered once, as before.
  *
@@ -539,6 +575,169 @@ private class CardState(installNow: Boolean, var previousState: Int) {
   }
 }
 
+/**
+ * The hero folding as the body scrolls, as a collapsing top app bar: a scroll up first folds it down to its band, a
+ * scroll down unfolds it once the body is back at its top. It folds only as far as the body has left to scroll, so a
+ * card whose notes fit never shrinks under the finger; the hero's height changes the body's range, never the other way
+ * round. [range] is set by the card ([resize]): 0 without a hero.
+ */
+private class HeroFold(private val body: ScrollState) : NestedScrollConnection {
+  /** How far the hero can fold, px: its height less the band's. */
+  var range by mutableFloatStateOf(0f)
+    private set
+
+  /** How far it is folded, px: 0 (open) to [range] (the band). */
+  var folded by mutableFloatStateOf(0f)
+    private set
+
+  private var width = 0.dp
+
+  /**
+   * The hero's [range] in a card [width] wide. A new size (rotated, folded or unfolded: the notes reflow) opens it
+   * again, as the fold may be more than the body has left to scroll now; the body clamps its own scroll.
+   */
+  fun resize(range: Float, width: Dp) {
+    if (range != this.range || width != this.width) {
+      this.range = range
+      this.width = width
+      folded = 0f
+    }
+  }
+
+  /** 0 open, 1 folded down to the band. */
+  val fraction: Float
+    get() = if (range > 0f) (folded / range).coerceIn(0f, 1f) else 0f
+
+  /**
+   * Folds to [target], clamped (a spring's overshoot never goes past the band or the full height); further only by
+   * [room] px.
+   */
+  fun foldTo(target: Float, room: Float) {
+    val current = folded.coerceIn(0f, range)
+    val next = target.coerceIn(0f, range)
+    folded = if (next > current) minOf(next, current + room.coerceAtLeast(0f)) else next
+  }
+
+  override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+    if (available.y >= 0f) {
+      return Offset.Zero
+    }
+    // Up: the hero folds first, by what the body has left to scroll
+    val before = folded.coerceIn(0f, range)
+    foldTo(before - available.y, (body.maxValue - body.value).toFloat())
+    return Offset(0f, before - folded)
+  }
+
+  override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+    if (available.y <= 0f) {
+      return Offset.Zero
+    }
+    // Down past the body's top: the hero unfolds
+    val before = folded.coerceIn(0f, range)
+    foldTo(before - available.y, 0f)
+    return Offset(0f, before - folded)
+  }
+}
+
+/** Where What's new is in the body, for See all changes and Show less, and the reveal running. Main thread. */
+private class ChangesReveal {
+  /** The body's content, inside its scroll. */
+  var content: LayoutCoordinates? = null
+  var label: LayoutCoordinates? = null
+  var job: Job? = null
+
+  /** Show less is on its way up, the swap after it: a second tap changes nothing. */
+  var hiding = false
+
+  /** What's new's top in the body's content, px; null until both are placed. */
+  fun labelTop(): Float? {
+    val inside = content
+    val of = label
+    if (inside == null || of == null || !inside.isAttached || !of.isAttached) {
+      return null
+    }
+    return inside.localPositionOf(of, Offset.Zero).y
+  }
+
+  val labelHeight: Int
+    get() = label?.size?.height ?: 0
+}
+
+/**
+ * See all changes, once the swap is laid out: the body glides so What's new is [margin] under its top, the changes
+ * filling the card, and the hero folds with it ([glide]).
+ */
+private suspend fun revealChanges(
+  scroll: ScrollState,
+  hero: HeroFold,
+  reveal: ChangesReveal,
+  margin: Float,
+  spec: AnimationSpec<Float>?
+) {
+  // The swap is composed in the next frame and laid out in it: the frame after knows where things are
+  withFrameNanos { }
+  withFrameNanos { }
+  if (scroll.isScrollInProgress) {
+    return // the user took over
+  }
+  val labelTop = reveal.labelTop() ?: return
+  glide(scroll, hero, (labelTop - margin).coerceAtLeast(0f), hero.range, spec)
+}
+
+/**
+ * Show less, before the swap, on the whole list (What's new is above it: it stays where it is): back to the top with
+ * the hero open when What's new shows there that way, else What's new to the top as it is ([glide]). The list then
+ * shrinks below the view and the top crossfades in place; the card never shrinks under a folded hero to grow back.
+ */
+private suspend fun hideChanges(
+  scroll: ScrollState,
+  hero: HeroFold,
+  reveal: ChangesReveal,
+  margin: Float,
+  spec: AnimationSpec<Float>?
+) {
+  // A fling still going keeps the scroll (its priority): the swap only
+  val labelTop = reveal.labelTop() ?: return
+  val fromFold = hero.folded.coerceIn(0f, hero.range)
+  // With the hero open the body is shorter by the fold (the card at its full height)
+  val toTop = labelTop + reveal.labelHeight + margin <= scroll.viewportSize - fromFold
+  glide(scroll, hero, if (toTop) 0f else (labelTop - margin).coerceAtLeast(0f), if (toTop) 0f else fromFold, spec)
+}
+
+/**
+ * The body to [scrollTarget] and the hero to [foldTarget] together. The steps are absolute positions on [spec] (at once
+ * without one), so new content growing on its own spring only clamps them, and a few frames more follow it to its end.
+ * A touch on the body stops it (the scroll's own priority).
+ */
+private suspend fun glide(
+  scroll: ScrollState,
+  hero: HeroFold,
+  scrollTarget: Float,
+  foldTarget: Float,
+  spec: AnimationSpec<Float>?
+) {
+  val fromScroll = scroll.value.toFloat()
+  val fromFold = hero.folded.coerceIn(0f, hero.range)
+  scroll.scroll {
+    val step: (Float) -> Unit = { p ->
+      scrollBy(fromScroll + (scrollTarget - fromScroll) * p - scroll.value)
+      // Then the fold, by what the body has left after it: no clamp, no jump, on the next layout
+      hero.foldTo(fromFold + (foldTarget - fromFold) * p, (scroll.maxValue - scroll.value).toFloat())
+    }
+    if (spec == null) {
+      step(1f)
+    } else {
+      animate(0f, 1f, animationSpec = spec) { p, _ -> step(p) }
+    }
+    var frames = 0
+    while (frames < REVEAL_FOLLOW_FRAMES && (scroll.value != scrollTarget.roundToInt() || hero.folded != foldTarget.coerceIn(0f, hero.range))) {
+      withFrameNanos { }
+      step(1f)
+      frames++
+    }
+  }
+}
+
 /** Fades for state changes; instant with Reduce motion. */
 @Composable
 private fun <T> effectsSpec(still: Boolean): FiniteAnimationSpec<T> =
@@ -582,6 +781,9 @@ private fun UpdateScreen(controller: ViewController<*>, screen: ScreenState) {
     }
   }
   val effects = effectsSpec<Float>(still)
+  // The body's scroll lives here for the hero, which folds as the body scrolls up
+  val bodyScroll = rememberScrollState()
+  val heroFold = remember { HeroFold(bodyScroll) }
   // The scrim: a tap on it closes the card (no semantics: TalkBack closes it with Back or Later)
   Box(
     Modifier
@@ -598,6 +800,8 @@ private fun UpdateScreen(controller: ViewController<*>, screen: ScreenState) {
       // A card, not a stretched sheet, on the unfolded Fold and tablets; 312dp on the 344dp cover screen
       val width = if (maxWidth < CARD_MAX_WIDTH) maxWidth else CARD_MAX_WIDTH
       val heroHeight = if (maxHeight < HERO_SPACE) 0.dp else (maxHeight * HERO_SHARE).coerceIn(HERO_MIN_HEIGHT, HERO_MAX_HEIGHT)
+      val heroRange = with(LocalDensity.current) { (heroHeight - HERO_BAND).coerceAtLeast(0.dp).toPx() }
+      SideEffect { heroFold.resize(heroRange, width) }
       Column(
         Modifier
           .width(width)
@@ -610,6 +814,7 @@ private fun UpdateScreen(controller: ViewController<*>, screen: ScreenState) {
           .clip(MaterialTheme.shapes.extraLargeIncreased)
           .background(MaterialTheme.colorScheme.surfaceContainerHigh)
           .pointerInput(Unit) { detectTapGestures { } } // taps on the card never reach the scrim
+          .nestedScroll(heroFold)
       ) {
         val model = screen.model
         val found = model?.found
@@ -619,7 +824,7 @@ private fun UpdateScreen(controller: ViewController<*>, screen: ScreenState) {
         })
         val hero = heroHeight > 0.dp
         if (hero) {
-          Hero(model, screen.preview, heroHeight, still, openPost)
+          Hero(model, screen.preview, heroHeight, heroFold, still, openPost)
         }
         AnimatedContent(
           targetState = model,
@@ -632,7 +837,10 @@ private fun UpdateScreen(controller: ViewController<*>, screen: ScreenState) {
             LoadingBody(screen, still, close)
           } else {
             // Without the hero, its Open post and Preview tag go to the title block
-            UpdateBody(controller, screen, shown, still, openPost = if (hero) null else openPost, previewTag = screen.preview && !hero, close = close)
+            UpdateBody(
+              controller, screen, shown, still, bodyScroll, heroFold,
+              openPost = if (hero) null else openPost, previewTag = screen.preview && !hero, close = close
+            )
           }
         }
       }
@@ -682,6 +890,8 @@ private fun UpdateBody(
   screen: ScreenState,
   model: UpdateModel,
   still: Boolean,
+  scroll: ScrollState,
+  hero: HeroFold,
   openPost: (() -> Unit)?,
   previewTag: Boolean,
   close: () -> Unit
@@ -750,10 +960,15 @@ private fun UpdateBody(
       }
       AppUpdater.State.AVAILABLE -> {
         if (previous == AppUpdater.State.DOWNLOADING) {
-          // Stopped: by Cancel, or by TDLib (an error, the file gone)
+          // Stopped: by Cancel, or by TDLib (an error, the file gone). The preview's pretend download stops only by
+          // Cancel: no line without it
           card.installRequested = false
           card.downloadPending = false
-          card.error = s(if (card.userCanceled) R.string.XgramUpdCanceled else R.string.XgramUpdStopped)
+          card.error = when {
+            card.userCanceled -> s(R.string.XgramUpdCanceled)
+            screen.preview -> null
+            else -> s(R.string.XgramUpdStopped)
+          }
           card.userCanceled = false
         }
         if (card.downloadAgainPending) {
@@ -819,12 +1034,36 @@ private fun UpdateBody(
     flow.cancel()
   }
 
-  val scroll = rememberScrollState()
+  // What's new as opened (What's new: every change); See all changes and Show less bring the changes into view
+  var expanded by remember { mutableStateOf(screen.expanded) }
+  val reveal = remember { ChangesReveal() }
+  val margin = with(LocalDensity.current) { REVEAL_MARGIN.toPx() }
+  val revealSpec: AnimationSpec<Float>? = if (still) null else MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+  val toggle: (Boolean) -> Unit = { expand ->
+    if (expand) {
+      reveal.job?.cancel()
+      expanded = true
+      reveal.job = scope.launch { revealChanges(scroll, hero, reveal, margin, revealSpec) }
+    } else if (!reveal.hiding) {
+      // Up first on the whole list, then the swap: also when a touch stops the glide
+      reveal.job?.cancel()
+      reveal.hiding = true
+      reveal.job = scope.launch {
+        try {
+          hideChanges(scroll, hero, reveal, margin, revealSpec)
+        } finally {
+          reveal.hiding = false
+          expanded = false
+        }
+      }
+    }
+  }
+
   Column(Modifier.fillMaxWidth()) {
     // The notes scroll; the buttons stay at the bottom, whatever the font size
-    Column(Modifier.weight(1f, fill = false).verticalScroll(scroll)) {
+    Column(Modifier.weight(1f, fill = false).verticalScroll(scroll).onPlaced { reveal.content = it }) {
       TitleBlock(model, ready = state == AppUpdater.State.READY_TO_INSTALL, previewTag = previewTag, openPost = openPost)
-      WhatsNew(model.notes, screen.expanded, still)
+      WhatsNew(model.notes, expanded, toggle, still, reveal)
     }
     // A line over the buttons while more of the notes is below
     val divider by animateFloatAsState(if (scroll.canScrollForward) 1f else 0f, effectsSpec(still), label = "xgramUpdateDivider")
@@ -876,67 +1115,82 @@ private fun TitleBlock(model: UpdateModel, ready: Boolean, previewTag: Boolean, 
   }
 }
 
-/** "What's new": the top three changes as rows, then "See all changes" with the rest of the notes. */
+/**
+ * "What's new": the top three changes as rows with "See all changes (14)", which swaps them, in place, for every change
+ * of the notes grouped by section, with Show less at its end ([toggle] brings them into view: [revealChanges],
+ * [hideChanges]).
+ */
 @Composable
-private fun WhatsNew(notes: XgramUpdateNotes, startExpanded: Boolean, still: Boolean) {
+private fun WhatsNew(notes: XgramUpdateNotes, expanded: Boolean, toggle: (Boolean) -> Unit, still: Boolean, reveal: ChangesReveal) {
   val c = MaterialTheme.colorScheme
   val motion = MaterialTheme.motionScheme
-  var expanded by remember { mutableStateOf(startExpanded) }
-  Column(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 12.dp)) {
+  Column(Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 12.dp)) {
     Text(
       s(R.string.XgramUpdWhatsNew),
       style = MaterialTheme.typography.labelLarge,
       color = c.primary,
-      modifier = Modifier.semantics { heading() }
+      modifier = Modifier
+        .padding(horizontal = 24.dp)
+        .onPlaced { reveal.label = it }
+        .semantics { heading() }
     )
-    val top = notes.topNotes
     val body = notes.body
     when {
-      top.isNotEmpty() -> {
-        top.forEachIndexed { index, note ->
-          FeatureRow(note, index, Modifier.padding(top = if (index == 0) 16.dp else 20.dp))
-        }
-        if (notes.hasMore) {
-          val turn by animateFloatAsState(
-            targetValue = if (expanded) 180f else 0f,
-            animationSpec = if (still) snap() else motion.fastSpatialSpec(),
-            label = "xgramUpdateMoreArrow"
-          )
-          // Its text lines up with the rows; the button's own padding sits outside them
-          TextButton(
-            onClick = { expanded = !expanded },
-            shapes = ButtonDefaults.shapes(),
-            modifier = Modifier.padding(top = 12.dp).offset(x = (-12).dp)
-          ) {
-            Text(s(if (expanded) R.string.XgramUpdSeeLess else R.string.XgramUpdSeeAll))
-            Icon(
-              tgxIcon(R.drawable.baseline_keyboard_arrow_down_24),
-              contentDescription = null,
-              modifier = Modifier.padding(start = 4.dp).size(18.dp).graphicsLayer { rotationZ = turn }
-            )
-          }
-          AnimatedVisibility(
-            visible = expanded,
-            enter = if (still) fadeIn(snap()) else expandVertically(motion.defaultSpatialSpec()) + fadeIn(motion.defaultEffectsSpec()),
-            // Shrinking on the effects spring: no overshoot below nothing
-            exit = if (still) fadeOut(snap()) else shrinkVertically(motion.defaultEffectsSpec()) + fadeOut(motion.fastEffectsSpec())
-          ) {
-            AllChanges(notes)
+      notes.topNotes.isEmpty() -> Text(
+        body ?: s(R.string.XgramUpdateNoChangelog),
+        style = MaterialTheme.typography.bodyMedium,
+        color = c.onSurfaceVariant,
+        modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 12.dp)
+      )
+      !notes.hasMore -> TopChanges(notes, onMore = null)
+      else -> {
+        val effects = effectsSpec<Float>(still)
+        AnimatedContent(
+          targetState = expanded,
+          transitionSpec = {
+            fadeIn(effects) togetherWith fadeOut(effects) using SizeTransform(clip = true) { initial, target ->
+              when {
+                still -> snap<IntSize>()
+                target.height > initial.height -> motion.defaultSpatialSpec<IntSize>()
+                // Shrinking on the effects spring: no overshoot below the rows
+                else -> motion.defaultEffectsSpec<IntSize>()
+              }
+            }
+          },
+          label = "xgramUpdateChanges"
+        ) { all ->
+          if (all) {
+            AllChanges(notes, onLess = { toggle(false) })
+          } else {
+            TopChanges(notes, onMore = { toggle(true) })
           }
         }
       }
-      body != null -> Text(
-        body,
-        style = MaterialTheme.typography.bodyMedium,
-        color = c.onSurfaceVariant,
-        modifier = Modifier.padding(top = 12.dp)
-      )
-      else -> Text(
-        s(R.string.XgramUpdateNoChangelog),
-        style = MaterialTheme.typography.bodyMedium,
-        color = c.onSurfaceVariant,
-        modifier = Modifier.padding(top = 12.dp)
-      )
+    }
+  }
+}
+
+/** The top three changes, then See all changes with how many there are ([onMore] null: they are all there is). */
+@Composable
+private fun TopChanges(notes: XgramUpdateNotes, onMore: (() -> Unit)?) {
+  Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+    notes.topNotes.forEachIndexed { index, note ->
+      FeatureRow(note, index, Modifier.padding(top = if (index == 0) 16.dp else 20.dp))
+    }
+    if (onMore != null) {
+      // Its text lines up with the rows; the button's own padding sits outside them
+      TextButton(
+        onClick = onMore,
+        shapes = ButtonDefaults.shapes(),
+        modifier = Modifier.padding(top = 12.dp).offset(x = (-12).dp)
+      ) {
+        Text(s(R.string.XgramUpdSeeAll, Strings.buildCounter(notes.count.toLong())))
+        Icon(
+          tgxIcon(R.drawable.baseline_keyboard_arrow_down_24),
+          contentDescription = null,
+          modifier = Modifier.padding(start = 4.dp).size(18.dp)
+        )
+      }
     }
   }
 }
@@ -948,7 +1202,10 @@ private fun featureShape(index: Int): RoundedPolygon = when (index % 3) {
   else -> MaterialShapes.Arch
 }
 
-/** "Popup menu" with "Message menu → Popup menu · off by default" and what it does, by an icon picked from its words. */
+/**
+ * A top change by an icon picked from its words: "Popup menu" with "Message menu → Popup menu · off by default" and
+ * what it does, or a line without a name as it is, in the body's style (it isn't a title).
+ */
 @Composable
 private fun FeatureRow(note: XgramUpdateNotes.Note, index: Int, modifier: Modifier) {
   val c = MaterialTheme.colorScheme
@@ -962,29 +1219,41 @@ private fun FeatureRow(note: XgramUpdateNotes.Note, index: Int, modifier: Modifi
     ) {
       Icon(tgxIcon(icon), contentDescription = null, tint = content, modifier = Modifier.size(24.dp))
     }
-    Column(Modifier.weight(1f).padding(start = 16.dp)) {
-      Text(
-        note.title,
-        style = MaterialTheme.typography.titleMedium,
-        color = c.onSurface,
-        maxLines = 2,
-        overflow = TextOverflow.Ellipsis
-      )
-      val where = note.where
-      if (where != null) {
+    // A short change sits level with its icon, a longer one starts at its top
+    Column(
+      Modifier.weight(1f).heightIn(min = 48.dp).padding(start = 16.dp),
+      verticalArrangement = Arrangement.Center
+    ) {
+      val name = note.name
+      if (name == null) {
         Text(
-          where,
-          style = MaterialTheme.typography.labelMedium,
-          color = c.primary,
-          maxLines = 2,
-          overflow = TextOverflow.Ellipsis,
-          modifier = Modifier.padding(top = 2.dp)
+          note.body,
+          style = MaterialTheme.typography.bodyLarge,
+          color = c.onSurface,
+          maxLines = 3,
+          overflow = TextOverflow.Ellipsis
         )
-      }
-      val detail = note.detail
-      if (detail != null) {
+      } else {
         Text(
-          detail,
+          name,
+          style = MaterialTheme.typography.titleMedium,
+          color = c.onSurface,
+          maxLines = 2,
+          overflow = TextOverflow.Ellipsis
+        )
+        val where = note.where
+        if (where != null) {
+          Text(
+            where,
+            style = MaterialTheme.typography.labelMedium,
+            color = c.primary,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 2.dp)
+          )
+        }
+        Text(
+          note.body,
           style = MaterialTheme.typography.bodyMedium,
           color = c.onSurfaceVariant,
           maxLines = 3,
@@ -996,27 +1265,48 @@ private fun FeatureRow(note: XgramUpdateNotes.Note, index: Int, modifier: Modifi
   }
 }
 
-/** Everything but the top features: each section with its header and lines, then the closing line as small print. */
+/**
+ * Every change of the notes, the top three too: the intro, then each section under its header as one segmented group
+ * (its own lines after it), then Show less and the closing line as small print. The groups are 16dp in, their text
+ * and the headers' icons line up with the card's 24dp.
+ */
 @Composable
-private fun AllChanges(notes: XgramUpdateNotes) {
-  Column(Modifier.fillMaxWidth().padding(top = 4.dp)) {
+private fun AllChanges(notes: XgramUpdateNotes, onLess: () -> Unit) {
+  Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
     for (line in notes.intro) {
       Paragraph(line)
     }
-    for (section in notes.sections) {
-      val more = notes.moreNotes(section)
-      // The top section shows again only for the lines past its top three
-      if (more.isNotEmpty() || section.paragraphs.isNotEmpty()) {
-        if (section.title.isNotEmpty()) {
-          SectionTitle(section)
-        }
-        for (note in more) {
-          Bullet(note.text)
-        }
-        for (line in section.paragraphs) {
-          Paragraph(line)
+    notes.sections.forEachIndexed { index, section ->
+      val look = sectionLook(section.kind)
+      val first = index == 0 && notes.intro.isEmpty()
+      val titled = section.title.isNotEmpty()
+      if (titled) {
+        SectionHeader(section, look, Modifier.padding(top = if (first) 16.dp else 28.dp))
+      }
+      Column(
+        Modifier.fillMaxWidth().padding(top = if (titled) 12.dp else if (first) 16.dp else 24.dp),
+        verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
+      ) {
+        section.notes.forEachIndexed { i, note ->
+          ChangeItem(note, look, ListItemDefaults.segmentedShapes(index = i, count = section.notes.size))
         }
       }
+      for (line in section.paragraphs) {
+        Paragraph(line)
+      }
+    }
+    // Its text lines up with the headers; the button's own padding sits outside it
+    TextButton(
+      onClick = onLess,
+      shapes = ButtonDefaults.shapes(),
+      modifier = Modifier.padding(top = 12.dp).offset(x = (-4).dp)
+    ) {
+      Text(s(R.string.XgramUpdSeeLess))
+      Icon(
+        tgxIcon(R.drawable.baseline_keyboard_arrow_up_24),
+        contentDescription = null,
+        modifier = Modifier.padding(start = 4.dp).size(18.dp)
+      )
     }
     val footer = notes.footer
     if (footer != null) {
@@ -1025,50 +1315,138 @@ private fun AllChanges(notes: XgramUpdateNotes) {
   }
 }
 
+/** A section's icon, the shape it sits in and their colors, by what the section is. */
+private class SectionLook(@DrawableRes val icon: Int, val shape: RoundedPolygon, val container: Color, val content: Color)
+
 @Composable
-private fun SectionTitle(section: XgramUpdateNotes.Section) {
+private fun sectionLook(kind: XgramUpdateNotes.Kind): SectionLook {
   val c = MaterialTheme.colorScheme
-  Column(Modifier.fillMaxWidth().padding(top = 16.dp)) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-      val emoji = section.emoji
-      if (emoji != null) {
-        Text(emoji, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(end = 8.dp).clearAndSetSemantics { })
+  return when (kind) {
+    XgramUpdateNotes.Kind.NEW -> SectionLook(R.drawable.baseline_auto_awesome_24, MaterialShapes.SoftBurst, c.primaryContainer, c.onPrimaryContainer)
+    XgramUpdateNotes.Kind.IMPROVED -> SectionLook(R.drawable.baseline_tune_24, MaterialShapes.Cookie6Sided, c.secondaryContainer, c.onSecondaryContainer)
+    XgramUpdateNotes.Kind.FIXED -> SectionLook(R.drawable.baseline_bug_report_24, MaterialShapes.Clover4Leaf, c.tertiaryContainer, c.onTertiaryContainer)
+    XgramUpdateNotes.Kind.KNOWN_ISSUES -> SectionLook(R.drawable.baseline_warning_24, MaterialShapes.Cookie4Sided, c.errorContainer, c.onErrorContainer)
+    XgramUpdateNotes.Kind.TESTERS -> SectionLook(R.drawable.templarian_baseline_flask_24, MaterialShapes.Pentagon, c.surfaceContainerHighest, c.onSurface)
+    XgramUpdateNotes.Kind.OTHER -> SectionLook(R.drawable.baseline_article_24, MaterialShapes.Circle, c.surfaceContainerHighest, c.onSurfaceVariant)
+  }
+}
+
+/**
+ * "🧪 For testers: members of …": the kind's icon in its shape, "For testers" with how many lines it has, the rest
+ * under it. One heading for TalkBack ("For testers, 2 changes, members of …").
+ */
+@Composable
+private fun SectionHeader(section: XgramUpdateNotes.Section, look: SectionLook, modifier: Modifier) {
+  val c = MaterialTheme.colorScheme
+  Row(
+    modifier
+      .fillMaxWidth()
+      .padding(horizontal = 8.dp)
+      .semantics(mergeDescendants = true) { heading() },
+    verticalAlignment = Alignment.Top
+  ) {
+    Box(
+      Modifier.size(40.dp).clip(look.shape.toShape()).background(look.container),
+      contentAlignment = Alignment.Center
+    ) {
+      Icon(tgxIcon(look.icon), contentDescription = null, tint = look.content, modifier = Modifier.size(20.dp))
+    }
+    // A title alone sits level with the icon; with its text under it, it starts at the icon's top
+    Column(
+      Modifier.weight(1f).heightIn(min = 40.dp).padding(start = 16.dp),
+      verticalArrangement = Arrangement.Center
+    ) {
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+          section.title,
+          style = MaterialTheme.typography.titleMedium,
+          color = c.onSurface,
+          modifier = Modifier.weight(1f, fill = false)
+        )
+        CountBadge(section.notes.size, look, Modifier.padding(start = 8.dp))
       }
-      Text(
-        section.title,
-        style = MaterialTheme.typography.titleSmall,
-        color = c.onSurface,
-        modifier = Modifier.semantics { heading() }
-      )
-    }
-    val description = section.description
-    if (description != null) {
-      Text(
-        description,
-        style = MaterialTheme.typography.bodySmall,
-        color = c.onSurfaceVariant,
-        modifier = Modifier.padding(top = 2.dp)
-      )
+      val description = section.description
+      if (description != null) {
+        Text(
+          description,
+          style = MaterialTheme.typography.bodyMedium,
+          color = c.onSurfaceVariant,
+          modifier = Modifier.padding(top = 2.dp)
+        )
+      }
     }
   }
 }
 
+/** How many lines a section has, in a pill of its colors; TalkBack reads "6 changes". */
 @Composable
-private fun Bullet(text: String) {
-  val c = MaterialTheme.colorScheme
-  Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
-    Text("•", style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, modifier = Modifier.width(16.dp).clearAndSetSemantics { })
-    Text(text, style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, modifier = Modifier.weight(1f))
-  }
+private fun CountBadge(count: Int, look: SectionLook, modifier: Modifier) {
+  val counter = Strings.buildCounter(count.toLong())
+  val description = s(if (count == 1) R.string.XgramUpdChangesOne else R.string.XgramUpdChangesMany, counter)
+  Text(
+    counter,
+    style = MaterialTheme.typography.labelMedium,
+    color = look.content,
+    textAlign = TextAlign.Center,
+    maxLines = 1,
+    modifier = modifier
+      .clip(CircleShape)
+      .background(look.container)
+      .widthIn(min = 24.dp)
+      .padding(horizontal = 8.dp, vertical = 2.dp)
+      .clearAndSetSemantics { contentDescription = description }
+  )
 }
 
+/**
+ * One line of the notes in its section's group, whole: its name with what it does under it (and where it is, in the
+ * accent), or a line without a name as it is, in the body's style. A small icon from its words (else the section's).
+ * The rows are the card's lowest surface: white on its grey in the light, a recess in the dark and in Pure black.
+ */
+@Composable
+private fun ChangeItem(note: XgramUpdateNotes.Note, look: SectionLook, shapes: ListItemShapes) {
+  val c = MaterialTheme.colorScheme
+  val icon = remember(note, look.icon) { XgramUpdateNotes.iconFor(note, look.icon) }
+  val name = note.name
+  SegmentedListItem(
+    shapes = shapes,
+    modifier = Modifier.fillMaxWidth(),
+    leadingContent = { Icon(tgxIcon(icon), contentDescription = null, modifier = Modifier.size(20.dp)) },
+    supportingContent = if (name == null) null else {
+      {
+        Column {
+          val where = note.where
+          if (where != null) {
+            Text(
+              where,
+              style = MaterialTheme.typography.labelMedium,
+              color = c.primary,
+              modifier = Modifier.padding(bottom = 2.dp)
+            )
+          }
+          Text(note.body)
+        }
+      }
+    },
+    colors = ListItemDefaults.segmentedColors(containerColor = c.surfaceContainerLowest),
+    content = {
+      if (name != null) {
+        Text(name, style = MaterialTheme.typography.bodyLargeEmphasized)
+      } else {
+        Text(note.body)
+      }
+    }
+  )
+}
+
+/** A line of the notes that isn't a "• " line, at the card's 24dp. */
 @Composable
 private fun Paragraph(text: String) {
   Text(
     text,
     style = MaterialTheme.typography.bodyMedium,
     color = MaterialTheme.colorScheme.onSurfaceVariant,
-    modifier = Modifier.padding(top = 8.dp)
+    modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 12.dp)
   )
 }
 
@@ -1088,7 +1466,7 @@ private fun Footer(text: String) {
     styled,
     style = MaterialTheme.typography.bodySmall,
     color = MaterialTheme.colorScheme.onSurfaceVariant,
-    modifier = Modifier.padding(top = 16.dp)
+    modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp)
   )
 }
 
@@ -1280,40 +1658,69 @@ private fun StillIndicator(size: Dp) {
 
 /**
  * The top of the card, clipped by its corners: the generated art, or the notes' photo once it has loaded (a fade
- * between them), with the kind ("CI build" or "Stable") and Open post in its corners. Decoration only for TalkBack,
- * but for Open post.
+ * between them), with the kind ("CI build" or "Stable") and Open post in its corners. It folds as the body scrolls up
+ * ([fold]), from [height] down to the band, which keeps the chips and Open post. Decoration only for TalkBack, but for
+ * Open post.
  */
 @Composable
-private fun Hero(model: UpdateModel?, preview: Boolean, height: Dp, still: Boolean, onOpenPost: (() -> Unit)?) {
+private fun Hero(model: UpdateModel?, preview: Boolean, height: Dp, fold: HeroFold, still: Boolean, onOpenPost: (() -> Unit)?) {
   val photo = rememberHeroPhoto(model)
   val photoShown by animateFloatAsState(if (photo != null) 1f else 0f, effectsSpec(still), label = "xgramUpdatePhoto")
-  Box(Modifier.fillMaxWidth().height(height).clipToBounds()) {
+  // The chips' row, so the folded logo keeps clear of them and lines up with them
+  var chips by remember { mutableStateOf(IntSize.Zero) }
+  Box(
+    Modifier
+      .fillMaxWidth()
+      .layout { measurable, constraints ->
+        // The fold is read here, not while composing: a scroll only lays the card out again. Never below the band or
+        // above the full height, whatever a spring does
+        val full = height.roundToPx()
+        val shown = (full - fold.folded.roundToInt())
+          .coerceIn(minOf(HERO_BAND.roundToPx(), full), full)
+          .coerceIn(constraints.minHeight, constraints.maxHeight)
+        val placeable = measurable.measure(constraints.copy(minHeight = shown, maxHeight = shown))
+        layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+      }
+      .clipToBounds()
+  ) {
     if (photo == null || photoShown < 1f) {
-      HeroArt(still, Modifier.matchParentSize())
+      // Laid out at the full height from the top: folding uncovers less of it, nothing in it moves but the logo
+      HeroArt(
+        still,
+        fold,
+        chips = { chips },
+        modifier = Modifier.fillMaxWidth().wrapContentHeight(Alignment.Top, unbounded = true).height(height)
+      )
     }
     if (photo != null) {
+      // Cropped at the full height too: folding uncovers less of it, it never zooms or slides
       val image = remember(photo) { photo.asImageBitmap() }
       Image(
         image,
         contentDescription = null,
         contentScale = ContentScale.Crop,
-        modifier = Modifier.matchParentSize().graphicsLayer { alpha = photoShown }
+        modifier = Modifier
+          .fillMaxWidth()
+          .wrapContentHeight(Alignment.Top, unbounded = true)
+          .height(height)
+          .graphicsLayer { alpha = photoShown }
       )
     }
     // The chips keep clear of Open post, whatever the font size
-    Row(
+    Box(
       Modifier
         .align(Alignment.TopStart)
         .fillMaxWidth()
-        .padding(start = 16.dp, top = 16.dp, end = if (onOpenPost != null) 72.dp else 16.dp)
-        .clearAndSetSemantics { },
-      horizontalArrangement = Arrangement.spacedBy(8.dp)
+        .padding(start = CHIPS_INSET, top = CHIPS_INSET, end = if (onOpenPost != null) 72.dp else CHIPS_INSET)
+        .clearAndSetSemantics { }
     ) {
-      if (model != null) {
-        HeroChip(s(if (model.isStable) R.string.XgramUpdateKindStable else R.string.XgramUpdateKindCi))
-      }
-      if (preview) {
-        HeroChip(s(R.string.XgramUpdPreviewTag))
+      Row(Modifier.onSizeChanged { chips = it }, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (model != null) {
+          HeroChip(s(if (model.isStable) R.string.XgramUpdateKindStable else R.string.XgramUpdateKindCi))
+        }
+        if (preview) {
+          HeroChip(s(R.string.XgramUpdPreviewTag))
+        }
       }
     }
     if (onOpenPost != null) {
@@ -1361,10 +1768,12 @@ private fun heroFile(photo: TdApi.Photo): TdApi.File? {
 
 /**
  * The generated hero: the theme's primaryContainer to tertiaryContainer, four large Material shapes at low alpha
- * turning and drifting slowly, and the app's icon in the middle. Still with Reduce motion.
+ * turning and drifting slowly, and the app's icon in the middle. Still with Reduce motion. As the hero folds ([fold])
+ * the shapes fade and the icon shrinks up into the band, level with the chips ([chips]' row, px), fading out instead
+ * where they reach the band's middle.
  */
 @Composable
-private fun HeroArt(still: Boolean, modifier: Modifier) {
+private fun HeroArt(still: Boolean, fold: HeroFold, chips: () -> IntSize, modifier: Modifier) {
   val c = MaterialTheme.colorScheme
   val transition = if (still) null else rememberInfiniteTransition(label = "xgramUpdateHero")
   val drift = if (transition == null) null else transition.animateFloat(
@@ -1386,20 +1795,47 @@ private fun HeroArt(still: Boolean, modifier: Modifier) {
   ) {
     val w = maxWidth
     val h = maxHeight
+    val widthPx = constraints.maxWidth
+    val shapesShown = { (1f - fold.fraction * DECOR_FADE).coerceIn(0f, 1f) }
     // Whole turns per cycle, so the restart never jumps
-    Decoration(MaterialShapes.Cookie9Sided, h * .8f, -(h * .22f), -(h * .26f), c.primary.copy(alpha = .14f), 1f, 0f, drift)
-    Decoration(MaterialShapes.Sunny, h * .64f, w - h * .44f, h * .5f, c.tertiary.copy(alpha = .18f), -1f, .25f, drift)
-    Decoration(MaterialShapes.Clover4Leaf, h * .3f, w * .62f, h * .12f, c.secondary.copy(alpha = .2f), 2f, .5f, drift)
-    Decoration(MaterialShapes.Pill, h * .36f, w * .16f, h * .62f, c.onPrimaryContainer.copy(alpha = .08f), -1f, .75f, drift)
+    Decoration(MaterialShapes.Cookie9Sided, h * .8f, -(h * .22f), -(h * .26f), c.primary.copy(alpha = .14f), 1f, 0f, drift, shapesShown)
+    Decoration(MaterialShapes.Sunny, h * .64f, w - h * .44f, h * .5f, c.tertiary.copy(alpha = .18f), -1f, .25f, drift, shapesShown)
+    Decoration(MaterialShapes.Clover4Leaf, h * .3f, w * .62f, h * .12f, c.secondary.copy(alpha = .2f), 2f, .5f, drift, shapesShown)
+    Decoration(MaterialShapes.Pill, h * .36f, w * .16f, h * .62f, c.onPrimaryContainer.copy(alpha = .08f), -1f, .75f, drift, shapesShown)
     // Centered in the space under the chips' row, so the chips don't cover it on short heroes or at large font sizes
     val logo = minOf(h * .5f, h - HERO_CHIPS - 24.dp).coerceIn(56.dp, 104.dp)
-    LogoMorph(logo, breathe, drift, Modifier.align(Alignment.Center).padding(top = HERO_CHIPS))
+    LogoMorph(
+      logo,
+      breathe,
+      drift,
+      Modifier
+        .align(Alignment.Center)
+        .padding(top = HERO_CHIPS)
+        .graphicsLayer {
+          // Folding: down to the band's size, its middle from (h + chips) / 2 up to the chips' middle, the line Open
+          // post is centered on too (the band's middle without chips), never so low the band cuts it
+          val f = fold.fraction
+          val scale = 1f + (BAND_LOGO.toPx() / logo.toPx() - 1f) * f
+          scaleX = scale
+          scaleY = scale
+          val row = chips()
+          val middle = (if (row.height > 0) CHIPS_INSET.toPx() + row.height / 2f else HERO_BAND.toPx() / 2f)
+            .coerceAtMost(HERO_BAND.toPx() - BAND_LOGO.toPx() / 2f)
+          translationY = (2f * middle - h.toPx() - HERO_CHIPS.toPx()) / 2f * f
+          // The chips reach the band's middle (two chips, large fonts, the cover screen): out by half the fold
+          val clear = CHIPS_INSET.toPx() + row.width + 8.dp.toPx() <= (widthPx - BAND_LOGO.toPx()) / 2f
+          alpha = if (clear) 1f else (1f - 2f * f).coerceIn(0f, 1f)
+        }
+    )
   }
 }
 
-/** A shape of the hero at ([x], [y]) from the start corner, turning [turns] times and circling a few dp per cycle. */
+/**
+ * A shape of the hero at ([x], [y]) from the start corner, turning [turns] times and circling a few dp per cycle, at
+ * [shown] alpha (it fades as the hero folds).
+ */
 @Composable
-private fun Decoration(shape: RoundedPolygon, diameter: Dp, x: Dp, y: Dp, color: Color, turns: Float, seed: Float, drift: State<Float>?) {
+private fun Decoration(shape: RoundedPolygon, diameter: Dp, x: Dp, y: Dp, color: Color, turns: Float, seed: Float, drift: State<Float>?, shown: () -> Float) {
   Box(
     Modifier
       .offset(x, y)
@@ -1410,6 +1846,7 @@ private fun Decoration(shape: RoundedPolygon, diameter: Dp, x: Dp, y: Dp, color:
         rotationZ = 360f * turns * p
         translationX = sin(angle) * 8.dp.toPx()
         translationY = cos(angle) * 6.dp.toPx()
+        alpha = shown()
       }
       .clip(shape.toShape())
       .background(color)
