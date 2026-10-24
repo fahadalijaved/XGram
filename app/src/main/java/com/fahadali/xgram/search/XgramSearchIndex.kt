@@ -54,7 +54,7 @@ internal object XgramSearchIndex {
     R.id.btn_xgramHideSponsored -> intArrayOf(R.string.XgramSearchKwAds)
     R.id.btn_xgramExportSettings, R.id.btn_xgramImportSettings -> intArrayOf(R.string.XgramSearchKwBackup)
     R.id.btn_xgramUpdateChannel, R.id.btn_xgramUpdateCheck, R.id.btn_xgramAboutVersion -> intArrayOf(R.string.XgramSearchKwVersion, R.string.XgramSearchKwUpdateChannel)
-    R.id.btn_xgramExpressive, R.id.btn_xgramComposeTgx -> intArrayOf(R.string.XgramSearchKwExpressive)
+    R.id.btn_xgramExpressive -> intArrayOf(R.string.XgramSearchKwExpressive)
     R.id.btn_xgramColorSource -> intArrayOf(R.string.XgramSearchKwColors, R.string.XgramSearchKwMaterialYou, R.string.XgramSearchKwExpressive)
     R.id.btn_xgramAllowScreenshots, R.id.btn_xgramSaveProtected, R.id.btn_xgramBlockContentCapture -> intArrayOf(R.string.XgramSearchKwScreenshot)
     R.id.btn_xgramChatListView -> intArrayOf(R.string.XgramSearchKwChatListView)

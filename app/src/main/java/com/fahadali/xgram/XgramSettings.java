@@ -1750,11 +1750,9 @@ public final class XgramSettings {
   private volatile Boolean composeTgxPages;
 
   public boolean composeTgxPages () {
-    Boolean value = composeTgxPages;
-    if (value == null) {
-      composeTgxPages = value = pmc().getBoolean(KEY_COMPOSE_TGX_PAGES, true);
-    }
-    return value;
+    // Expressive design is the one switch (owner, 2026-10-24): its own "New look for Telegram X pages" row is gone, so
+    // Telegram X's pages always follow it, whatever an older build stored
+    return true;
   }
 
   public void setComposeTgxPages (boolean value) {

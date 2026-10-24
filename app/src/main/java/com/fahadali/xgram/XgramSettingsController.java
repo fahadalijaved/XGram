@@ -797,15 +797,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     final boolean expressive = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
     if (com.fahadali.xgram.appearance.XgramExpressive.isAvailable()) { // Android 13+
       items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
-      if (expressive) {
-        // Telegram X's own pages drawn in Compose (com.fahadali.xgram.compose.tgx): only with Expressive design
-        addRows(items,
-          toggle(R.id.btn_xgramExpressive, R.string.XgramExpressive, R.string.XgramExpressiveSub),
-          toggle(R.id.btn_xgramComposeTgx, R.string.XgramComposeTgx, R.string.XgramComposeTgxSub)
-        );
-      } else {
-        addRows(items, toggle(R.id.btn_xgramExpressive, R.string.XgramExpressive, R.string.XgramExpressiveSub));
-      }
+      // One switch: Telegram X's own pages follow Expressive design (XgramSettings.composeTgxPages)
+      addRows(items, toggle(R.id.btn_xgramExpressive, R.string.XgramExpressive, R.string.XgramExpressiveSub));
       items.add(description(expressive ? R.string.XgramExpressiveNote : R.string.XgramExpressiveNoteClassic));
     }
 
