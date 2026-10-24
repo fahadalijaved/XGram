@@ -41,6 +41,7 @@ notes=""
 kind=""
 to=channel
 announce=false
+pin=false
 send=false
 while (($# > 0)); do
   case "$1" in
@@ -51,12 +52,13 @@ while (($# > 0)); do
     --kind) kind=${2:?}; shift 2 ;;
     --to) to=${2:?}; shift 2 ;;
     --announce) announce=true; shift ;;
+    --pin) pin=true; shift ;;
     --send) send=true; shift ;;
     *) die "Unknown argument: $1" ;;
   esac
 done
 [[ -n "$dir" && -n "$version" && -n "$commit" && -n "$notes" ]] ||
-  die "usage: publish-telegram.sh --dir DIR --version V --commit SHA --notes FILE [--kind ci|stable] [--to channel|updates] [--announce] [--send]"
+  die "usage: publish-telegram.sh --dir DIR --version V --commit SHA --notes FILE [--kind ci|stable] [--to channel|updates] [--announce] [--pin] [--send]"
 [[ -z "$kind" || "$kind" == ci || "$kind" == stable ]] || die "--kind must be ci or stable, got: $kind"
 [[ "$to" == channel || "$to" == updates ]] || die "--to must be channel or updates, got: $to"
 # CI builds go to the XGram CI channel only; the Updates topic is for stable releases.
@@ -163,6 +165,9 @@ if [[ -n "$kind" ]]; then
 fi
 if [[ "$announce" == true ]]; then
   args+=(--announce updates)
+fi
+if [[ "$pin" == true ]]; then
+  args+=(--pin) # pin the release post (Stable releases in Updates)
 fi
 
 sub_help=$("$py" "$bot" publish --help 2>&1 || true)
