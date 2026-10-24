@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: the photo editor's Filled ellipse (Shapes) (com.fahadali.xgram.editor.XgramPaintTools), drawn as the XGram Line icons -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+  android:width="24dp"
+  android:height="24dp"
+  android:viewportWidth="24"
+  android:viewportHeight="24">
+  <path
+    android:pathData="M2.1,12 A9.9,7.9 0 1,0 21.9,12 A9.9,7.9 0 1,0 2.1,12 Z"
+    android:fillColor="#FF000000" />
+</vector>

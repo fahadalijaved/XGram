@@ -651,7 +651,7 @@ public class DrawAlgorithms {
         c.restore();
         if (paintState != null) {
           c.clipRect(x, y, x + bitmapWidth, y + bitmapHeight);
-          paintState.draw(c, x, y, bitmapWidth, bitmapHeight);
+          paintState.draw(c, x, y, bitmapWidth, bitmapHeight, bitmap, mirrorHorizontallyFactor >= .5f, mirrorVerticallyFactor >= .5f); // XGram: the photo under it
         }
         c.restore();
       } else {
@@ -670,7 +670,7 @@ public class DrawAlgorithms {
         c.restore();
         if (paintState != null && !paintState.isEmpty()) {
           c.clipRect(0, 0, viewWidth, viewHeight);
-          paintState.draw(c,  0, 0, viewWidth, viewHeight);
+          paintState.draw(c,  0, 0, viewWidth, viewHeight, bitmap, mirrorHorizontallyFactor >= .5f, mirrorVerticallyFactor >= .5f); // XGram: the photo under it
         }
         if (saved) {
           c.restore();
@@ -680,6 +680,11 @@ public class DrawAlgorithms {
   }
 
   public static void drawPainting (Canvas c, Bitmap bitmap, @Nullable Rect src, Rect dst, @NonNull PaintState state) {
+    drawPainting(c, bitmap, src, dst, state, false, false);
+  }
+
+  /** XGram: {@code bitmap}, mirrored as drawn, is the photo under the drawing for the blur and pixelate brushes. */
+  public static void drawPainting (Canvas c, Bitmap bitmap, @Nullable Rect src, Rect dst, @NonNull PaintState state, boolean mirrorHorizontally, boolean mirrorVertically) {
     int srcWidth, srcHeight;
     int x, y;
     if (src != null) {
@@ -699,7 +704,7 @@ public class DrawAlgorithms {
     if (scaleX != 1f || scaleY != 1f) {
       c.scale(scaleX, scaleY, dst.centerX(), dst.centerY());
     }
-    state.draw(c, x, y, bitmap.getWidth(), bitmap.getHeight());
+    state.draw(c, x, y, bitmap.getWidth(), bitmap.getHeight(), bitmap, mirrorHorizontally, mirrorVertically);
     c.restore();
   }
 

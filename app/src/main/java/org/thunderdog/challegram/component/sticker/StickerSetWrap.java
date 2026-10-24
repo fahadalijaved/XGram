@@ -287,6 +287,13 @@ public class StickerSetWrap extends FrameLayoutFix implements StickersListContro
 
   @Override
   public boolean onStickerClick (View view, TGStickerObj sticker, boolean isMenuClick, TdApi.MessageSendOptions sendOptions) {
+    if (com.fahadali.xgram.editor.XgramStickerPicker.isPicking()) { // XGram: opened from the photo editor's picker: on the photo, never to the chat behind the viewer
+      if (com.fahadali.xgram.editor.XgramStickerPicker.pickFromStickerSet(sticker)) {
+        popupLayout.hideWindow(true);
+        return true;
+      }
+      return false;
+    }
     NavigationController navigation = UI.getContext(getContext()).navigation();
     if (navigation != null) {
       ViewController<?> c = navigation.getCurrentStackItem();
@@ -315,7 +322,7 @@ public class StickerSetWrap extends FrameLayoutFix implements StickersListContro
   @Override
   public long getStickerOutputChatId () {
     NavigationController navigation = UI.getContext(getContext()).navigation();
-    if (navigation != null) {
+    if (navigation != null && !com.fahadali.xgram.editor.XgramStickerPicker.isPicking()) { // XGram: no chat for the photo editor's picker
       ViewController<?> c = navigation.getCurrentStackItem();
       if (c instanceof MessagesController && ((MessagesController) c).canWriteMessages()) {
         return c.getChatId();

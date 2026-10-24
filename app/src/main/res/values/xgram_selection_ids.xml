@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: Select text, see com.fahadali.xgram.chats.XgramTextSelection -->
+  <!-- The message menu's Select text -->
+  <item type="id" name="btn_xgramSelectText" />
+  <!-- Settings → XGram → Messages: Long press on text selects it -->
+  <item type="id" name="btn_xgramTextSelectDrag" />
+  <!-- The toolbar over the selection -->
+  <item type="id" name="btn_xgramSelCopy" />
+  <item type="id" name="btn_xgramSelQuote" />
+  <item type="id" name="btn_xgramSelTranslate" />
+  <item type="id" name="btn_xgramSelShare" />
+  <item type="id" name="btn_xgramSelAll" />
+</resources>

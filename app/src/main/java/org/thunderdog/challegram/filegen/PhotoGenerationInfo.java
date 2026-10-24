@@ -174,7 +174,9 @@ public class PhotoGenerationInfo extends GenerationInfo {
 
       Bitmap bitmapRegion = null;
       Rect regionRect = null;
-      if (Config.CROP_USE_REGION_READER && opts.inSampleSize > 1 && cropState.getDegreesAroundCenter() == 0) { // TODO BitmapRegionDecoder support for getDegreesAroundCenter() != 0
+      // XGram: not when blur or pixelate strokes paint with the photo: their copy is made from the whole photo, as in
+      // the editor (one of the crop alone shifts the pixelate grid and blurs its clamped edges); cropped in memory instead
+      if (Config.CROP_USE_REGION_READER && opts.inSampleSize > 1 && cropState.getDegreesAroundCenter() == 0 && (paintState == null || !paintState.hasBaseDrawings())) { // TODO BitmapRegionDecoder support for getDegreesAroundCenter() != 0
         BitmapRegionDecoder decoder = null;
         try {
           regionRect = new Rect();
@@ -227,7 +229,11 @@ public class PhotoGenerationInfo extends GenerationInfo {
     }
   }
 
-  private void drawPaintState (Canvas c, int bitmapWidth, int bitmapHeight) {
+  /**
+   * XGram: {@code source} is the photo just drawn under the paint, mirrored as it was drawn: the blur and pixelate
+   * brushes paint with it. It must not be recycled yet.
+   */
+  private void drawPaintState (Canvas c, int bitmapWidth, int bitmapHeight, Bitmap source, boolean sourceMirrorHorizontally, boolean sourceMirrorVertically) {
     if (paintState != null) {
       if (regionDecoderState == REGION_OK) {
         float scaleX = (float) bitmapWidth / (float) regionRect.width();
@@ -238,9 +244,10 @@ public class PhotoGenerationInfo extends GenerationInfo {
         int left = (int) ((float) regionRect.left * scaleX);
         int top = (int) ((float) regionRect.top * scaleY);
 
-        paintState.draw(c, -left, -top, baseWidth, baseHeight);
+        // XGram: the region bitmap covers its own rect, inside the whole photo's drawing
+        paintState.draw(c, -left, -top, baseWidth, baseHeight, source, sourceMirrorHorizontally, sourceMirrorVertically, new android.graphics.RectF(0, 0, bitmapWidth, bitmapHeight));
       } else {
-        paintState.draw(c, 0,0, bitmapWidth, bitmapHeight);
+        paintState.draw(c, 0,0, bitmapWidth, bitmapHeight, source, sourceMirrorHorizontally, sourceMirrorVertically);
       }
     }
   }
@@ -299,6 +306,7 @@ public class PhotoGenerationInfo extends GenerationInfo {
         if (scale != 1f) {
           c.scale(scale, scale, w / 2, h / 2);
         }
+        final boolean drawnMirrorHorizontal = needMirrorHorizontal, drawnMirrorVertical = needMirrorVertical; // XGram
         if (needMirrorHorizontal || needMirrorVertical) {
           c.save();
           c.scale(needMirrorHorizontal ? -1 : 1, needMirrorVertical ? -1 : 1, w / 2f, h / 2f);
@@ -310,7 +318,7 @@ public class PhotoGenerationInfo extends GenerationInfo {
           needMirrorVertical = false;
         }
         if (paintState != null) {
-          drawPaintState(c, source.getWidth(), source.getHeight());
+          drawPaintState(c, source.getWidth(), source.getHeight(), source, drawnMirrorHorizontal, drawnMirrorVertical);
           drawingComplete = true;
         }
         source.recycle();
@@ -330,6 +338,7 @@ public class PhotoGenerationInfo extends GenerationInfo {
     if (paintState != null && !paintState.isEmpty() && !drawingComplete) {
       Bitmap altered = Bitmap.createBitmap(source.getWidth(), source.getHeight(), Bitmap.Config.ARGB_8888);
       Canvas c = new Canvas(altered);
+      final boolean drawnMirrorHorizontal = needMirrorHorizontal, drawnMirrorVertical = needMirrorVertical; // XGram
       if (needMirrorHorizontal || needMirrorVertical) {
         c.save();
         c.scale(needMirrorHorizontal ? -1 : 1, needMirrorVertical ? -1 : 1, source.getWidth() / 2f, source.getHeight() / 2f);
@@ -340,7 +349,7 @@ public class PhotoGenerationInfo extends GenerationInfo {
         needMirrorHorizontal = false;
         needMirrorVertical = false;
       }
-      drawPaintState(c, source.getWidth(), source.getHeight());
+      drawPaintState(c, source.getWidth(), source.getHeight(), source, drawnMirrorHorizontal, drawnMirrorVertical);
       source.recycle();
       source = altered;
       U.recycle(c);

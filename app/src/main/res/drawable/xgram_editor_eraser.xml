@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: the photo editor's Eraser (com.fahadali.xgram.editor.XgramPaintTools), drawn as the XGram Line icons -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+  android:width="24dp"
+  android:height="24dp"
+  android:viewportWidth="24"
+  android:viewportHeight="24">
+  <path
+    android:pathData="M20.49,8.17 L14.83,2.51 L3.51,13.83 L9.17,19.49 Z"
+    android:fillColor="#00000000"
+    android:strokeColor="#FF000000"
+    android:strokeWidth="1.8"
+    android:strokeLineCap="round"
+    android:strokeLineJoin="round" />
+  <path
+    android:pathData="M3.51,13.83 L8.04,9.3 L13.7,14.96 L9.17,19.49 Z"
+    android:fillColor="#FF000000" />
+  <path
+    android:pathData="M11,21 L20,21"
+    android:fillColor="#00000000"
+    android:strokeColor="#FF000000"
+    android:strokeWidth="1.8"
+    android:strokeLineCap="round"
+    android:strokeLineJoin="round" />
+</vector>

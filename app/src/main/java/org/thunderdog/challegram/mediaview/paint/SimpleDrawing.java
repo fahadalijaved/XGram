@@ -14,10 +14,18 @@
  */
 package org.thunderdog.challegram.mediaview.paint;
 
+import android.graphics.BlurMaskFilter;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.RectF;
+import android.graphics.Shader;
+import android.os.Build;
 import android.view.MotionEvent;
+
+import androidx.annotation.Nullable;
+
+import com.fahadali.xgram.editor.XgramPaintBase;
 
 import org.thunderdog.challegram.tool.Paints;
 import org.thunderdog.challegram.tool.Screen;
@@ -26,6 +34,7 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.ArrayList;
 
+import me.vkryl.core.ColorUtils;
 import me.vkryl.core.MathUtils;
 import me.vkryl.core.util.Blob;
 import me.vkryl.core.util.LocalVar;
@@ -41,6 +50,48 @@ public class SimpleDrawing {
   public static final int TYPE_ARROW = 1;
   public static final int TYPE_RECTANGLE = 2;
   public static final int TYPE_FILLING = 3;
+
+  // XGram: the photo editor's brushes and shapes. The brushes are paths; the shapes are stored as the rectangle is,
+  // their rotation included. Telegram X before them cannot read a state that has them (no version byte).
+  public static final int TYPE_MARKER = 4;
+  public static final int TYPE_NEON = 5;
+  public static final int TYPE_BLUR = 6;
+  public static final int TYPE_PIXELATE = 7;
+  public static final int TYPE_ELLIPSE = 8;
+  public static final int TYPE_RECTANGLE_FILLED = 9;
+  public static final int TYPE_ELLIPSE_FILLED = 10;
+
+  /** XGram: the marker's colour alpha (one path, so it does not darken where the stroke crosses itself). */
+  private static final float MARKER_ALPHA = .5f;
+
+  /** XGram: the types drawn as a path (TYPE_PATH and the brushes). */
+  public static boolean isPathType (int type) {
+    switch (type) {
+      case TYPE_PATH:
+      case TYPE_MARKER:
+      case TYPE_NEON:
+      case TYPE_BLUR:
+      case TYPE_PIXELATE:
+        return true;
+    }
+    return false;
+  }
+
+  /** XGram: rectangles and ellipses, outlined or filled (two corners and the crop's straightening angle). */
+  public static boolean isShapeType (int type) {
+    switch (type) {
+      case TYPE_RECTANGLE:
+      case TYPE_ELLIPSE:
+      case TYPE_RECTANGLE_FILLED:
+      case TYPE_ELLIPSE_FILLED:
+        return true;
+    }
+    return false;
+  }
+
+  private static boolean isKnownType (int type) {
+    return type >= TYPE_PATH && type <= TYPE_ELLIPSE_FILLED;
+  }
 
   private final int type;
 
@@ -69,7 +120,7 @@ public class SimpleDrawing {
     this.x1 = x2 = x1;
     this.y1 = y2 = y1;
     this.canvasRotation = canvasRotation;
-    this.path = type == TYPE_PATH ? new CustomPath(this) : null;
+    this.path = isPathType(type) ? new CustomPath(this) : null; // XGram: and the brushes
     if (paint == null) {
       paint = new LocalVar<>();
       paint.set(newPaint());
@@ -96,7 +147,7 @@ public class SimpleDrawing {
     float y = getRelativeY(e.getY());
     this.x1 = this.x2 = x;
     this.y1 = this.y2 = y;
-    if (type == TYPE_PATH) {
+    if (isPathType(type)) { // XGram: and the brushes
       trackPoint(e, false, true);
     }
   }
@@ -104,37 +155,31 @@ public class SimpleDrawing {
   public void moveDrawing (MotionEvent e, boolean allowHistory) { // touchMove
     float x = getRelativeX(e.getX());
     float y = getRelativeY(e.getY());
-    switch (type) {
-      case TYPE_ARROW:
-      case TYPE_RECTANGLE: {
-        if (this.x2 != x || this.y2 != y) {
-          this.x2 = x;
-          this.y2 = y;
-          invalidate(true);
-        }
-        break;
+    if (type == TYPE_ARROW || isShapeType(type)) { // XGram: and the other shapes
+      if (this.x2 != x || this.y2 != y) {
+        this.x2 = x;
+        this.y2 = y;
+        invalidate(true);
       }
-      case TYPE_PATH: {
-        trackPoint(e, false, allowHistory);
-        break;
-      }
+    } else if (isPathType(type)) { // XGram: and the brushes
+      trackPoint(e, false, allowHistory);
     }
   }
 
   public boolean completeDrawing (MotionEvent e, boolean byPinch) { // touchUp
-    switch (type) {
-      case TYPE_ARROW:
-      case TYPE_RECTANGLE: {
-        return !byPinch || (x1 == x2 && y1 == y2);
+    // XGram: the other shapes as the rectangle, the brushes as the path
+    if (type == TYPE_ARROW || isShapeType(type)) {
+      // XGram: after a pinch only a shape the finger really drew stays, as the path's rule (Telegram X kept the
+      // unmoved one, a stray dot)
+      return !byPinch || Math.hypot((x2 - x1) * canvasWidth, (y2 - y1) * canvasHeight) > Screen.getTouchSlop() * canvasScale;
+    }
+    if (isPathType(type)) {
+      if (!byPinch || path.getActionCount() > 3) {
+        trackPoint(e, true, true);
+        path.trim();
+        return true;
       }
-      case TYPE_PATH: {
-        if (!byPinch || path.getActionCount() > 3) {
-          trackPoint(e, true, true);
-          path.trim();
-          return true;
-        }
-        return false;
-      }
+      return false;
     }
     return true;
   }
@@ -255,11 +300,7 @@ public class SimpleDrawing {
   }
 
   private static boolean needsCanvasRotation (int type) {
-    switch (type) {
-      case TYPE_RECTANGLE:
-        return true;
-    }
-    return false;
+    return isShapeType(type); // XGram: Telegram X had the rectangle only
   }
 
   private static boolean needsStrokeRadius (int type) {
@@ -296,7 +337,7 @@ public class SimpleDrawing {
       (type == TYPE_FILLING || (b.canvasWidth == canvasWidth && b.canvasHeight == canvasHeight) || (b.canvasWidth / b.canvasHeight) == (canvasWidth / canvasHeight)) && // checking only for aspect ratio, since result will be the same
       (!needsCanvasRotation(type) || b.canvasRotation == canvasRotation) &&
       b.x1 == x1 && b.x2 == x2 &&
-      b.y1 == y1 && b.y2 == y2 && (type != TYPE_PATH || b.path.compare(path));
+      b.y1 == y1 && b.y2 == y2 && (!isPathType(type) || b.path.compare(path)); // XGram: and the brushes
   }
 
   public void setBrushParameters (int color, float strokeRadius) {
@@ -324,6 +365,11 @@ public class SimpleDrawing {
   }
 
   public void draw (Canvas c, int viewLeft, int viewTop, int viewRight, int viewBottom) {
+    draw(c, viewLeft, viewTop, viewRight, viewBottom, null);
+  }
+
+  /** XGram: {@code base} is the photo under the drawing, for {@link #needsBase()} (without it they draw nothing). */
+  public void draw (Canvas c, int viewLeft, int viewTop, int viewRight, int viewBottom, @Nullable XgramPaintBase base) {
     int width = viewRight - viewLeft; //  (viewLeft + viewRight) / 2;
     int height = viewBottom - viewTop; // (viewTop + viewBottom) / 2;
 
@@ -432,7 +478,197 @@ public class SimpleDrawing {
         c.restore();
         break;
       }
+      // XGram
+      case TYPE_ELLIPSE:
+      case TYPE_RECTANGLE_FILLED:
+      case TYPE_ELLIPSE_FILLED: {
+        RectF rectF = Paints.getRectF();
+        rectF.set(left, top, right, bottom);
+        final boolean saved = canvasRotation != 0f;
+        if (saved) {
+          c.save();
+          c.rotate(-canvasRotation, left, top);
+        }
+        final boolean filled = type != TYPE_ELLIPSE;
+        if (filled) {
+          paint.setStyle(Paint.Style.FILL);
+        }
+        if (type == TYPE_RECTANGLE_FILLED) {
+          c.drawRect(rectF, paint);
+        } else {
+          c.drawOval(rectF, paint);
+        }
+        if (filled) {
+          paint.setStyle(Paint.Style.STROKE);
+        }
+        if (saved) {
+          c.restore();
+        }
+        break;
+      }
+      case TYPE_MARKER:
+      case TYPE_NEON:
+      case TYPE_BLUR:
+      case TYPE_PIXELATE: {
+        c.save();
+        c.clipRect(viewLeft, viewTop, viewRight, viewBottom);
+        if (viewLeft != 0 || viewTop != 0) {
+          c.translate(viewLeft, viewTop);
+        }
+        xgramDrawBrush(c, paint, path.getPath(width, height), strokeSize, width, height, viewLeft, viewTop, base);
+        c.restore();
+        break;
+      }
     }
+  }
+
+  // XGram: the brushes
+
+  /** Blur and pixelate paint with the photo under them: they need the base image to draw. */
+  public boolean needsBase () {
+    return type == TYPE_BLUR || type == TYPE_PIXELATE;
+  }
+
+  public int getType () {
+    return type;
+  }
+
+  /** The glow passes of the neon brush where BlurMaskFilter is not drawn by the hardware renderer (before Android 9). */
+  private static final float[] NEON_GLOW_WIDTHS = {2.6f, 2f, 1.5f};
+  private static final float[] NEON_GLOW_ALPHAS = {.1f, .16f, .26f};
+
+  /** The neon glow's mask filter for one stroke size (the editor, thumbnails and the export draw at different sizes). */
+  private static final class NeonGlow {
+    final float strokeSize;
+    final BlurMaskFilter filter;
+
+    NeonGlow (float strokeSize) {
+      this.strokeSize = strokeSize;
+      this.filter = new BlurMaskFilter(Math.max(1f, strokeSize * .9f), BlurMaskFilter.Blur.NORMAL);
+    }
+  }
+
+  private volatile NeonGlow neonGlow;
+
+  private void xgramDrawBrush (Canvas c, Paint paint, Path path, float strokeSize, int width, int height, int viewLeft, int viewTop, @Nullable XgramPaintBase base) {
+    paint.setStrokeJoin(Paint.Join.ROUND);
+    switch (type) {
+      case TYPE_MARKER: {
+        // a wide flat-ended stroke at half alpha, in one path so it does not darken where it crosses itself
+        paint.setStrokeCap(Paint.Cap.SQUARE);
+        paint.setColor(ColorUtils.alphaColor(MARKER_ALPHA, color));
+        c.drawPath(path, paint);
+        paint.setStrokeCap(Paint.Cap.ROUND);
+        break;
+      }
+      case TYPE_NEON: {
+        // a glow in the colour, the stroke, then a light core
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+          // one filter per size, not one per frame (a native object); it is immutable, so threads can share it
+          NeonGlow glow = neonGlow;
+          if (glow == null || glow.strokeSize != strokeSize) {
+            neonGlow = glow = new NeonGlow(strokeSize);
+          }
+          paint.setMaskFilter(glow.filter);
+          paint.setStrokeWidth(strokeSize * 1.8f);
+          paint.setColor(ColorUtils.alphaColor(.9f, color));
+          c.drawPath(path, paint);
+          paint.setMaskFilter(null);
+        } else {
+          for (int i = 0; i < NEON_GLOW_WIDTHS.length; i++) {
+            paint.setStrokeWidth(strokeSize * NEON_GLOW_WIDTHS[i]);
+            paint.setColor(ColorUtils.alphaColor(NEON_GLOW_ALPHAS[i], color));
+            c.drawPath(path, paint);
+          }
+        }
+        paint.setStrokeWidth(strokeSize);
+        paint.setColor(color);
+        c.drawPath(path, paint);
+        paint.setStrokeWidth(strokeSize * .45f);
+        paint.setColor(ColorUtils.fromToArgb(color, 0xffffffff, .8f));
+        c.drawPath(path, paint);
+        paint.setStrokeWidth(strokeSize);
+        break;
+      }
+      case TYPE_BLUR:
+      case TYPE_PIXELATE: {
+        // the photo under the stroke, blurred or pixelated (nothing without it)
+        final boolean pixelate = type == TYPE_PIXELATE;
+        Shader shader = base != null ? base.shader(pixelate ? XgramPaintBase.KIND_PIXELATE : XgramPaintBase.KIND_BLUR, width, height, viewLeft, viewTop) : null;
+        if (shader != null) {
+          paint.setShader(shader);
+          paint.setColor(0xffffffff);
+          paint.setFilterBitmap(!pixelate);
+          c.drawPath(path, paint);
+          paint.setFilterBitmap(false);
+          paint.setShader(null);
+        }
+        break;
+      }
+    }
+    paint.setStrokeJoin(Paint.Join.MITER);
+  }
+
+  // XGram: the eraser
+
+  /** Whether (x, y), in a view of width x height, is within {@code tolerance} of this drawing as drawn there. */
+  public boolean hitTest (float x, float y, int width, int height, float tolerance) {
+    if (type == TYPE_FILLING || width <= 0 || height <= 0 || canvasWidth <= 0) {
+      return false;
+    }
+    final float maxDistance = dp(strokeRadius, width, height) / 2f + tolerance;
+    if (isPathType(type)) {
+      return path != null && path.hitTest(x, y, width, height, maxDistance);
+    }
+    final float x1 = width * this.x1, y1 = height * this.y1, x2 = width * this.x2, y2 = height * this.y2;
+    if (type == TYPE_ARROW) {
+      return segmentDistanceSq(x, y, x1, y1, x2, y2) <= maxDistance * maxDistance;
+    }
+    if (!isShapeType(type)) {
+      return false;
+    }
+    final float left = Math.min(x1, x2), top = Math.min(y1, y2), right = Math.max(x1, x2), bottom = Math.max(y1, y2);
+    if (canvasRotation != 0f) {
+      // drawn turned by -canvasRotation around its top left corner: turn the point back
+      final double rad = Math.toRadians(canvasRotation);
+      final float cos = (float) Math.cos(rad), sin = (float) Math.sin(rad);
+      final float dx = x - left, dy = y - top;
+      x = left + dx * cos - dy * sin;
+      y = top + dx * sin + dy * cos;
+    }
+    final boolean filled = type == TYPE_RECTANGLE_FILLED || type == TYPE_ELLIPSE_FILLED;
+    if (type == TYPE_RECTANGLE || type == TYPE_RECTANGLE_FILLED) {
+      final boolean inside = x >= left && x <= right && y >= top && y <= bottom;
+      if (inside && filled) {
+        return true;
+      }
+      final float distance;
+      if (inside) {
+        distance = Math.min(Math.min(x - left, right - x), Math.min(y - top, bottom - y));
+      } else {
+        final float dx = Math.max(Math.max(left - x, 0f), x - right);
+        final float dy = Math.max(Math.max(top - y, 0f), y - bottom);
+        distance = (float) Math.sqrt(dx * dx + dy * dy);
+      }
+      return distance <= maxDistance;
+    }
+    final float rx = Math.max(1f, (right - left) / 2f), ry = Math.max(1f, (bottom - top) / 2f);
+    final float nx = (x - (left + right) / 2f) / rx, ny = (y - (top + bottom) / 2f) / ry;
+    final float r = (float) Math.sqrt(nx * nx + ny * ny);
+    if (r <= 1f && filled) {
+      return true;
+    }
+    return Math.abs(r - 1f) * Math.min(rx, ry) <= maxDistance; // close enough to the distance from the outline
+  }
+
+  /** The squared distance from (px, py) to the segment (x1, y1)-(x2, y2). */
+  static float segmentDistanceSq (float px, float py, float x1, float y1, float x2, float y2) {
+    final float dx = x2 - x1, dy = y2 - y1;
+    final float lengthSq = dx * dx + dy * dy;
+    float t = lengthSq > 0f ? ((px - x1) * dx + (py - y1) * dy) / lengthSq : 0f;
+    t = Math.max(0f, Math.min(1f, t));
+    final float cx = x1 + dx * t - px, cy = y1 + dy * t - py;
+    return cx * cx + cy * cy;
   }
 
   // Blob
@@ -473,36 +709,31 @@ public class SimpleDrawing {
     savePositionData(blob);
   }
 
+  // XGram: the other shapes as the rectangle, the brushes as the path
+
+  private static boolean hasCorners (int type) {
+    return type == TYPE_ARROW || isShapeType(type);
+  }
+
   private void savePositionData (RandomAccessFile file) throws IOException {
-    switch (type) {
-      case TYPE_ARROW:
-      case TYPE_RECTANGLE:
-        file.writeFloat(x1);
-        file.writeFloat(x2);
-        file.writeFloat(y1);
-        file.writeFloat(y2);
-        break;
-      case TYPE_PATH: {
-        path.saveData(file);
-        break;
-      }
+    if (hasCorners(type)) {
+      file.writeFloat(x1);
+      file.writeFloat(x2);
+      file.writeFloat(y1);
+      file.writeFloat(y2);
+    } else if (isPathType(type)) {
+      path.saveData(file);
     }
   }
 
   private void savePositionData (Blob blob) {
-    switch (type) {
-      case TYPE_ARROW:
-      case TYPE_RECTANGLE: {
-        blob.writeFloat(x1);
-        blob.writeFloat(x2);
-        blob.writeFloat(y1);
-        blob.writeFloat(y2);
-        break;
-      }
-      case TYPE_PATH: {
-        path.saveData(blob);
-        break;
-      }
+    if (hasCorners(type)) {
+      blob.writeFloat(x1);
+      blob.writeFloat(x2);
+      blob.writeFloat(y1);
+      blob.writeFloat(y2);
+    } else if (isPathType(type)) {
+      path.saveData(blob);
     }
   }
 
@@ -511,20 +742,20 @@ public class SimpleDrawing {
   }
 
   private int getEstimatedPositionSaveSize () {
-    switch (type) {
-      case TYPE_ARROW:
-      case TYPE_RECTANGLE: {
-        return 8 * 4;
-      }
-      case TYPE_PATH: {
-        return path.getEstimatedOutputSize();
-      }
+    if (hasCorners(type)) {
+      return 8 * 4;
+    }
+    if (isPathType(type)) {
+      return path.getEstimatedOutputSize();
     }
     return 0;
   }
 
   public static SimpleDrawing restore (RandomAccessFile file) throws IOException {
     int type = file.read();
+    if (!isKnownType(type)) { // XGram: stop instead of reading the rest out of step
+      throw new IOException("Unknown drawing type: " + type);
+    }
 
     int canvasWidth = Blob.readVarint(file);
     int canvasHeight = Blob.readVarint(file);
@@ -552,6 +783,9 @@ public class SimpleDrawing {
 
   public static SimpleDrawing restore (Blob blob) {
     int type = blob.readByte();
+    if (!isKnownType(type)) { // XGram: stop instead of reading the rest out of step
+      throw new IllegalStateException("Unknown drawing type: " + type);
+    }
 
     int canvasWidth = blob.readVarint();
     int canvasHeight = blob.readVarint();
@@ -578,36 +812,24 @@ public class SimpleDrawing {
   }
 
   private static void restorePositionData (RandomAccessFile file, SimpleDrawing out) throws IOException {
-    switch (out.type) {
-      case TYPE_ARROW:
-      case TYPE_RECTANGLE: {
-        out.x1 = file.readFloat();
-        out.x2 = file.readFloat();
-        out.y1 = file.readFloat();
-        out.y2 = file.readFloat();
-        break;
-      }
-      case TYPE_PATH: {
-        out.path = new CustomPath(out, file);
-        break;
-      }
+    if (hasCorners(out.type)) {
+      out.x1 = file.readFloat();
+      out.x2 = file.readFloat();
+      out.y1 = file.readFloat();
+      out.y2 = file.readFloat();
+    } else if (isPathType(out.type)) {
+      out.path = new CustomPath(out, file);
     }
   }
 
   private static void restorePositionData (Blob blob, SimpleDrawing out) {
-    switch (out.type) {
-      case TYPE_ARROW:
-      case TYPE_RECTANGLE: {
-        out.x1 = blob.readFloat();
-        out.x2 = blob.readFloat();
-        out.y1 = blob.readFloat();
-        out.y2 = blob.readFloat();
-        break;
-      }
-      case TYPE_PATH: {
-        out.path = new CustomPath(out, blob);
-        break;
-      }
+    if (hasCorners(out.type)) {
+      out.x1 = blob.readFloat();
+      out.x2 = blob.readFloat();
+      out.y1 = blob.readFloat();
+      out.y2 = blob.readFloat();
+    } else if (isPathType(out.type)) {
+      out.path = new CustomPath(out, blob);
     }
   }
 }

@@ -194,6 +194,87 @@ public class CustomPath {
     appendAction(ACTION_CUBIC_TO, x1, y1, x2, y2, x3, y3);
   }
 
+  // XGram: the eraser's hit test on the path as drawn at width x height: whether (x, y) is within maxDistance of it.
+  // Curves are followed through four points on each.
+
+  private static final int HIT_STEPS = 4;
+
+  public boolean hitTest (float x, float y, int width, int height, float maxDistance) {
+    final float maxSq = maxDistance * maxDistance;
+    final int size = actions.size();
+    float lastX = 0f, lastY = 0f;
+    int i = 0;
+    while (i < size) {
+      int type = (int) actions.get(i++);
+      switch (type) {
+        case ACTION_MOVE_TO: {
+          lastX = width * actions.get(i++);
+          lastY = height * actions.get(i++);
+          if (SimpleDrawing.segmentDistanceSq(x, y, lastX, lastY, lastX, lastY) <= maxSq) {
+            return true;
+          }
+          break;
+        }
+        case ACTION_LINE_TO: {
+          float x1 = width * actions.get(i++);
+          float y1 = height * actions.get(i++);
+          if (SimpleDrawing.segmentDistanceSq(x, y, lastX, lastY, x1, y1) <= maxSq) {
+            return true;
+          }
+          lastX = x1;
+          lastY = y1;
+          break;
+        }
+        case ACTION_QUAD_TO: {
+          float cx = width * actions.get(i++);
+          float cy = height * actions.get(i++);
+          float x2 = width * actions.get(i++);
+          float y2 = height * actions.get(i++);
+          float prevX = lastX, prevY = lastY;
+          for (int step = 1; step <= HIT_STEPS; step++) {
+            float t = (float) step / (float) HIT_STEPS, u = 1f - t;
+            float px = u * u * lastX + 2f * u * t * cx + t * t * x2;
+            float py = u * u * lastY + 2f * u * t * cy + t * t * y2;
+            if (SimpleDrawing.segmentDistanceSq(x, y, prevX, prevY, px, py) <= maxSq) {
+              return true;
+            }
+            prevX = px;
+            prevY = py;
+          }
+          lastX = x2;
+          lastY = y2;
+          break;
+        }
+        case ACTION_CUBIC_TO: {
+          float c1x = width * actions.get(i++);
+          float c1y = height * actions.get(i++);
+          float c2x = width * actions.get(i++);
+          float c2y = height * actions.get(i++);
+          float x3 = width * actions.get(i++);
+          float y3 = height * actions.get(i++);
+          float prevX = lastX, prevY = lastY;
+          for (int step = 1; step <= HIT_STEPS; step++) {
+            float t = (float) step / (float) HIT_STEPS, u = 1f - t;
+            float px = u * u * u * lastX + 3f * u * u * t * c1x + 3f * u * t * t * c2x + t * t * t * x3;
+            float py = u * u * u * lastY + 3f * u * u * t * c1y + 3f * u * t * t * c2y + t * t * t * y3;
+            if (SimpleDrawing.segmentDistanceSq(x, y, prevX, prevY, px, py) <= maxSq) {
+              return true;
+            }
+            prevX = px;
+            prevY = py;
+          }
+          lastX = x3;
+          lastY = y3;
+          break;
+        }
+        default: {
+          return false;
+        }
+      }
+    }
+    return false;
+  }
+
   public Path getPath (int width, int height) {
     if (this.width != width || this.height != height) {
       this.width = width;

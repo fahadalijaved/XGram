@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: the photo editor's drawing tools (the brush section), see com.fahadali.xgram.editor.XgramPaintTools -->
+
+  <!-- The tools row (TalkBack, and the name shown on a long press) -->
+  <string name="XgramEditorPen">Pen</string>
+  <string name="XgramEditorMarker">Marker</string>
+  <string name="XgramEditorNeon">Neon</string>
+  <string name="XgramEditorArrow">Arrow</string>
+  <string name="XgramEditorShapes">Shapes</string>
+  <string name="XgramEditorBlur">Blur</string>
+  <string name="XgramEditorPixelate">Pixelate</string>
+  <string name="XgramEditorEraser">Eraser</string>
+
+  <!-- The Shapes choice above the tools row -->
+  <string name="XgramEditorRectangle">Rectangle</string>
+  <string name="XgramEditorEllipse">Ellipse</string>
+  <string name="XgramEditorRectangleFilled">Filled rectangle</string>
+  <string name="XgramEditorEllipseFilled">Filled ellipse</string>
+
+  <!-- Next to Undo -->
+  <string name="XgramEditorRedo">Redo</string>
+  <!-- The size slider over the photo's edge (TalkBack) -->
+  <string name="XgramEditorSize">Brush size</string>
+
+  <!-- In the colour row's place while a tool without a colour is picked -->
+  <string name="XgramEditorBlurHint">Paint over what you want to blur</string>
+  <string name="XgramEditorPixelateHint">Paint over what you want to pixelate</string>
+  <string name="XgramEditorEraserHint">Touch a drawing to erase it</string>
+
+  <!-- XGram: the layers over the drawing (text, emoji, stickers), see com.fahadali.xgram.editor.XgramLayer -->
+
+  <!-- The bottom row's buttons in the brush section (TalkBack): Crop and Adjust turn into them -->
+  <string name="XgramEditorAddSticker">Add a sticker or emoji</string>
+  <string name="XgramEditorAddText">Add text</string>
+  <!-- Where a layer dragged to the bottom is let go to delete it (TalkBack) -->
+  <string name="XgramEditorTrash">Drag here to delete</string>
+  <string name="XgramEditorStickerFailed">Couldn\'t load this sticker</string>
+
+  <!-- The text editor -->
+  <string name="XgramEditorTextHint">Type something</string>
+  <string name="XgramEditorTextColor">Text color</string>
+  <!-- TalkBack: the style button, %1$s is Plain, Outline or Background -->
+  <string name="XgramEditorTextStyle">Text style: %1$s</string>
+  <string name="XgramEditorStylePlain">Plain</string>
+  <string name="XgramEditorStyleOutline">Outline</string>
+  <string name="XgramEditorStyleBubble">Background</string>
+  <!-- TalkBack: the alignment button, %1$s is Left, Center or Right -->
+  <string name="XgramEditorTextAlign">Alignment: %1$s</string>
+  <string name="XgramEditorAlignLeft">Left</string>
+  <string name="XgramEditorAlignCenter">Center</string>
+  <string name="XgramEditorAlignRight">Right</string>
+  <!-- The font chips, each in its own font; TalkBack reads the full names (Google Sans Flex and Rounded are XgramFontFlex and XgramFontRounded) -->
+  <string name="XgramEditorFontSans">Sans</string>
+  <string name="XgramEditorFontRounded">Rounded</string>
+  <string name="XgramEditorFontSerif">Serif</string>
+  <string name="XgramEditorFontMono">Mono</string>
+  <string name="XgramEditorFontMonoFull">Monospace</string>
+  <!-- TalkBack, as the text editor opens on a text already on the photo (a new one says XgramEditorAddText) -->
+  <string name="XgramEditorEditText">Edit text</string>
+</resources>

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: the photo editor's Marker (com.fahadali.xgram.editor.XgramPaintTools), drawn as the XGram Line icons -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+  android:width="24dp"
+  android:height="24dp"
+  android:viewportWidth="24"
+  android:viewportHeight="24">
+  <path
+    android:pathData="M14.6,3.4 L19,7.8 L11,15.8 L6.6,11.4 Z"
+    android:fillColor="#00000000"
+    android:strokeColor="#FF000000"
+    android:strokeWidth="1.8"
+    android:strokeLineCap="round"
+    android:strokeLineJoin="round" />
+  <path
+    android:pathData="M6.6,11.4 L5,17.4 L11,15.8 Z"
+    android:fillColor="#FF000000" />
+  <path
+    android:pathData="M4,21 L20,21"
+    android:fillColor="#00000000"
+    android:strokeColor="#FF000000"
+    android:strokeWidth="2.6"
+    android:strokeAlpha="0.5"
+    android:strokeLineCap="round"
+    android:strokeLineJoin="round" />
+</vector>

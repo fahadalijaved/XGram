@@ -68,6 +68,8 @@ public final class XgramBackup {
     XgramSettings.KEY_HEADER_BUTTON_HIDDEN,
     // Forwarding (Messages): the last choice, for Remember my last choice
     XgramSettings.KEY_FORWARD_LAST_HIDDEN,
+    // Long press on text selects it (Messages > Gestures)
+    XgramSettings.KEY_TEXT_SELECT_DRAG,
     // Add to group or channel (a bot's profile): as an admin, with every right
     XgramSettings.KEY_ADD_BOT_ADMIN, XgramSettings.KEY_ADD_BOT_ALL_RIGHTS,
     // Expressive design and New look for Telegram X pages (Appearance): on by default, so turning one off is kept too

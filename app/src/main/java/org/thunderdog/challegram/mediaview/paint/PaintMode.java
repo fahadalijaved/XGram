@@ -21,6 +21,17 @@ public class PaintMode {
   public static final int ARROW = 2;
   public static final int RECTANGLE = 3;
 
+  // XGram: the photo editor's brushes and shapes (com.fahadali.xgram.editor.XgramPaintTools)
+  public static final int MARKER = 4;
+  public static final int NEON = 5;
+  public static final int BLUR = 6;
+  public static final int PIXELATE = 7;
+  public static final int ELLIPSE = 8;
+  public static final int RECTANGLE_FILLED = 9;
+  public static final int ELLIPSE_FILLED = 10;
+  /** Removes the drawings it touches. */
+  public static final int ERASER = 11;
+
   public static final int FREE_MOVEMENT = 100;
 
   public static void save (int mode) {
@@ -45,6 +56,15 @@ public class PaintMode {
       case PATH:
       case ARROW:
       case RECTANGLE:
+      // XGram
+      case MARKER:
+      case NEON:
+      case BLUR:
+      case PIXELATE:
+      case ELLIPSE:
+      case RECTANGLE_FILLED:
+      case ELLIPSE_FILLED:
+      case ERASER:
         return mode;
     }
     return PATH;

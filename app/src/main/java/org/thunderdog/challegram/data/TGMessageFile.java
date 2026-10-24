@@ -834,6 +834,31 @@ public class TGMessageFile extends TGMessage {
     return file != null && file.translatedCaption == null && file.hasCaption() ? file.captionWrapper : null;
   }
 
+  // XGram: Select text: each file's own caption as shown, translated or not
+
+  @Nullable
+  @Override
+  public TextWrapper xgramSelectableText (long messageId) {
+    final CaptionedFile file = findCaptionedFile(messageId);
+    return file != null && file.hasCaption() ? file.captionWrapper : null;
+  }
+
+  @Override
+  public boolean xgramSelectableTextTranslated (long messageId) {
+    final CaptionedFile file = findCaptionedFile(messageId);
+    return file != null && file.translatedCaption != null;
+  }
+
+  @Override
+  public long xgramSelectableTextAt (float x, float y) {
+    for (CaptionedFile file : filesList) {
+      if (file.hasCaption() && file.captionWrapper != null && file.captionWrapper.getXgramOffsetAt(x, y, true) != -1) {
+        return file.messageId;
+      }
+    }
+    return 0;
+  }
+
   @Override
   protected void setTranslationResult (@Nullable TdApi.FormattedText text) {
     ArrayList<TdApi.FormattedText> translatedParts = null;

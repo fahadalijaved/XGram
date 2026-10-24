@@ -700,6 +700,25 @@ public class TGMessageText extends TGMessage {
     return translatedText == null && messageId == msg.id ? effectiveWrapper : null; // XGram: quote highlight
   }
 
+  // XGram: Select text: the text as shown, translated or not
+
+  @Nullable
+  @Override
+  public TextWrapper xgramSelectableText (long messageId) {
+    return messageId == msg.id ? effectiveWrapper : null;
+  }
+
+  @Override
+  public boolean xgramSelectableTextTranslated (long messageId) {
+    return translatedText != null;
+  }
+
+  @Override
+  public long xgramSelectableTextAt (float x, float y) {
+    final TextWrapper wrapper = effectiveWrapper;
+    return wrapper != null && wrapper.getXgramOffsetAt(x, y, true) != -1 ? msg.id : 0;
+  }
+
   @Nullable
   @Override
   public TdApi.FormattedText getTextToTranslateImpl () {

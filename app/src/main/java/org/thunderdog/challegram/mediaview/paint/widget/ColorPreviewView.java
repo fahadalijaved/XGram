@@ -298,6 +298,11 @@ public class ColorPreviewView extends View implements FactorAnimator.Target {
     return (MIN_RADIUS + (MAX_RADIUS - MIN_RADIUS) * radiusFactor) * scale;
   }
 
+  /** XGram: the brush size, 0..1 (each editor tool has its own range: com.fahadali.xgram.editor.XgramPaintTools). */
+  public float getRadiusFactor () {
+    return radiusFactor;
+  }
+
   public int getBrushColor () {
     return color;
   }

@@ -35,13 +35,16 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredWidth
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -211,7 +214,8 @@ object XgramR5ChatPickers {
   /**
    * A dialog window with [content] centred over the 32% scrim; a tap on the scrim or back dismisses it. [forceDark]
    * draws it with the dark scheme whatever the app theme (the media viewer's forced night theme). The window resizes
-   * for the keyboard, so a dialog with text fields stays centred above it.
+   * for the keyboard, so a dialog with text fields stays centred above it. It is edge to edge ([XgramDialogWindow]):
+   * transparent system bars over the dimmed app, the dialog inside the safe area.
    */
   private fun show(context: Context, forceDark: Boolean = false, content: @Composable (dismiss: () -> Unit) -> Unit): Boolean {
     return try {
@@ -237,7 +241,8 @@ object XgramR5ChatPickers {
               Box(
                 modifier = Modifier
                   .fillMaxSize()
-                  .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = dismiss),
+                  .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = dismiss)
+                  .windowInsetsPadding(WindowInsets.safeDrawing), // the window is edge to edge: clear of the bars and the keyboard
                 contentAlignment = Alignment.Center
               ) {
                 content(dismiss)
@@ -255,6 +260,8 @@ object XgramR5ChatPickers {
         window.setDimAmount(SCRIM)
         @Suppress("DEPRECATION")
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        // Transparent system bars over the dimmed app, not an opaque black navigation bar
+        XgramDialogWindow.edgeToEdge(window, context, dark)
       }
       XgramAppMotion.dialogWindow(dialog)
       dialog.setOnDismissListener { owner.destroy() }

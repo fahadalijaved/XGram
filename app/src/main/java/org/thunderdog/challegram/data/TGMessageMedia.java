@@ -1000,6 +1000,25 @@ public class TGMessageMedia extends TGMessage {
     return translatedText == null && messageId == captionMessageId ? wrapper : null;
   }
 
+  // XGram: Select text: the album's one caption as shown, translated or not
+
+  @Nullable
+  @Override
+  public TextWrapper xgramSelectableText (long messageId) {
+    return messageId == captionMessageId ? wrapper : null;
+  }
+
+  @Override
+  public boolean xgramSelectableTextTranslated (long messageId) {
+    return translatedText != null;
+  }
+
+  @Override
+  public long xgramSelectableTextAt (float x, float y) {
+    final TextWrapper wrapper = this.wrapper;
+    return wrapper != null && wrapper.getXgramOffsetAt(x, y, true) != -1 ? captionMessageId : 0;
+  }
+
   @Nullable
   @Override
   public TdApi.FormattedText getTextToTranslateImpl () {

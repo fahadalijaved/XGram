@@ -121,10 +121,20 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
   }
 
   public void layout (int maxWidth) {
-    if (this.maxWidth != maxWidth && maxWidth > 0) {
+    if ((this.maxWidth != maxWidth || xgramTextSizeChanged) && maxWidth > 0) {
+      xgramTextSizeChanged = false;
       this.maxWidth = maxWidth;
       buildLayout(maxWidth, false);
     }
+  }
+
+  // XGram: the chat's text size changed: the text is laid out again at the next layout(), at the same width too (a
+  // quote's line breaks and height follow the size)
+  private volatile boolean xgramTextSizeChanged;
+
+  /** XGram: TGMessage#onUpdateTextSize, before the messages are laid out again. */
+  public void xgramOnTextSizeChanged () {
+    xgramTextSizeChanged = true;
   }
 
   public void setCurrentView (@Nullable View view) {
@@ -192,7 +202,8 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
 
   /**
    * XGram, main thread: puts a layout made for a load on screen, or makes it again when the width changed since. When
-   * that changes the reply's width, the message's bubble fits it again (TGMessage#xgramOnReplyLayoutChanged).
+   * that changes the reply's width, the message's bubble fits it again (TGMessage#xgramOnReplyLayoutChanged); when it
+   * changes a quote's height, the message is laid out again, its content moving with the quote's last line.
    */
   private void publishLayout (int builtWidth, Text title, Text content) {
     if (isDestroyed) {
@@ -204,14 +215,21 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
       return;
     }
     final int oldWidth = width();
+    final int oldHeight = xgramHeight();
     this.trimmedTitle = title;
     this.trimmedContent = content;
-    if (width() != oldWidth) {
-      parent.xgramOnReplyLayoutChanged();
+    final boolean heightChanged = xgramHeight() != oldHeight; // a quote wrapped to more or fewer lines (a preview came, a translation)
+    if (width() != oldWidth || heightChanged) {
+      parent.xgramOnReplyLayoutChanged(heightChanged);
     }
   }
 
   private static final float CORNER_PADDING = 1f;
+
+  /** XGram M3E: the quote mark sits this far in from the block's end edge, clear of its rounded corner. */
+  private static int xgramCornerInset () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Screen.dp(4f) : 0;
+  }
 
   private int getContentWidth (int maxWidth, boolean isTitle) {
     maxWidth = maxWidth - paddingLeft - lineWidth - paddingLeft;
@@ -219,7 +237,7 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
       maxWidth -= lineWidth + (isMessageComponent() ? mHeight : height);
     }
     if (isTitle && cornerDrawable != null) {
-      maxWidth -= cornerDrawable.getMinimumWidth() + Screen.dp(CORNER_PADDING);
+      maxWidth -= cornerDrawable.getMinimumWidth() + Screen.dp(CORNER_PADDING) + xgramCornerInset();
     }
     return maxWidth;
   }
@@ -229,7 +247,7 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
   }
 
   public int width (boolean isWhite) {
-    int contentWidth = Math.max(getTextWidth(), getTitleWidth() + (cornerDrawable != null ? cornerDrawable.getMinimumWidth() + Screen.dp(CORNER_PADDING) : 0)) + paddingLeft + paddingLeft + lineWidth;
+    int contentWidth = Math.max(getTextWidth(), getTitleWidth() + (cornerDrawable != null ? cornerDrawable.getMinimumWidth() + Screen.dp(CORNER_PADDING) + xgramCornerInset() : 0)) + paddingLeft + paddingLeft + lineWidth;
     if (hasPreview()) {
       contentWidth += lineWidth + (isMessageComponent() ? mHeight : height);
     }
@@ -272,9 +290,9 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
 
     //noinspection UnsafeOptInUsageError
     return new Text.Builder(content != null ? content.buildText(true) : Lang.getString(R.string.LoadingMessage), width, isMessageComponent() ? TGMessage.getTextStyleProvider() : getTextStyleProvider(), getContentColorSet())
-      .singleLine()
+      .maxLineCount(xgramQuote ? XGRAM_QUOTE_MAX_LINES : 1) // XGram: a quote over up to four lines (ellipsized past them), its line breaks kept
       .textFlags(Text.FLAG_CUSTOM_LONG_PRESS)
-      .ignoreNewLines().ignoreContinuousNewLines()
+      .ignoreNewLines(!xgramQuote).ignoreContinuousNewLines()
       .entities(
         content != null && !Td.isEmpty(content.formattedText) ? TextEntity.valueOf(tdlib, content.formattedText.text, content.formattedText.entities, null) : null,
         (text, specificMedia) -> {
@@ -393,7 +411,7 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
   public int lastX, lastY;
 
   public boolean isInside (float x, float y, boolean needWhite) {
-    return x >= lastX && x <= lastX + width(needWhite) && y >= lastY && y <= lastY + mHeight;
+    return x >= lastX && x <= lastX + width(needWhite) && y >= lastY && y <= lastY + xgramBlockHeight(); // XGram: all of a quote's lines
   }
 
   private boolean hasPreview () {
@@ -497,6 +515,7 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
     lastY = startY;
 
     final boolean isOutBubble = isOutBubble();
+    final int blockHeight = xgramBlockHeight(); // XGram: mHeight, or as tall as a quote's lines
     final @ColorInt int lineColor;
     if (isMessageComponent()) {
       if (isWhite && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
@@ -518,7 +537,7 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
       int padding = Screen.dp(8f);
       int paddingHorizontal = Screen.dp(12f);
       rectF.top = startY - padding;
-      rectF.bottom = startY + mHeight + padding;
+      rectF.bottom = startY + blockHeight + padding;
       rectF.left = startX - paddingHorizontal;
       rectF.right = startX + width;
       float mergeRadius = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Screen.dp(12f) : Theme.getBubbleMergeRadius();
@@ -541,7 +560,7 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
     if (xgramBlock) {
       // XGram: Material 3 Expressive: the reply sits in a tinted block with 12dp corners; the line follows its edge
       int blockLeft = rtl ? endX - width : startX, blockRight = rtl ? endX : startX + width;
-      rectF.set(blockLeft, startY - Screen.dp(2f), blockRight, startY + mHeight + Screen.dp(2f));
+      rectF.set(blockLeft, startY - Screen.dp(2f), blockRight, startY + blockHeight + Screen.dp(2f));
       int blockColor = isOutBubble ?
         com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER), .08f) :
         com.fahadali.xgram.appearance.XgramExpressive.withAlpha(lineColor, .10f);
@@ -556,7 +575,7 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
 
     if (cornerDrawable != null) {
       // TODO: optimize
-      Drawables.draw(c, cornerDrawable, cornerPositionX - cornerDrawable.getMinimumWidth(), cornerPositionY, Paints.getPorterDuffPaint(lineColor));
+      Drawables.draw(c, cornerDrawable, cornerPositionX - cornerDrawable.getMinimumWidth() - xgramCornerInset(), cornerPositionY, Paints.getPorterDuffPaint(lineColor));
     }
 
     if (hasPreview()) {
@@ -628,18 +647,18 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
         c.clipPath(xgramBlockPath);
         int blockLeft = rtl ? endX - width : startX, blockRight = rtl ? endX : startX + width;
         if (rtl) {
-          c.drawRect(blockRight - lineWidth, startY - Screen.dp(2f), blockRight, startY + mHeight + Screen.dp(2f), Paints.fillingPaint(lineColor));
+          c.drawRect(blockRight - lineWidth, startY - Screen.dp(2f), blockRight, startY + blockHeight + Screen.dp(2f), Paints.fillingPaint(lineColor));
         } else {
-          c.drawRect(blockLeft, startY - Screen.dp(2f), blockLeft + lineWidth, startY + mHeight + Screen.dp(2f), Paints.fillingPaint(lineColor));
+          c.drawRect(blockLeft, startY - Screen.dp(2f), blockLeft + lineWidth, startY + blockHeight + Screen.dp(2f), Paints.fillingPaint(lineColor));
         }
         c.restoreToCount(saveCount);
         return;
       }
 
       if (rtl) {
-        rectF.set(endX - lineWidth, startY, endX, startY + mHeight);
+        rectF.set(endX - lineWidth, startY, endX, startY + blockHeight);
       } else {
-        rectF.set(startX, startY, startX + lineWidth, startY + mHeight);
+        rectF.set(startX, startY, startX + lineWidth, startY + blockHeight);
       }
       c.drawRoundRect(rectF, lineWidth / 2f, lineWidth / 2f, Paints.fillingPaint(lineColor));
 
@@ -710,6 +729,9 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
   private @Nullable TdApi.TextQuote quote;
   private String pollOptionId;
   private Drawable cornerDrawable;
+  // XGram: a quote chosen by its sender shows its words over up to XGRAM_QUOTE_MAX_LINES lines, the reply as tall as them
+  private boolean xgramQuote;
+  private static final int XGRAM_QUOTE_MAX_LINES = 4;
 
   public void load () {
     if (parent == null)
@@ -727,6 +749,7 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
         } else {
           cornerDrawable = null;
         }
+        xgramQuote = cornerDrawable != null;
         if (replyToMessage.origin != null) {
           handleOrigin(replyToMessage.origin);
         }
@@ -1317,8 +1340,30 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
 
   private static int mHeight;
 
+  /** The height of a one-line reply with the space below it. A quote can be taller: {@link #xgramHeight()}. */
   public static int height () {
     return mHeight + Screen.dp(10f);
+  }
+
+  /**
+   * XGram: {@link #height()} for this reply as laid out now: a quote is as tall as its lines (up to
+   * XGRAM_QUOTE_MAX_LINES, at the chat's text size); any other reply keeps the one-line height. The message lays out
+   * its content below this, so a change after a load goes through TGMessage#xgramOnReplyLayoutChanged.
+   */
+  public int xgramHeight () {
+    return xgramBlockHeight() + Screen.dp(10f);
+  }
+
+  /**
+   * XGram: the block itself (mHeight before): the title, then the text from 22dp down (draw). A quote ends with its
+   * last line, so a one-line quote at the default text size is mHeight, and a larger text size fits too.
+   */
+  private int xgramBlockHeight () {
+    Text content = xgramQuote ? trimmedContent : null;
+    if (content == null) {
+      return mHeight;
+    }
+    return Math.max(mHeight, Screen.dp(22f) + content.getHeight() - Screen.dp(1f));
   }
 
   public static void reset () {

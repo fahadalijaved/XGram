@@ -153,7 +153,7 @@ public final class XgramPullToNext implements FactorAnimator.Target {
           tracking = false; // horizontal: swipe to reply, back gesture
           return false;
         }
-        if (dy > 0 && totalUp > Screen.getTouchSlop() && !list.canScrollVertically(1) && host.xgramCanPullToNext()) {
+        if (dy > 0 && totalUp > Screen.getTouchSlop() && !list.canScrollVertically(1) && host.xgramCanPullToNext() && !XgramTextSelection.isDragging()) { // a finger selecting text never pulls
           pulling = true;
           needsCancel = true;
           armed = false;

@@ -1224,7 +1224,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   }
 
   private int getBubbleReplyOffset () {
-    return ReplyComponent.height() + Screen.dp(useBubble() ? 3f : 6f) - (useForward() ? Screen.dp(9f) : 0);
+    return replyData.xgramHeight() + Screen.dp(useBubble() ? 3f : 6f) - (useForward() ? Screen.dp(9f) : 0); // XGram: a quote's lines too
   }
 
   public void rebuildLayout () {
@@ -1237,6 +1237,9 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
   public void onUpdateTextSize () {
     messageReactions.onUpdateTextSize();
+    if (replyData != null) {
+      replyData.xgramOnTextSizeChanged(); // XGram: its text at the new size with the layout that follows (a quote's lines)
+    }
   }
 
   public void prepareLayout () {
@@ -1299,7 +1302,8 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     updateContentPositions(true);
     if (allowMessageHorizontalExtend()) {
       if (replyData != null && !alignReplyHorizontally()) {
-        pContentY += ReplyComponent.height();
+        buildReply(); // XGram: laid out first: a quote's lines set where the content (and the plain mode clock) starts
+        pContentY += replyData.xgramHeight();
       }
       buildHeader();
       buildForward();
@@ -1312,7 +1316,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       }
     } else {
       if (replyData != null) {
-        pContentY += ReplyComponent.height();
+        pContentY += replyData.xgramHeight(); // XGram: bubbles only here, where the bubble sets pContentY again below
       }
       buildContent(pContentMaxWidth);
       buildHeader();
@@ -2088,6 +2092,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     if (xgramQuoteHighlight != null) {
       xgramQuoteHighlight.beforeDraw(view); // XGram: the words a reply quoted, after a jump here
     }
+    com.fahadali.xgram.chats.XgramTextSelection.beforeDraw(this, view); // XGram: the selected text follows edits and moves
 
     final float isHiddenFactor = isHiddenByFilter.getFloatValue();
     if (isHiddenFactor == 1f) {
@@ -2556,7 +2561,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
           lineBottom = height + lineWidth;
           mergeBottom = true;
         } else {
-          lineBottom = forwardY + getForwardHeight() + (replyData != null ? ReplyComponent.height() : 0);
+          lineBottom = forwardY + getForwardHeight() + (replyData != null ? replyData.xgramHeight() : 0);
           mergeBottom = false;
         }
       }
@@ -2591,18 +2596,18 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
           endX = getInternalBubbleEndX();
           if (alignReplyHorizontally()) {
             startX -= getContentWidth();
-            top = topContentEdge + (bottomContentEdge - topContentEdge) / 2 - ReplyComponent.height() / 2;
+            top = topContentEdge + (bottomContentEdge - topContentEdge) / 2 - replyData.xgramHeight() / 2;
           }
         } else {
           startX = getInternalBubbleStartX();
           endX = getInternalBubbleEndX();
           if (alignReplyHorizontally()) {
             startX += getContentWidth();
-            top = topContentEdge + (bottomContentEdge - topContentEdge) / 2 - ReplyComponent.height() / 2;
+            top = topContentEdge + (bottomContentEdge - topContentEdge) / 2 - replyData.xgramHeight() / 2;
           }
         }
       } else {
-        top = pContentY - ReplyComponent.height();
+        top = pContentY - replyData.xgramHeight(); // XGram: a quote's lines too
         startX = useFullWidth() ? pRealContentX : pContentX;
         endX = viewWidth - startX;
       }
@@ -2632,6 +2637,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     if (isHiddenFactor > 0f) {
       drawHiddenMessage(view, c, isHiddenFactor);
     }
+    com.fahadali.xgram.chats.XgramTextSelection.afterDraw(this); // XGram: the handles follow the text drawn
   }
 
   public final void drawHiddenMessage (MessageView view, Canvas c, float isHiddenFactor) {
@@ -3287,8 +3293,8 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       pTicksLeft = currentWidth - Screen.dp(15f);
 
       if (replyData != null && !alignReplyHorizontally()) {
-        pClockTop += ReplyComponent.height();
-        pTicksTop += ReplyComponent.height();
+        pClockTop += replyData.xgramHeight(); // XGram: below a quote's last line too
+        pTicksTop += replyData.xgramHeight();
       }
     }
   }
@@ -3785,24 +3791,36 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   }
 
   // XGram: the reply's text changed width while this message had no view (or was being laid out on another thread):
-  // its bubble fits the reply once a view shows it (xgramBeforeBind)
-  private volatile boolean xgramReplyRefit;
+  // its bubble fits the reply once a view shows it (xgramBeforeBind). xgramReplyRelayout: a quote's height changed
+  // too, so the whole message is laid out again then.
+  private volatile boolean xgramReplyRefit, xgramReplyRelayout;
 
   /**
    * XGram, main thread: the reply was laid out again after this message (the replied message loaded, a translation,
    * the width caught up). The bubble takes its width from the reply too (computeBubbleWidth), so it fits it again: now
-   * when the message is on screen, else as soon as a view shows it.
+   * when the message is on screen, else as soon as a view shows it. When a quote's height changed, the content below
+   * it moves (pContentY, the bubble's height), so the message is laid out again instead.
    */
-  public final void xgramOnReplyLayoutChanged () {
+  public final void xgramOnReplyLayoutChanged (boolean heightChanged) {
     if (isDestroyed()) {
       return;
     }
     if (!isLayoutBuilt() || !hasAnyTargetToInvalidate()) {
+      if (heightChanged) {
+        xgramReplyRelayout = true;
+      }
       xgramReplyRefit = true;
       return;
     }
-    xgramReplyRefit = false;
-    if (xgramRefitToReply()) {
+    final boolean relayout = heightChanged || xgramReplyRelayout;
+    xgramReplyRefit = xgramReplyRelayout = false;
+    final int oldHeight = height;
+    if (relayout ? xgramRelayoutForReply() : xgramRefitToReply()) {
+      if (!useBubbles()) {
+        // The list keeps its place (the unread badge, a partly visible message), as rebuildContent does. With bubbles,
+        // buildBubble has told the manager already (notifyBubbleChanged), so it is not told twice
+        manager.onMessageHeightChanged(getChatId(), getId(), oldHeight, height);
+      }
       requestLayout();
     } else {
       invalidate();
@@ -3812,9 +3830,21 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   /** XGram, main thread: a view is about to show this message (MessageView#setMessage), before it measures it. */
   public final void xgramBeforeBind () {
     if (xgramReplyRefit && isLayoutBuilt() && !isDestroyed()) {
-      xgramReplyRefit = false;
-      xgramRefitToReply();
+      final boolean relayout = xgramReplyRelayout;
+      xgramReplyRefit = xgramReplyRelayout = false;
+      if (relayout) {
+        xgramRelayoutForReply();
+      } else {
+        xgramRefitToReply();
+      }
     }
+  }
+
+  /** XGram: a quote's height changed: the content, the clock and the bubble move with its last line. Callers check isLayoutBuilt(). */
+  private boolean xgramRelayoutForReply () {
+    final int oldHeight = height;
+    rebuildLayout();
+    return oldHeight != height;
   }
 
   /**
@@ -6692,6 +6722,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
   public final void onDestroy () {
     isDestroyed = true;
+    com.fahadali.xgram.chats.XgramTextSelection.onDestroyed(this); // XGram: a deleted message takes its selection
     if (topicObserverRegistered) {
       tdlib.topics().stopObserving(forumTopicKey, this);
       topicObserverRegistered = false;
@@ -7199,6 +7230,23 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
    */
   public @Nullable TextWrapper xgramQuotedTextWrapper (long messageId) {
     return null;
+  }
+
+  // XGram: Select text (com.fahadali.xgram.chats.XgramTextSelection): the text or caption as the bubble shows it
+
+  /** XGram: the text or caption shown for {@code messageId} (this message, or an album item), a translation too; null when none. */
+  public @Nullable TextWrapper xgramSelectableText (long messageId) {
+    return null;
+  }
+
+  /** XGram: whether the text shown for {@code messageId} is a translation (no quote of it then). */
+  public boolean xgramSelectableTextTranslated (long messageId) {
+    return false;
+  }
+
+  /** XGram: the message whose text or caption is at ({@code x}, {@code y}) in the view, 0 for none. */
+  public long xgramSelectableTextAt (float x, float y) {
+    return 0;
   }
 
   private void setHighlight (float highlight) {
@@ -10070,7 +10118,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       outRect.left = replyData.getLastX();
       outRect.top = replyData.getLastY();
       outRect.right = outRect.left + replyData.width(!useBubble());
-      outRect.bottom = outRect.top + ReplyComponent.height();
+      outRect.bottom = outRect.top + replyData.xgramHeight();
     };
   }
 

@@ -394,9 +394,10 @@ public class EditButton extends View implements FactorAnimator.Target {
         Drawables.draw(c, this.icon, centerX - iconWidth / 2, centerY - iconHeight / 2, paint);
       }
     }
-    if (secondFactor > 0f) {
+    if (secondFactor > 0f && secondIcon != null) {
       paint.setAlpha((int) ((float) origAlpha * secondFactor));
-      Drawables.draw(c, secondIcon, centerX - iconWidth / 2, centerY - iconHeight / 2, paint);
+      // XGram: centred by its own size (Telegram X used the first icon's, none once it had faded out)
+      Drawables.draw(c, secondIcon, centerX - secondIcon.getMinimumWidth() / 2, centerY - secondIcon.getMinimumHeight() / 2, paint);
     }
     paint.setAlpha(origAlpha);
 

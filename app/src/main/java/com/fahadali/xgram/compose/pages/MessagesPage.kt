@@ -82,6 +82,10 @@ fun MessagesPage() {
       switch(R.id.btn_xgramPullToNext, s(R.string.XgramPullToNext), s(R.string.XgramPullToNextSub), checked = settings.pullToNext()) {
         settings.setPullToNext(it)
       }
+      // Select text without the menu: a long press on text that moves selects (XgramTextSelection)
+      switch(R.id.btn_xgramTextSelectDrag, s(R.string.XgramSelTextDrag), s(R.string.XgramSelTextDragSub), checked = settings.textSelectDrag()) {
+        settings.setTextSelectDrag(it)
+      }
     }
 
     header(R.string.XgramHeaderDefaults)

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: Select text, part of a message's text selected right in its bubble, see com.fahadali.xgram.chats.XgramTextSelection -->
+
+  <!-- The message menu: starts the selection on the word tapped -->
+  <string name="XgramSelText">Select text</string>
+  <!-- The toolbar over the selection (Copy, Quote, Translate and Share are the app's own words) -->
+  <string name="XgramSelAll">Select all</string>
+  <!-- The snackbar after Copy -->
+  <string name="XgramSelCopied">Copied</string>
+
+  <!-- Settings → XGram → Messages → Gestures -->
+  <string name="XgramSelTextDrag">Long press on text selects it</string>
+  <string name="XgramSelTextDragSub">Hold a message\'s text and drag to select part of it. Held still, a long press works as before</string>
+  <!-- Settings search: other words the setting is found by -->
+  <string name="XgramSearchKwSelectText">select text, text selection, copy part, partial copy, copy a word, highlight text, drag to select</string>
+</resources>

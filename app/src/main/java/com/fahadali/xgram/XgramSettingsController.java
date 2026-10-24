@@ -499,6 +499,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.getToggler().setRadioEnabled(settings.showSeconds(), isUpdate);
         } else if (id == R.id.btn_xgramTapTimeDetails) {
           view.getToggler().setRadioEnabled(settings.tapTimeForDetails(), isUpdate);
+        } else if (id == R.id.btn_xgramTextSelectDrag) {
+          view.getToggler().setRadioEnabled(settings.textSelectDrag(), isUpdate);
         } else if (id == R.id.btn_xgramCleanLinks) {
           view.getToggler().setRadioEnabled(settings.cleanLinks(), isUpdate);
         } else if (id == R.id.btn_xgramFixLinkPreviews) {
@@ -935,7 +937,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     items.add(description(R.string.XgramSwipeInfo));
     addRows(items,
       toggle(R.id.btn_xgramTapTimeDetails, R.string.XgramTapTimeDetails, R.string.XgramTapTimeDetailsSub),
-      toggle(R.id.btn_xgramPullToNext, R.string.XgramPullToNext, R.string.XgramPullToNextSub)
+      toggle(R.id.btn_xgramPullToNext, R.string.XgramPullToNext, R.string.XgramPullToNextSub),
+      toggle(R.id.btn_xgramTextSelectDrag, R.string.XgramSelTextDrag, R.string.XgramSelTextDragSub) // Select text without the menu
     );
 
     items.add(header(R.string.XgramHeaderDefaults));
@@ -1707,6 +1710,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     } else if (id == R.id.btn_xgramTapTimeDetails) {
       settings.setTapTimeForDetails(adapter.toggleView(v));
+      return;
+    } else if (id == R.id.btn_xgramTextSelectDrag) {
+      settings.setTextSelectDrag(adapter.toggleView(v));
       return;
     } else if (id == R.id.btn_xgramCleanLinks) {
       settings.setCleanLinks(adapter.toggleView(v));

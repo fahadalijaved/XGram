@@ -164,6 +164,38 @@ public class TextWrapper implements ListAnimator.Measurable, Destroyable, Text.T
     return text.getXgramRangeBounds(out);
   }
 
+  // XGram: the selected part (com.fahadali.xgram.chats.XgramTextSelection), passed to the layout drawn like the range
+
+  private int xgramSelectionStart = -1, xgramSelectionEnd = -1;
+  private int xgramSelectionColor;
+
+  /** XGram: draws {@code color} behind the text from {@code start} to {@code end} (UTF-16 offsets in {@link #getText()}); -1 for none. */
+  public void setXgramSelection (int start, int end, int color) {
+    this.xgramSelectionStart = start;
+    this.xgramSelectionEnd = end;
+    this.xgramSelectionColor = color;
+    final Text text = getCurrent();
+    if (text != null) {
+      text.setXgramSelection(start, end, color);
+    }
+  }
+
+  /** XGram: the selection's ends and bounds where the text was drawn last (see {@link Text#getXgramSelectionEnds}). */
+  public boolean getXgramSelectionEnds (float[] out) {
+    final Text text = getCurrent();
+    if (text == null) {
+      return false;
+    }
+    text.setXgramSelection(xgramSelectionStart, xgramSelectionEnd, xgramSelectionColor);
+    return text.getXgramSelectionEnds(out);
+  }
+
+  /** XGram: the offset in {@link #getText()} at a point where the text was drawn last (see {@link Text#getXgramOffsetAt}). */
+  public int getXgramOffsetAt (float x, float y, boolean strict) {
+    final Text text = getCurrent();
+    return text != null ? text.getXgramOffsetAt(x, y, strict) : -1;
+  }
+
   @Override
   public void onInvalidateTextMedia (Text text, @Nullable TextMedia specificMedia) {
     if (textMediaListener != null && text == getCurrent()) {
@@ -437,6 +469,7 @@ public class TextWrapper implements ListAnimator.Measurable, Destroyable, Text.T
     final Text text = getCurrent();
     if (text != null) {
       text.setXgramRange(xgramRangeStart, xgramRangeEnd, xgramRangeColor); // XGram
+      text.setXgramSelection(xgramSelectionStart, xgramSelectionEnd, xgramSelectionColor); // XGram
       text.draw(c, startX, startX, 0, startY, colorTheme, alpha, textMediaReceiver);
     }
   }
@@ -458,6 +491,7 @@ public class TextWrapper implements ListAnimator.Measurable, Destroyable, Text.T
     final Text text = getCurrent();
     if (text != null) {
       text.setXgramRange(xgramRangeStart, xgramRangeEnd, xgramRangeColor); // XGram
+      text.setXgramSelection(xgramSelectionStart, xgramSelectionEnd, xgramSelectionColor); // XGram
       text.draw(c, startX, endX, endXPadding, startY, colorTheme, alpha, textMediaReceiver);
     }
   }

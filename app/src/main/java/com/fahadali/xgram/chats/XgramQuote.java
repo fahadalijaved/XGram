@@ -464,7 +464,8 @@ public final class XgramQuote {
 
   // Reply
 
-  private static void reply (MessagesController m, TdApi.Message message, TdApi.FormattedText text, int selectionStart, int selectionEnd) {
+  /** Reply quoting [selectionStart, selectionEnd) of {@code text}, the text of {@code message}; also Select text's Quote. */
+  static void reply (MessagesController m, TdApi.Message message, TdApi.FormattedText text, int selectionStart, int selectionEnd) {
     Tdlib tdlib = m.tdlib();
     int maxLength = tdlib.options().messageReplyQuoteLengthMax;
     if (maxLength <= 0) {

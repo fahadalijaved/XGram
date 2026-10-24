@@ -20,26 +20,34 @@ import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.SurfaceTexture;
 import android.os.Build;
+import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+
+import com.fahadali.xgram.editor.XgramLayer;
 
 import org.thunderdog.challegram.U;
 import org.thunderdog.challegram.loader.ImageGalleryFile;
 import org.thunderdog.challegram.mediaview.MediaCellView;
 import org.thunderdog.challegram.mediaview.crop.CropState;
 import org.thunderdog.challegram.mediaview.data.FiltersState;
+import org.thunderdog.challegram.mediaview.paint.PaintAction;
 import org.thunderdog.challegram.mediaview.paint.PaintMode;
 import org.thunderdog.challegram.mediaview.paint.PaintState;
 import org.thunderdog.challegram.mediaview.paint.SimpleDrawing;
 import org.thunderdog.challegram.mediaview.paint.widget.SimpleDrawingView;
 import org.thunderdog.challegram.tool.Paints;
+import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.UI;
 
 import me.vkryl.android.widget.FrameLayoutFix;
+import me.vkryl.core.MathUtils;
 
 public class EGLEditorView extends ViewGroup {
   private SimpleDrawingView paintView;
@@ -166,7 +174,9 @@ public class EGLEditorView extends ViewGroup {
             }
 
             @Override
-            public void onSurfaceTextureUpdated (SurfaceTexture surface) { }
+            public void onSurfaceTextureUpdated (SurfaceTexture surface) {
+              xgramScheduleFilteredBase(); // XGram
+            }
           });
           textureView.setScaleX(-1);
           contentWrap.addView(textureView);
@@ -184,6 +194,7 @@ public class EGLEditorView extends ViewGroup {
       this.textureView = textureView;
       applyCurrentStyles();
       initedType = initType;
+      xgramSetFiltersBase();
     }
   }
 
@@ -401,6 +412,57 @@ public class EGLEditorView extends ViewGroup {
         break;
     }
     contentWrap.setPaintingState(paintState);
+    xgramSetFiltersBase();
+  }
+
+  // XGram: the photo under the drawing, for the blur and pixelate brushes. Adjust (filters) shows the source under its
+  // drawing, mirrored as its texture is; the paint section passes what its image receiver shows (setPaintBase).
+
+  private void xgramSetFiltersBase () {
+    removeCallbacks(xgramFilteredBase);
+    if (initedType == TYPE_FILTERS && paintView != null) {
+      paintView.setBaseBitmap(sourceBitmap, sourceCropState != null && sourceCropState.needMirrorHorizontally(), sourceCropState != null && sourceCropState.needMirrorVertically());
+    }
+  }
+
+  // XGram: once the filtered frames settle, Adjust's blur and pixelate strokes paint with a small copy of the texture
+  // (the filtered photo only: the drawing is another view), as the paint section and the export use the filtered
+  // photo; the source until then. A new bitmap each time: XgramPaintBase caches its copies by bitmap.
+
+  private static final float FILTERED_BASE_SIDE = 240f;
+
+  private final Runnable xgramFilteredBase = this::xgramTakeFilteredBase;
+
+  private void xgramScheduleFilteredBase () {
+    removeCallbacks(xgramFilteredBase);
+    postDelayed(xgramFilteredBase, 150L);
+  }
+
+  private void xgramTakeFilteredBase () {
+    if (initedType != TYPE_FILTERS || paintView == null || !(textureView instanceof android.view.TextureView) || contentWrap.state == null || !contentWrap.state.hasBaseDrawings()) {
+      return;
+    }
+    android.view.TextureView view = (android.view.TextureView) textureView;
+    final int width = view.getWidth(), height = view.getHeight();
+    if (!view.isAvailable() || width <= 0 || height <= 0) {
+      return;
+    }
+    final float scale = Math.min(1f, FILTERED_BASE_SIDE / (float) Math.max(width, height));
+    Bitmap bitmap;
+    try {
+      bitmap = view.getBitmap(Math.max(1, Math.round(width * scale)), Math.max(1, Math.round(height * scale)));
+    } catch (Throwable t) {
+      bitmap = null;
+    }
+    if (bitmap != null) {
+      paintView.setBaseBitmap(bitmap, sourceCropState != null && sourceCropState.needMirrorHorizontally(), sourceCropState != null && sourceCropState.needMirrorVertically());
+    }
+  }
+
+  public void setPaintBase (@Nullable Bitmap bitmap, boolean mirrorHorizontally, boolean mirrorVertically) {
+    if (paintView != null) {
+      paintView.setBaseBitmap(bitmap, mirrorHorizontally, mirrorVertically);
+    }
   }
 
   public void setSizes (int width, int height, int rotation, CropState cropState) {
@@ -477,6 +539,9 @@ public class EGLEditorView extends ViewGroup {
     }
 
     public void setPaintingState (PaintState state) {
+      if (heldLayer != null && this.state != state) {
+        xgramEndLayerGesture(null, true); // XGram: the layer goes back to where it was in the drawing it was in
+      }
       this.state = state;
       parent.paintView.setPaintState(state);
     }
@@ -514,7 +579,7 @@ public class EGLEditorView extends ViewGroup {
     @SuppressWarnings("ClickableViewAccessibility")
     @Override
     public boolean onTouchEvent (MotionEvent e) {
-      int action = e.getAction();
+      int action = e.getActionMasked(); // XGram: masked, so a second finger's events are not read as the first's
 
       if (state == null) {
         return false;
@@ -522,6 +587,14 @@ public class EGLEditorView extends ViewGroup {
 
       if (action == MotionEvent.ACTION_DOWN) {
         needZoomCancel = false;
+        if (xgramBeginLayerGesture(e)) { // XGram: a finger on a layer moves it instead of drawing
+          return true;
+        }
+      }
+
+      if (heldLayer != null) { // XGram
+        xgramOnLayerTouch(e, action);
+        return true;
       }
 
       if (action != MotionEvent.ACTION_DOWN && effectiveMode == PaintMode.NONE) {
@@ -560,9 +633,34 @@ public class EGLEditorView extends ViewGroup {
     }
 
     private SimpleDrawing currentSimpleDrawing;
+    // XGram: the eraser's current gesture
+    private PaintAction.EraseData eraseData;
 
     private int brushColor;
     private float brushRadius;
+
+    /** XGram: how much the drawing is scaled on screen: the crop's straightening and region, and the zoom. */
+    private float getScreenScale () {
+      float scale = parent.textureWrap.getScaleX() * getScaleX();
+      if (parent.getParent() instanceof MediaCellView) {
+        scale *= ((MediaCellView) parent.getParent()).getZoomFactor();
+      }
+      return scale > 0f ? Math.abs(scale) : 1f;
+    }
+
+    /** XGram: removes every drawing the eraser touches at (x, y); its size is brushRadius, in dp on screen. */
+    private void eraseAt (float x, float y, float tolerance) {
+      SimpleDrawing drawing;
+      while ((drawing = state.findSimpleDrawing(x, y, getMeasuredWidth(), getMeasuredHeight(), tolerance)) != null) {
+        if (!state.eraseSimpleDrawing(drawing, eraseData)) {
+          break;
+        }
+      }
+    }
+
+    private float getEraserTolerance () {
+      return Screen.dpf(brushRadius) / 2f / getScreenScale();
+    }
 
     public void setBrushParameters (int brushColor, float brushRadius) {
       if (this.brushColor != brushColor || this.brushRadius != brushRadius) {
@@ -586,10 +684,41 @@ public class EGLEditorView extends ViewGroup {
         case PaintMode.PATH:
           type = SimpleDrawing.TYPE_PATH;
           break;
+        // XGram
+        case PaintMode.MARKER:
+          type = SimpleDrawing.TYPE_MARKER;
+          break;
+        case PaintMode.NEON:
+          type = SimpleDrawing.TYPE_NEON;
+          break;
+        case PaintMode.BLUR:
+          type = SimpleDrawing.TYPE_BLUR;
+          break;
+        case PaintMode.PIXELATE:
+          type = SimpleDrawing.TYPE_PIXELATE;
+          break;
+        case PaintMode.ELLIPSE:
+          type = SimpleDrawing.TYPE_ELLIPSE;
+          break;
+        case PaintMode.RECTANGLE_FILLED:
+          type = SimpleDrawing.TYPE_RECTANGLE_FILLED;
+          break;
+        case PaintMode.ELLIPSE_FILLED:
+          type = SimpleDrawing.TYPE_ELLIPSE_FILLED;
+          break;
+        case PaintMode.ERASER: {
+          eraseData = new PaintAction.EraseData();
+          float tolerance = getEraserTolerance();
+          parent.paintView.setScreenScale(getScreenScale());
+          eraseAt(e.getX(), e.getY(), tolerance);
+          parent.paintView.setEraser(e.getX(), e.getY(), tolerance);
+          return true;
+        }
         default:
           return false;
       }
-      SimpleDrawing drawing = new SimpleDrawing(type, canvasWidth, canvasHeight, 1f, parent.sourceCropState != null ? parent.sourceCropState.getDegreesAroundCenter() : 0f);
+      // XGram: the brush keeps its size on screen whatever the zoom and crop (Telegram X: 1, the size before them)
+      SimpleDrawing drawing = new SimpleDrawing(type, canvasWidth, canvasHeight, 1f / getScreenScale(), parent.sourceCropState != null ? parent.sourceCropState.getDegreesAroundCenter() : 0f);
       drawing.startDrawing(e);
       drawing.setBrushParameters(brushColor, brushRadius);
       state.addSimpleDrawing(drawing);
@@ -599,36 +728,340 @@ public class EGLEditorView extends ViewGroup {
     }
 
     private boolean moveDrawing (int mode, MotionEvent e, boolean allowHistory) {
-      switch (mode) {
-        case PaintMode.ARROW:
-        case PaintMode.RECTANGLE:
-        case PaintMode.PATH: {
-          currentSimpleDrawing.moveDrawing(e, allowHistory);
-          return true;
+      if (mode == PaintMode.ERASER) { // XGram: along the finger's path since the last event
+        if (eraseData == null) {
+          return false;
         }
+        float tolerance = getEraserTolerance();
+        for (int i = 0; i < e.getHistorySize(); i++) {
+          eraseAt(e.getHistoricalX(i), e.getHistoricalY(i), tolerance);
+        }
+        eraseAt(e.getX(), e.getY(), tolerance);
+        parent.paintView.setEraser(e.getX(), e.getY(), tolerance);
+        return true;
+      }
+      if (currentSimpleDrawing != null) { // XGram: every drawing tool (Telegram X listed path, arrow and rectangle)
+        currentSimpleDrawing.moveDrawing(e, allowHistory);
+        return true;
       }
       throw new UnsupportedOperationException("mode == " + mode);
     }
 
     private void completeDrawing (int mode, MotionEvent e, boolean byPinch) {
-      switch (mode) {
-        case PaintMode.ARROW:
-        case PaintMode.RECTANGLE:
-        case PaintMode.PATH: {
-          if (currentSimpleDrawing.completeDrawing(e, byPinch)) {
-            state.trackSimpleDrawingAction(currentSimpleDrawing);
+      if (mode == PaintMode.ERASER) { // XGram: one action for the gesture, none when a pinch took it over
+        if (eraseData != null) {
+          if (byPinch) {
+            state.restoreErased(eraseData);
           } else {
-            state.removeSimpleDrawing(currentSimpleDrawing);
+            state.trackEraseAction(eraseData);
           }
-          currentSimpleDrawing.removeChangeListener(this);
-          currentSimpleDrawing = null;
+          eraseData = null;
+        }
+        parent.paintView.setEraser(0f, 0f, 0f);
+        return;
+      }
+      if (currentSimpleDrawing != null) {
+        if (currentSimpleDrawing.completeDrawing(e, byPinch)) {
+          state.trackSimpleDrawingAction(currentSimpleDrawing);
+        } else {
+          state.removeSimpleDrawing(currentSimpleDrawing);
+        }
+        currentSimpleDrawing.removeChangeListener(this);
+        currentSimpleDrawing = null;
+      }
+    }
+
+    public boolean isBusy () {
+      return effectiveMode != PaintMode.NONE || heldLayer != null; // XGram: or a layer is held
+    }
+
+    // XGram: the movable layers (text, emoji, stickers). A finger on one moves it, two scale and turn it about their
+    // middle, a tap opens it (a text to edit), and dragged onto the trash it goes. Its touches are this view's alone
+    // while it is held: the cell's zoom and the pager keep out. One action per gesture, so undo puts it back.
+
+    public interface LayerListener {
+      /** A layer started ({@code layer}) or stopped (null) being dragged: the trash shows while one is. */
+      void onLayerDragChanged (ContentLayout v, @Nullable XgramLayer layer);
+      /** Whether (rawX, rawY) on screen is over the trash. */
+      boolean isOverLayerTrash (ContentLayout v, float rawX, float rawY);
+      /** The dragged layer came over the trash or left it (a second finger takes it off): the trash shows it. */
+      void onLayerOverTrashChanged (ContentLayout v, boolean isOver);
+      /** A tap on a layer. */
+      void onLayerClick (ContentLayout v, XgramLayer layer);
+    }
+
+    private @Nullable LayerListener layerListener;
+
+    public void setLayerListener (@Nullable LayerListener listener) {
+      this.layerListener = listener;
+    }
+
+    /** A layer at least this big on screen (a pinch can't lose it), at most this many times the photo's width. */
+    private static final float MIN_LAYER_SCREEN_DP = 16f, MAX_LAYER_SIZE = 4f;
+    /** A turn this close to upright on screen (or a quarter from it) settles there. */
+    private static final float LAYER_SNAP_DEGREES = 4f;
+
+    private @Nullable XgramLayer heldLayer, heldLayerBefore;
+    private boolean heldLayerMoved, heldLayerDragging, heldLayerOverTrash;
+    private long heldLayerDownTime;
+    private float heldLayerDownX, heldLayerDownY;
+    // The pointers, and the layer, when the pointers last changed: the gesture goes on from there
+    private int gesturePointer0 = -1, gesturePointer1 = -1;
+    private float gestureX0, gestureY0, gestureX1, gestureY1;
+    private float gestureCx, gestureCy, gestureSize, gestureRotation;
+
+    public boolean isHoldingLayer () {
+      return heldLayer != null;
+    }
+
+    private boolean xgramBeginLayerGesture (MotionEvent e) {
+      if (heldLayer != null) {
+        xgramEndLayerGesture(null, true); // a gesture that never ended
+      }
+      if (!paintingEnabled || paintingMode == PaintMode.FREE_MOVEMENT || state == null || !state.hasLayers() || e.getPointerCount() > 1) {
+        return false;
+      }
+      final float scale = getScreenScale();
+      final XgramLayer layer = state.findLayer(e.getX(), e.getY(), getMeasuredWidth(), getMeasuredHeight(), Screen.dp(8f) / scale);
+      if (layer == null) {
+        return false;
+      }
+      heldLayer = layer;
+      heldLayerBefore = layer.copy();
+      heldLayerMoved = heldLayerDragging = heldLayerOverTrash = false;
+      heldLayerDownTime = e.getEventTime();
+      heldLayerDownX = e.getX();
+      heldLayerDownY = e.getY();
+      xgramRebaseLayerGesture(e, -1);
+      ViewParent viewParent = getParent();
+      if (viewParent != null) {
+        viewParent.requestDisallowInterceptTouchEvent(true);
+      }
+      parent.paintView.setScreenScale(scale);
+      parent.paintView.setHeldLayer(layer);
+      return true;
+    }
+
+    /** The gesture goes on from the pointers down now, but the one at {@code upIndex} (lifting), and the layer's place. */
+    private void xgramRebaseLayerGesture (MotionEvent e, int upIndex) {
+      gesturePointer0 = gesturePointer1 = -1;
+      for (int i = 0; i < e.getPointerCount(); i++) {
+        if (i == upIndex) {
+          continue;
+        }
+        if (gesturePointer0 == -1) {
+          gesturePointer0 = e.getPointerId(i);
+          gestureX0 = e.getX(i);
+          gestureY0 = e.getY(i);
+        } else {
+          gesturePointer1 = e.getPointerId(i);
+          gestureX1 = e.getX(i);
+          gestureY1 = e.getY(i);
+          break;
+        }
+      }
+      if (heldLayer != null) {
+        gestureCx = heldLayer.getCenterX();
+        gestureCy = heldLayer.getCenterY();
+        gestureSize = heldLayer.getSize();
+        gestureRotation = heldLayer.getRotation();
+      }
+    }
+
+    private void xgramOnLayerTouch (MotionEvent e, int action) {
+      switch (action) {
+        case MotionEvent.ACTION_POINTER_DOWN: {
+          heldLayerMoved = true; // two fingers: not a tap
+          xgramRebaseLayerGesture(e, -1);
+          xgramUpdateLayerTrash(null); // a pinch drops nothing
+          break;
+        }
+        case MotionEvent.ACTION_POINTER_UP: {
+          xgramRebaseLayerGesture(e, e.getActionIndex());
+          break;
+        }
+        case MotionEvent.ACTION_MOVE: {
+          xgramMoveLayer(e);
+          break;
+        }
+        case MotionEvent.ACTION_UP: {
+          xgramEndLayerGesture(e, false);
+          break;
+        }
+        case MotionEvent.ACTION_CANCEL: {
+          xgramEndLayerGesture(e, true);
           break;
         }
       }
     }
 
-    public boolean isBusy () {
-      return effectiveMode != PaintMode.NONE;
+    private void xgramMoveLayer (MotionEvent e) {
+      final XgramLayer layer = heldLayer;
+      final int index0 = gesturePointer0 != -1 ? e.findPointerIndex(gesturePointer0) : -1;
+      final int width = getMeasuredWidth(), height = getMeasuredHeight();
+      if (layer == null || index0 == -1 || width <= 0 || height <= 0) {
+        return;
+      }
+      final float scale = getScreenScale();
+      if (!heldLayerMoved) {
+        if (Math.hypot(e.getX(index0) - heldLayerDownX, e.getY(index0) - heldLayerDownY) <= Screen.getTouchSlop() / scale) {
+          return;
+        }
+        heldLayerMoved = true;
+      }
+      final int index1 = gesturePointer1 != -1 ? e.findPointerIndex(gesturePointer1) : -1;
+      float cx, cy, size = gestureSize, rotation = gestureRotation;
+      if (index1 != -1) {
+        // two fingers: their middle moves it, their distance scales it, their angle turns it
+        final float x0 = e.getX(index0), y0 = e.getY(index0), x1 = e.getX(index1), y1 = e.getY(index1);
+        cx = gestureCx + ((x0 + x1) - (gestureX0 + gestureX1)) / 2f / width;
+        cy = gestureCy + ((y0 + y1) - (gestureY0 + gestureY1)) / 2f / height;
+        final double startDistance = Math.hypot(gestureX1 - gestureX0, gestureY1 - gestureY0);
+        if (startDistance > 0) {
+          size = (float) (gestureSize * Math.hypot(x1 - x0, y1 - y0) / startDistance);
+        }
+        final double startAngle = Math.atan2(gestureY1 - gestureY0, gestureX1 - gestureX0);
+        rotation = xgramSnapLayerRotation(gestureRotation + (float) Math.toDegrees(Math.atan2(y1 - y0, x1 - x0) - startAngle));
+      } else {
+        cx = gestureCx + (e.getX(index0) - gestureX0) / width;
+        cy = gestureCy + (e.getY(index0) - gestureY0) / height;
+      }
+      final float minSize = Math.min(gestureSize, Screen.dp(MIN_LAYER_SCREEN_DP) / (width * scale));
+      size = Math.max(minSize, Math.min(MAX_LAYER_SIZE, size));
+      layer.setPosition(cx, cy, size, rotation);
+      if (!heldLayerDragging) {
+        heldLayerDragging = true;
+        if (layerListener != null) {
+          layerListener.onLayerDragChanged(this, layer);
+        }
+      }
+      xgramUpdateLayerTrash(index1 == -1 && e.getPointerCount() == 1 ? e : null);
+      parent.paintView.invalidate();
+    }
+
+    /** The turn, settled upright on screen (or a quarter turn from it) when it is close. */
+    private float xgramSnapLayerRotation (float rotation) {
+      final float base = parent.textureWrap.getRotation() + getRotation();
+      final float onScreen = rotation + base;
+      final float nearest = Math.round(onScreen / 90f) * 90f;
+      return Math.abs(onScreen - nearest) <= LAYER_SNAP_DEGREES ? nearest - base : rotation;
+    }
+
+    private void xgramUpdateLayerTrash (@Nullable MotionEvent e) {
+      final boolean over = e != null && heldLayerDragging && layerListener != null && layerListener.isOverLayerTrash(this, e.getRawX(), e.getRawY());
+      if (heldLayerOverTrash != over) {
+        heldLayerOverTrash = over;
+        if (heldLayer != null) {
+          heldLayer.setFade(over ? 1f : 0f);
+        }
+        if (over) {
+          performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+        }
+        if (layerListener != null) {
+          layerListener.onLayerOverTrashChanged(this, over);
+        }
+      }
+    }
+
+    /** Puts a held layer back where it was and lets it go (the section is closing). */
+    public void cancelLayerGesture () {
+      if (heldLayer != null) {
+        xgramEndLayerGesture(null, true);
+      }
+    }
+
+    private void xgramEndLayerGesture (@Nullable MotionEvent e, boolean cancel) {
+      final XgramLayer layer = heldLayer, before = heldLayerBefore;
+      final boolean moved = heldLayerMoved, dragging = heldLayerDragging, overTrash = heldLayerOverTrash;
+      heldLayer = heldLayerBefore = null;
+      heldLayerMoved = heldLayerDragging = heldLayerOverTrash = false;
+      gesturePointer0 = gesturePointer1 = -1;
+      parent.paintView.setHeldLayer(null);
+      if (layer == null || before == null) {
+        return;
+      }
+      layer.setFade(0f);
+      if (cancel || state == null) {
+        layer.set(before);
+      } else if (!moved) {
+        if (e != null && e.getEventTime() - heldLayerDownTime <= ViewConfiguration.getLongPressTimeout() && layerListener != null) {
+          layerListener.onLayerClick(this, layer);
+        }
+      } else if (overTrash) {
+        layer.set(before); // undo brings it back where it was
+        state.removeLayer(layer);
+      } else {
+        // its middle stays on the photo: it can't get lost off the edge
+        layer.setPosition(MathUtils.clamp(layer.getCenterX()), MathUtils.clamp(layer.getCenterY()), layer.getSize(), layer.getRotation());
+        state.trackLayerChange(layer, before);
+      }
+      if (dragging && layerListener != null) {
+        layerListener.onLayerDragChanged(this, null);
+      }
+      parent.paintView.invalidate();
+    }
+
+    /**
+     * Adds {@code layer} where the middle of the cropped photo is on screen (whatever the zoom), upright on screen and
+     * {@code screenSize} pixels big there (a text's font size, a picture's long side), as an action.
+     */
+    public void addLayer (XgramLayer layer, float screenSize) {
+      final int width = getMeasuredWidth(), height = getMeasuredHeight();
+      if (state == null || width <= 0 || height <= 0) {
+        return;
+      }
+      final float[] point = {parent.getLeft() + parent.centerX, parent.getTop() + parent.centerY};
+      mapIntoChild(parent, point);
+      mapIntoChild(parent.textureWrap, point);
+      mapIntoChild(this, point);
+      final float rotation = -(parent.textureWrap.getRotation() + getRotation());
+      layer.setPosition(MathUtils.clamp(point[0] / width), MathUtils.clamp(point[1] / height), screenSize / (width * getScreenScale()), rotation);
+      state.addLayer(layer);
+    }
+
+    /** How big a new emoji or sticker is on screen: 40% of the cropped photo's shorter side. */
+    public float getDefaultLayerScreenSize () {
+      return Math.max(Screen.dp(56f), Math.min(parent.croppedWidth, parent.croppedHeight) * .4f);
+    }
+
+    private float xgramZoomFactor () {
+      final float zoom = parent.getParent() instanceof MediaCellView ? ((MediaCellView) parent.getParent()).getZoomFactor() : 1f;
+      return zoom > 0f ? zoom : 1f;
+    }
+
+    /** How wide the cropped photo is on screen, with the zoom (a new text's field is no wider). */
+    public float getPhotoScreenWidth () {
+      return parent.croppedWidth * xgramZoomFactor();
+    }
+
+    /**
+     * {@code screenSize} for a new {@code layer}, smaller if the layer would be wider or taller than 90% of the cropped
+     * photo on screen, so the sent photo has all of it.
+     */
+    public float fitLayerScreenSize (XgramLayer layer, float screenSize) {
+      final float zoom = xgramZoomFactor();
+      final float maxWidth = parent.croppedWidth * zoom * .9f, maxHeight = parent.croppedHeight * zoom * .9f;
+      final float contentWidth = layer.getContentWidth(), contentHeight = layer.getContentHeight();
+      if (maxWidth > 0f && contentWidth > 0f && contentWidth * screenSize > maxWidth) {
+        screenSize = maxWidth / contentWidth;
+      }
+      if (maxHeight > 0f && contentHeight > 0f && contentHeight * screenSize > maxHeight) {
+        screenSize = maxHeight / contentHeight;
+      }
+      return screenSize;
+    }
+
+    /** {@code point}, in {@code child}'s parent's coordinates, in {@code child}'s own (through its scale and turn). */
+    private static void mapIntoChild (View child, float[] point) {
+      point[0] -= child.getLeft();
+      point[1] -= child.getTop();
+      final android.graphics.Matrix matrix = child.getMatrix();
+      if (!matrix.isIdentity()) {
+        final android.graphics.Matrix inverse = new android.graphics.Matrix();
+        if (matrix.invert(inverse)) {
+          inverse.mapPoints(point);
+        }
+      }
     }
 
     private boolean scheduled;

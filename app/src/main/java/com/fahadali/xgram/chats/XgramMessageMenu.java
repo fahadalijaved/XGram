@@ -103,6 +103,7 @@ public final class XgramMessageMenu {
     new Option("shadow_ban", R.string.XgramShadowBan, R.drawable.baseline_block_24, true, R.id.btn_xgramShadowBan),
     new Option("copy_photo", R.string.XgramCopyPhoto, R.drawable.baseline_content_copy_24, true, R.id.btn_xgramCopyPhoto),
     new Option("copy", R.string.Copy, R.drawable.baseline_content_copy_24, false, R.id.btn_messageCopy, R.id.btn_copyTranslation),
+    new Option("select_text", R.string.XgramSelText, XgramTextSelection.ICON, true, R.id.btn_xgramSelectText),
     new Option("translate", R.string.Translate, R.drawable.baseline_translate_24, false, R.id.btn_chatTranslate, R.id.btn_chatTranslateOff),
     new Option("sticker_set", R.string.OpenStickerSet, R.drawable.deproko_baseline_stickers_24, false, R.id.btn_messageStickerSet),
     new Option("save", R.string.SaveToDownloads, R.drawable.baseline_file_download_24, false, R.id.btn_saveFile, R.id.btn_saveGif),

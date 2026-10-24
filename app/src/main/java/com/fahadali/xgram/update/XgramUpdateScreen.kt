@@ -171,6 +171,7 @@ import com.fahadali.xgram.appearance.XgramMotion
 import com.fahadali.xgram.appearance.XgramR6B3Shell
 import com.fahadali.xgram.compose.XgramComposeFlags
 import com.fahadali.xgram.compose.XgramComposeOwner
+import com.fahadali.xgram.compose.XgramDialogWindow
 import com.fahadali.xgram.compose.theme.XgramM3Theme
 import com.fahadali.xgram.compose.ui.s
 import com.fahadali.xgram.compose.pages.URL_SUPPORT
@@ -283,7 +284,8 @@ private const val PREVIEW_TIMEOUT_MS = 8_000L
  *
  * The window is a platform [Dialog] holding a ComposeView with its own lifecycle, as XgramR5ChatPickers: the 32% scrim,
  * the app's Compose theme (dynamic colors, Telegram X's dark mode). The window only fades; the card springs in and out
- * itself (fades only with Reduce motion, which also stops the hero's motion).
+ * itself (fades only with Reduce motion, which also stops the hero's motion). It is edge to edge ([XgramDialogWindow]):
+ * the system bars stay transparent over the dimmed app.
  */
 object XgramUpdateScreen {
   private var showing: WeakReference<ScreenState>? = null
@@ -537,6 +539,8 @@ object XgramUpdateScreen {
         window.setDimAmount(SCRIM)
         // The window and its scrim only fade: the card springs in and out itself
         window.setWindowAnimations(R.style.XgramDialogFade)
+        // Transparent system bars over the dimmed app, not an opaque black navigation bar; the card pads with safeDrawing
+        XgramDialogWindow.edgeToEdge(window, context, dark)
       }
       dialog.setOnDismissListener {
         screen.closing = true

@@ -48,6 +48,8 @@ public final class XgramSettings {
   public static final String KEY_SAVE_LAST_SEEN = "xgram_save_last_seen";
   public static final String KEY_SHOW_SECONDS = "xgram_show_seconds";
   public static final String KEY_TAP_TIME_DETAILS = "xgram_tap_time_details";
+  /** Long press on text selects it (com.fahadali.xgram.chats.XgramTextSelection), off by default. */
+  public static final String KEY_TEXT_SELECT_DRAG = "xgram_text_select_drag";
   public static final String KEY_CLEAN_LINKS = "xgram_clean_links";
   public static final String KEY_FIX_LINK_PREVIEWS = "xgram_fix_link_previews";
   public static final String KEY_ALLOW_SCREENSHOTS = "xgram_allow_screenshots";
@@ -121,6 +123,7 @@ public final class XgramSettings {
   private volatile boolean hideSponsored, showPeerIds, twoPaneLayout, saveLastSeen, showSeconds, cleanLinks, fixLinkPreviews, allowScreenshots, saveProtected, proxyOffOnVpn, proxyOffOnWifi, proxyOffOnMobile, hidePhone, blockContentCapture, iconTheme, mergeCommunities;
   private volatile boolean aiTools, hideFab, pullToNext, allChatsLabel, connectionStatusAtStart, sendMenuTests;
   private volatile boolean tapTimeForDetails;
+  private volatile boolean textSelectDrag;
   private volatile boolean tapToRecord;
   private volatile boolean systemEmoji;
   private volatile boolean downloadBoost;
@@ -146,6 +149,7 @@ public final class XgramSettings {
     saveLastSeen = pmc.getBoolean(KEY_SAVE_LAST_SEEN, true);
     showSeconds = pmc.getBoolean(KEY_SHOW_SECONDS, false);
     tapTimeForDetails = pmc.getBoolean(KEY_TAP_TIME_DETAILS, false); // off by default (as NagramX): the time pill sits over media corners
+    textSelectDrag = pmc.getBoolean(KEY_TEXT_SELECT_DRAG, false); // off by default: a long press keeps what it does
     videoAutoHide = pmc.getBoolean(KEY_VIDEO_AUTO_HIDE, true);
     cleanLinks = pmc.getBoolean(KEY_CLEAN_LINKS, true);
     fixLinkPreviews = pmc.getBoolean(KEY_FIX_LINK_PREVIEWS, true);
@@ -326,6 +330,19 @@ public final class XgramSettings {
   public void setTapTimeForDetails (boolean value) {
     tapTimeForDetails = value;
     put(KEY_TAP_TIME_DETAILS, value);
+  }
+
+  /**
+   * Long press on text selects it: a long press on a message's text that then moves selects text right in the
+   * bubble (com.fahadali.xgram.chats.XgramTextSelection); held still, it does what it did before. Read on long press.
+   */
+  public boolean textSelectDrag () {
+    return textSelectDrag;
+  }
+
+  public void setTextSelectDrag (boolean value) {
+    textSelectDrag = value;
+    put(KEY_TEXT_SELECT_DRAG, value);
   }
 
   /** Remove tracking parameters (utm_*, fbclid, si…) from links before opening them. */
@@ -2224,5 +2241,43 @@ public final class XgramSettings {
     } else {
       putInt(KEY_PANE_LIST_WIDTH, value);
     }
+  }
+
+  // Photo editor (com.fahadali.xgram.editor.XgramPaintTools): the tool picked last, the shape, and each tool's size
+  // and colour. Not settings: left out of backups.
+
+  public static final String KEY_EDITOR_TOOL = "xgram_editor_tool";
+  public static final String KEY_EDITOR_SHAPE = "xgram_editor_shape";
+  /** Prefixes: followed by the tool id. */
+  public static final String KEY_EDITOR_SIZE = "xgram_editor_size_", KEY_EDITOR_COLOR = "xgram_editor_color_", KEY_EDITOR_HUE = "xgram_editor_hue_";
+
+  public int editorTool (int defaultTool) {
+    return pmc().getInt(KEY_EDITOR_TOOL, defaultTool);
+  }
+
+  public int editorShape (int defaultShape) {
+    return pmc().getInt(KEY_EDITOR_SHAPE, defaultShape);
+  }
+
+  /** The tool's size, 0..1 of its range, or {@code defaultSize}. */
+  public float editorSize (int tool, float defaultSize) {
+    return pmc().getFloat(KEY_EDITOR_SIZE + tool, defaultSize);
+  }
+
+  public int editorColor (int tool, int defaultColor) {
+    return pmc().getInt(KEY_EDITOR_COLOR + tool, defaultColor);
+  }
+
+  /** The hue track position the colour was picked at (0..1), or -1: found from the colour. */
+  public float editorHue (int tool) {
+    return pmc().getFloat(KEY_EDITOR_HUE + tool, -1f);
+  }
+
+  public void setEditorTool (int tool, int shape) {
+    pmc().edit().putInt(KEY_EDITOR_TOOL, tool).putInt(KEY_EDITOR_SHAPE, shape).apply();
+  }
+
+  public void setEditorBrush (int tool, float size, int color, float hue) {
+    pmc().edit().putFloat(KEY_EDITOR_SIZE + tool, size).putInt(KEY_EDITOR_COLOR + tool, color).putFloat(KEY_EDITOR_HUE + tool, hue).apply();
   }
 }

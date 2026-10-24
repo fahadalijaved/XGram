@@ -429,6 +429,17 @@ public class ImageReceiver implements Watcher, ValueAnimator.AnimatorUpdateListe
     return file != null && U.isRotated(Math.abs(getVisualRotationWithoutCropState() - file.getVisualRotation()));
   }
 
+  // XGram: how the bitmap is mirrored when drawn, for the photo editor's blur and pixelate brushes (they sample the
+  // photo as it is shown under the drawing)
+
+  public boolean xgramMirrorsHorizontally () {
+    return displayCrop != null && (needSwapMirrorAxis() ? displayCrop.needMirrorVertically() : displayCrop.needMirrorHorizontally());
+  }
+
+  public boolean xgramMirrorsVertically () {
+    return displayCrop != null && (needSwapMirrorAxis() ? displayCrop.needMirrorHorizontally() : displayCrop.needMirrorVertically());
+  }
+
   private int getVisualRotation () {
     if (file != null) {
       int rotation = getVisualRotationWithoutCropState();
@@ -1256,13 +1267,13 @@ public class ImageReceiver implements Watcher, ValueAnimator.AnimatorUpdateListe
 
             drawBitmap(c, bitmap, 0, 0, needMirrorHorizontally, needMirrorVertically, paint);
             if (paintState != null) {
-              paintState.draw(c, 0, 0, bitmap.getWidth(), bitmap.getHeight());
+              paintState.draw(c, 0, 0, bitmap.getWidth(), bitmap.getHeight(), bitmap, needMirrorHorizontally, needMirrorVertically); // XGram: the photo under it
             }
           } else {
             drawBitmap(c, bitmap, bitmapRect, rect, needMirrorHorizontally, needMirrorVertically, paint);
             if (paintState != null) {
               c.clipRect(rect);
-              DrawAlgorithms.drawPainting(c, bitmap, bitmapRect, rect, paintState);
+              DrawAlgorithms.drawPainting(c, bitmap, bitmapRect, rect, paintState, needMirrorHorizontally, needMirrorVertically);
             }
           }
         } else {
@@ -1270,7 +1281,7 @@ public class ImageReceiver implements Watcher, ValueAnimator.AnimatorUpdateListe
           drawBitmap(c, bitmap, 0, 0, needMirrorHorizontally, needMirrorVertically, paint);
           if (paintState != null) {
             c.clipRect(0, 0, bitmap.getWidth(), bitmap.getHeight());
-            paintState.draw(c, 0, 0, bitmap.getWidth(), bitmap.getHeight());
+            paintState.draw(c, 0, 0, bitmap.getWidth(), bitmap.getHeight(), bitmap, needMirrorHorizontally, needMirrorVertically); // XGram: the photo under it
           }
         }
 
@@ -1280,7 +1291,7 @@ public class ImageReceiver implements Watcher, ValueAnimator.AnimatorUpdateListe
         if (paintState != null) {
           c.save();
           c.clipRect(drawRegion);
-          DrawAlgorithms.drawPainting(c, bitmap, bitmapRect, drawRegion, paintState);
+          DrawAlgorithms.drawPainting(c, bitmap, bitmapRect, drawRegion, paintState, needMirrorHorizontally, needMirrorVertically);
           c.restore();
         }
       }

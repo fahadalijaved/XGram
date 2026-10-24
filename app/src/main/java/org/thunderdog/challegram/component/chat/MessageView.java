@@ -632,6 +632,7 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
   private boolean onMessageClickImpl (float x, float y, @Nullable TdApi.ChatMember sender) {
     MessagesController m = msg.messagesController();
     boolean isSent = !msg.isNotSent();
+    com.fahadali.xgram.chats.XgramTextSelection.setMenuPoint(msg, x, y); // XGram: Select text starts at the word tapped
 
     if (msg.isEventLog()) {
       msg.checkTranslatableText(() -> showEventLogOptions(m, msg));
@@ -733,6 +734,7 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
         strings.append(R.string.Copy);
         icons.append(R.drawable.baseline_content_copy_24);
       }
+      com.fahadali.xgram.chats.XgramTextSelection.fill(m, msg, ids, icons, strings); // XGram: select part of the text in the bubble
       ids.append(R.id.btn_xgramMessageDetails);
       strings.append(R.string.XgramMessageDetails);
       icons.append(R.drawable.baseline_info_24);
@@ -992,6 +994,9 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
         strings.append(R.string.Copy);
       }
       icons.append(R.drawable.baseline_content_copy_24);
+    }
+    if (!isMore) {
+      com.fahadali.xgram.chats.XgramTextSelection.fill(m, msg, ids, icons, strings); // XGram: select part of the text in the bubble
     }
 
     if (!isMore && msg.isTranslated()) {
@@ -1543,15 +1548,24 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
   }
 
   private void onLongPress () {
+    // XGram: Long press on text selects it (XgramTextSelection): the long press waits to see whether the finger moves
+    // (it selects then); lifted without moving, it does what it did before (onLongPress(false) from onTouchEvent)
+    if (((flags & (FLAG_CAUGHT_CLICK | FLAG_CAUGHT_MESSAGE_TOUCH)) != 0) && com.fahadali.xgram.chats.XgramTextSelection.startPress(this, msg, touchX, touchY)) {
+      return;
+    }
+    onLongPress(true);
+  }
+
+  private void onLongPress (boolean allowHapticFeedback) {
     if ((flags & FLAG_CAUGHT_CLICK) != 0) {
       if (performLongPress()) {
         flags &= ~FLAG_CAUGHT_CLICK;
-        setLongPressed(true);
+        setLongPressed(true, allowHapticFeedback);
       }
     } else if ((flags & FLAG_CAUGHT_MESSAGE_TOUCH) != 0) {
       flags &= ~FLAG_CAUGHT_MESSAGE_TOUCH;
       if (msg.performLongPress(this, touchX, touchY) || performLongPress()) {
-        setLongPressed(true);
+        setLongPressed(true, allowHapticFeedback);
       }
     }
   }
@@ -1651,6 +1665,27 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
         }
       }
       return true;
+    }
+    // XGram: Select text (XgramTextSelection): the message with the selection takes its own touches (a tap, a double
+    // tap or a long press on its text), and after a long press on text (Long press on text selects it) moving selects
+    switch (com.fahadali.xgram.chats.XgramTextSelection.onMessageTouch(this, msg, e)) {
+      case com.fahadali.xgram.chats.XgramTextSelection.TOUCH_HANDLED:
+        return true;
+      case com.fahadali.xgram.chats.XgramTextSelection.TOUCH_SELECTING: {
+        // The long pressed finger moved: it selects now, and what the message caught lets go of the touch
+        if ((flags & FLAG_CAUGHT_MESSAGE_TOUCH) != 0) {
+          MotionEvent cancel = MotionEvent.obtain(e);
+          cancel.setAction(MotionEvent.ACTION_CANCEL);
+          msg.onTouchEvent(this, cancel);
+          cancel.recycle();
+        }
+        flags &= ~(FLAG_CAUGHT_CLICK | FLAG_CAUGHT_MESSAGE_TOUCH);
+        return true;
+      }
+      case com.fahadali.xgram.chats.XgramTextSelection.TOUCH_STILL:
+        // Lifted without moving: the long press does what it did before, then the touch ends as usual
+        onLongPress(false);
+        break;
     }
     switch (e.getAction()) {
       case MotionEvent.ACTION_DOWN: {

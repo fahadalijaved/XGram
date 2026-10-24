@@ -2060,6 +2060,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   @Override
   protected void onEnterSelectMode () {
+    com.fahadali.xgram.chats.XgramTextSelection.dismiss(this); // XGram: selecting messages ends the text selection
     if (pagerContentView != null) {
       pagerContentView.setPagingEnabled(false);
     }
@@ -4761,6 +4762,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   @Override
   public void onBlur () {
+    com.fahadali.xgram.chats.XgramTextSelection.dismiss(this); // XGram: leaving the chat ends the text selection
     saveDraft();
     com.fahadali.xgram.chats.XgramUndoSend.onComposerHidden(this); // XGram: Undo send, what was in sight (ghost read on send)
     if (xgramNextChatId != 0) {
@@ -4855,6 +4857,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   @Override
   public void destroy () {
+    com.fahadali.xgram.chats.XgramTextSelection.dismiss(this); // XGram: Select text
     // XGram: Undo send. First, while the chat and the message box are still this screen's: what waits goes now.
     com.fahadali.xgram.chats.XgramUndoSend.onOwnerDestroyed(this);
     if (xgramUndoBar != null) {
@@ -5274,6 +5277,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   public void showMessageOptions (MessageContext messageContext, int[] ids, String[] options, int[] icons) {
     final TGMessage msg = messageContext.message;
+    com.fahadali.xgram.chats.XgramTextSelection.dismiss(this); // XGram: a message's menu ends the text selection
     SpannableStringBuilder b = new SpannableStringBuilder();
     if (chat != null) {
       final boolean isChannel = tdlib.isChannel(chat.id);
@@ -6586,6 +6590,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
       } else if (id == R.id.btn_xgramQuote) { // XGram: reply quoting part of the text
         cancelSheduledKeyboardOpeningAndHideAllKeyboards();
         com.fahadali.xgram.chats.XgramQuote.open(this, selectedMessage);
+        return true;
+      } else if (id == R.id.btn_xgramSelectText) { // XGram: select part of the text right in the bubble
+        com.fahadali.xgram.chats.XgramTextSelection.startFromMenu(this, selectedMessage);
         return true;
       } else if (id == R.id.btn_messageReplies) {
         cancelSheduledKeyboardOpeningAndHideAllKeyboards();
@@ -10513,6 +10520,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   @Override
   public boolean performOnBackPressed (boolean fromTop, boolean commit) {
+    if (!fromTop && com.fahadali.xgram.chats.XgramTextSelection.onBackPressed(this, commit)) {
+      return true; // XGram: Back ends the text selection first (no predictive back card while it shows)
+    }
     BaseActivity context = context();
     if (context.getRecordAudioVideoController().isOpen()) {
       if (commit) {

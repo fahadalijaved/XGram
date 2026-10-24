@@ -820,6 +820,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
 
   @Override
   public int[] displayBaseViewWithAnchor (EmojiToneHelper context, View anchorView, View viewToDisplay, int viewWidth, int viewHeight, int horizontalMargin, int horizontalOffset, int verticalOffset) {
+    if (xgramStickerPicker != null && xgramStickerPicker.isShowing()) { // XGram: an emoji in the photo editor's sticker picker
+      return com.fahadali.xgram.editor.XgramStickerPicker.displayTone(anchorView, viewToDisplay, viewWidth, viewHeight, horizontalMargin, horizontalOffset, verticalOffset, contentView);
+    }
     return EmojiToneHelper.defaultDisplay(context, anchorView, viewToDisplay, viewWidth, viewHeight, horizontalMargin, horizontalOffset, verticalOffset, contentView, bottomWrap, keyboardFrameLayout);
   }
 
@@ -3701,7 +3704,6 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   private ColorToneView colorToneView;
   private ShadowView colorToneShadow;
   private ImageView undoButton;
-  private EditButton paintTypeButton;
   private ColorPreviewView colorPreviewView;
 
   private static final float COUNTER_SCALE = .7f;
@@ -3713,6 +3715,18 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   @Override
   public boolean performOnBackPressed (boolean fromTop, boolean commit) {
     if (inSlideMode || (slideAnimator != null && slideAnimator.isAnimating())) {
+      return true;
+    }
+    if (xgramTextEditor != null) { // XGram: Back keeps the text, as a tap around it does
+      if (commit) {
+        xgramTextEditor.done();
+      }
+      return true;
+    }
+    if (xgramStickerPicker != null && xgramStickerPicker.isShowing()) { // XGram
+      if (commit) {
+        xgramStickerPicker.hide(true);
+      }
       return true;
     }
     if (showOtherMedias) {
@@ -3975,11 +3989,8 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     return Views.isValid(view) ? view.getAlpha() : 0f;
   }
 
-  /** XGram: the height of an edit section's band at the bottom of bottomWrap (paint: its colour picker row). */
+  /** XGram: the height of an edit section's band at the bottom of bottomWrap (paint: its colour and tools rows). */
   private static int xgramSectionBandHeight (int section) {
-    if (section == SECTION_PAINT) {
-      return Screen.dp(12f) + Screen.dp(18f) * 2;
-    }
     return getSectionHeight(section);
   }
 
@@ -6302,6 +6313,20 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   public void dispatchSystemInsets (View parentView, ViewGroup.MarginLayoutParams originalParams, Rect legacyInsets, Rect insets, Rect insetsWithoutIme, Rect systemInsets, Rect systemInsetsWithoutIme, boolean fitsSystemWindows) {
     super.dispatchSystemInsets(parentView, originalParams, legacyInsets, insets, insetsWithoutIme, systemInsets, systemInsetsWithoutIme, fitsSystemWindows);
     int bottomInset = insets.bottom;
+    // XGram: the layer text editor keeps clear of the keyboard itself; the photo and the controls behind it stay where
+    // they are until that keyboard has gone
+    final boolean edgeToEdge = useEdgeToEdge() || (mode == MODE_GALLERY && isFromCamera);
+    xgramLayerEditorBottom = edgeToEdge ? insets.bottom : 0;
+    xgramLayerPickerBottom = edgeToEdge ? insetsWithoutIme.bottom : 0;
+    xgramImeHeight = insets.bottom - insetsWithoutIme.bottom;
+    if (xgramHoldControlsOverIme) {
+      if (xgramTextEditor == null && xgramImeHeight <= 0) {
+        xgramHoldControlsOverIme = false;
+      } else {
+        bottomInset = insetsWithoutIme.bottom;
+      }
+    }
+    xgramUpdateLayerEditorInsets();
     boolean changed = this.bottomInnerMargin != bottomInset;
     this.bottomInnerMargin = bottomInset;
     if (useEdgeToEdge() || (mode == MODE_GALLERY && isFromCamera)) {
@@ -6358,6 +6383,10 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     xgramReleaseAutoHide(); // XGram: Hide controls while playing
     if (xgramChromeSlide != null) {
       xgramChromeSlide.cancel();
+    }
+    if (xgramStickerPicker != null) { // XGram: the photo editor's sticker picker
+      xgramStickerPicker.destroy();
+      xgramStickerPicker = null;
     }
     MediaItem current = stack.getCurrent();
     if (current != null && current.isViewOnce()) {
@@ -6678,7 +6707,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
         return Screen.dp(220f) + add;
       }
       case SECTION_PAINT: {
-        return Screen.dp(136f) + add;
+        return Screen.dp(136f) + Screen.dp(com.fahadali.xgram.editor.XgramPaintToolbar.ROW_HEIGHT_DP) + add; // XGram: and the tools row
       }
       case SECTION_CROP: {
         return Screen.dp(160f) + add;
@@ -6708,7 +6737,8 @@ public class MediaViewController extends ViewController<MediaViewController.Args
         return Screen.dp(56f + CROP_PADDING_TOP);
       }
       case SECTION_PAINT: {
-        return Screen.dp(64f); // TODO check
+        // XGram: the colour row and the tools row above it (Telegram X: 64dp, "TODO check")
+        return Screen.dp(12f) + Screen.dp(18f) * 2 + Screen.dp(com.fahadali.xgram.editor.XgramPaintToolbar.ROW_HEIGHT_DP);
       }
       case SECTION_QUALITY: {
         return Screen.dp(72f) + Screen.dp(24f);
@@ -7128,8 +7158,11 @@ public class MediaViewController extends ViewController<MediaViewController.Args
 
           int margin = Screen.dp(56f);
           int padding = Screen.dp(18f);
+          // XGram: the tools row over the colour row
+          final int colorRowHeight = Screen.dp(12f) + padding * 2;
+          final int toolsRowHeight = Screen.dp(com.fahadali.xgram.editor.XgramPaintToolbar.ROW_HEIGHT_DP);
 
-          params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(12f) + padding * 2, Gravity.BOTTOM);
+          params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, colorRowHeight + toolsRowHeight, Gravity.BOTTOM); // XGram: behind both rows
           View backgroundView = new View(context());
           if (!xgramGalleryToolbar()) { // XGram: on bottomWrap's scrim instead of a flat band (xgramSectionBandHeight)
             backgroundView.setBackgroundColor(Theme.getColor(ColorId.transparentEditor));
@@ -7163,15 +7196,24 @@ public class MediaViewController extends ViewController<MediaViewController.Args
           com.fahadali.xgram.appearance.XgramM3MediaChrome.iconButton(undoButton); // XGram
           paintControlsWrap.addView(undoButton);
 
+          // XGram: Redo where the tool button was (the tools have their own row now): Undo's arrow mirrored, from
+          // the same icon pack
           params = FrameLayoutFix.newParams(Screen.dp(56f), Screen.dp(48f), Gravity.RIGHT | Gravity.BOTTOM);
-          paintTypeButton = new EditButton(context());
-          paintTypeButton.setId(R.id.btn_paintType);
-          paintTypeButton.setUseFastAnimations();
-          paintTypeButton.setOnClickListener(this);
-          paintTypeButton.setIcon(getIconForPaintType(PaintMode.PATH), false, false);
-          paintTypeButton.setLayoutParams(params);
-          com.fahadali.xgram.appearance.XgramM3MediaChrome.iconButton(paintTypeButton); // XGram
-          paintControlsWrap.addView(paintTypeButton);
+          redoButton = new ImageView(context());
+          redoButton.setId(R.id.paint_redo);
+          redoButton.setOnClickListener(this);
+          redoButton.setScaleType(ImageView.ScaleType.CENTER);
+          redoButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_undo_24));
+          redoButton.setScaleX(-1f);
+          redoButton.setColorFilter(0xffffffff);
+          redoButton.setContentDescription(Lang.getString(R.string.XgramEditorRedo));
+          Views.setClickable(redoButton);
+          redoButton.setBackgroundResource(R.drawable.bg_btn_header_light);
+          redoButton.setLayoutParams(params);
+          com.fahadali.xgram.appearance.XgramM3MediaChrome.iconButton(redoButton);
+          paintControlsWrap.addView(redoButton);
+
+          xgramBuildPaintTools(colorRowHeight, toolsRowHeight, margin);
 
           params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(12f) + padding * 2, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
           params.leftMargin = params.rightMargin = margin - padding;
@@ -7262,11 +7304,12 @@ public class MediaViewController extends ViewController<MediaViewController.Args
           colorPickerView.setDirection(colorDirectionView);
         }
 
-        setPaintType(PaintMode.restore(), false);
         checkCanUndo();
         colorPreviewView.reset(true);
+        xgramRestorePaintTool(); // XGram: the tool picked last, with its size and colour (Telegram X: the pen, reset)
 
         bottomWrap.addView(paintControlsWrap);
+        xgramAddLayerTrash(); // XGram: over the rows, shown while a layer is dragged
 
         break;
       }
@@ -7785,9 +7828,16 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     paintingItem = stack.getCurrent();
     paintingWidth = bitmap.getWidth();
     paintingHeight = bitmap.getHeight();
+    // XGram: the photo as shown, for the blur and pixelate brushes
+    paintingBitmap = bitmap;
+    paintingMirrorHorizontally = currentTargetReceiver != null && currentTargetReceiver.xgramMirrorsHorizontally();
+    paintingMirrorVertically = currentTargetReceiver != null && currentTargetReceiver.xgramMirrorsVertically();
 
     return true;
   }
+
+  private @Nullable Bitmap paintingBitmap;
+  private boolean paintingMirrorHorizontally, paintingMirrorVertically;
 
   private PaintState currentPaintState;
   private PaintState oldPaintState;
@@ -7804,17 +7854,34 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   private float paintSectionFactor;
 
   private void setPaintSectionFactor (float factor) {
-    if (Config.MASKS_TEXTS_AVAILABLE && this.paintSectionFactor != factor) {
+    if (xgramLayers() && this.paintSectionFactor != factor) { // XGram: Telegram X's sticker and text buttons, now in use
       this.paintSectionFactor = factor;
       cropOrStickerButton.setSecondFactor(factor);
       adjustOrTextButton.setSecondFactor(factor);
+      // XGram: TalkBack reads what they do in the brush section (Telegram X's buttons have no names)
+      final boolean inPaint = factor >= .5f;
+      cropOrStickerButton.setContentDescription(inPaint ? Lang.getString(R.string.XgramEditorAddSticker) : null);
+      adjustOrTextButton.setContentDescription(inPaint ? Lang.getString(R.string.XgramEditorAddText) : null);
       if (stopwatchButton != null) {
         float alpha = 1f - factor;
         stopwatchButton.setAlpha(alpha);
         float scale = .6f + .4f * alpha;
         stopwatchButton.setScaleX(scale);
         stopwatchButton.setScaleY(scale);
+        if (xgramGalleryToolbar()) {
+          // XGram: the floating toolbar is the row's own background: the stopwatch's slot folds away, so the pill
+          // closes around the other buttons and stays in the middle (Telegram X's shift of the row would move it off)
+          final int width = Math.round(Screen.dp(56f) * alpha);
+          if (stopwatchButton.getLayoutParams().width != width) {
+            stopwatchButton.getLayoutParams().width = width;
+            stopwatchButton.requestLayout();
+          }
+          stopwatchButton.setVisibility(factor == 1f ? View.GONE : View.VISIBLE);
+          editButtons.setTranslationX(0f);
+        } else {
+        stopwatchButton.setVisibility(factor == 1f ? View.INVISIBLE : View.VISIBLE); // XGram: not tapped or read while hidden
         editButtons.setTranslationX(Views.getParamsWidth(stopwatchButton) / 2 * factor);
+        }
       }
     }
   }
@@ -7828,9 +7895,11 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       applyPaintingMode(paintType);
     }
 
-    paintView.getContentWrap().setBrushParameters(colorPreviewView.getBrushColor(), colorPreviewView.getBrushRadius(getBrushScale()));
+    paintView.getContentWrap().setBrushParameters(colorPreviewView.getBrushColor(), xgramBrushSize(colorPreviewView));
 
     paintView.reset(paintingItem.getSourceGalleryFile(), paintingWidth, paintingHeight, null, null, currentPaintState);
+    paintView.setPaintBase(paintingBitmap, paintingMirrorHorizontally, paintingMirrorVertically); // XGram
+    paintView.post(this::xgramPrepareBrushBase); // XGram: once it is measured, for Blur or Pixelate picked last time
     boolean changed = paintingItem.setPaintState(null, false);
 
     mediaView.getBaseCell().addView(paintView);
@@ -7839,6 +7908,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     paintView.getContentWrap().setDrawingListener((v, mode) -> {
       showDefaultBrushHint();
     });
+    paintView.getContentWrap().setLayerListener(xgramLayerListener); // XGram: the text and sticker layers
 
     if (changed) {
       mediaView.getBaseReceiver().invalidate();
@@ -7848,7 +7918,8 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   }
 
   public void showDefaultBrushHint () {
-    if (paintView != null && paintView.isEditorVisible() && !paintView.getContentWrap().hasEffectiveDrawing()) {
+    // XGram: not for the tools without a colour (their colour row is hidden)
+    if (paintView != null && paintView.isEditorVisible() && !paintView.getContentWrap().hasEffectiveDrawing() && com.fahadali.xgram.editor.XgramPaintTools.usesColor(paintTool)) {
       CharSequence text;
       int textFlags = 0;
       if (colorPickerView.isInLongTap()) {
@@ -7859,7 +7930,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
           Strings.getColorRepresentation(Settings.COLOR_FORMAT_HEX, hue, hsv[1], hsv[2], color, true) + "\n" +
           Strings.getColorRepresentation(Settings.COLOR_FORMAT_RGB, hue, hsv[1], hsv[2], color, true) + "\n" +
           Strings.getColorRepresentation(Settings.COLOR_FORMAT_HSL, hue, hsv[1], hsv[2], color, true) + "\n" +
-          Lang.getStringBold(R.string.BrushSize, U.formatFloat(colorPreviewView.getBrushRadius(1f), false));
+          Lang.getStringBold(R.string.BrushSize, U.formatFloat(xgramBrushSize(colorPreviewView), false));
         textFlags = Text.FLAG_ALIGN_CENTER;
       } else if (Settings.instance().needTutorial(Settings.TUTORIAL_BRUSH_COLOR_TONE)) {
         text = Lang.getString(R.string.HoldToTone);
@@ -7886,6 +7957,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   private TooltipOverlayView.TooltipInfo brushToneHint;
 
   private void hidePaintEditor () {
+    xgramCloseLayerEditors(); // XGram: a held layer goes back, the text editor and the sticker picker close
     if (paintView != null) {
       paintView.setEditorVisible(false);
     }
@@ -7898,105 +7970,472 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       paintView.pause();
       paintView.setScaleX(1f);
       paintView.setScaleY(1f);
+      paintView.setPaintBase(null, false, false); // XGram
     }
+    paintingBitmap = null;
     showDefaultBrushHint();
-  }
-
-  private static int getIconForPaintType (int type) {
-    switch (type) {
-      case PaintMode.PATH:
-        return R.drawable.baseline_adjust_24;
-      case PaintMode.FREE_MOVEMENT:
-        return R.drawable.baseline_zoom_out_map_24;
-      case PaintMode.ARROW:
-        return R.drawable.baseline_arrow_upward_24;
-      case PaintMode.RECTANGLE:
-        return R.drawable.baseline_crop_3_2_24;
-    }
-    return R.drawable.baseline_bubble_chart_24;
   }
 
   private int paintType;
 
-  private void setPaintType (int mode, boolean changeByUser) {
+  private void setPaintType (int mode) {
     if (this.paintType != mode) {
       this.paintType = mode;
-      if (changeByUser) {
-        PaintMode.save(mode);
-      }
-      paintTypeButton.setIcon(getIconForPaintType(mode), changeByUser, false);
       applyPaintingMode(mode);
     }
   }
 
-  private void showPaintTypes () {
-    // TODO design
+  // XGram: the photo editor's tools (com.fahadali.xgram.editor.XgramPaintTools) in place of Telegram X's options sheet
+  // (doodle, arrow, rectangle, fill): a tools row over the colour row, the Shapes choice above it while Shapes is picked,
+  // a size slider over the photo's start edge and Redo next to Undo. Each tool keeps its size and colour; the colour
+  // row gives way to a line about the tool for Blur, Pixelate and the eraser.
 
-    boolean canErase = currentPaintState != null && !currentPaintState.isEmpty();
+  private com.fahadali.xgram.editor.XgramPaintToolbar paintToolbar, paintShapesBar;
+  private com.fahadali.xgram.editor.XgramBrushSizeSlider paintSizeSlider;
+  private TextView paintToolHint;
+  private ImageView redoButton;
+  private int paintTool = -1, paintShape;
 
-    IntList ids = new IntList(5);
-    IntList icons = new IntList(5);
-    StringList strings = new StringList(5);
+  private void xgramBuildPaintTools (int colorRowHeight, int toolsRowHeight, int margin) {
+    final int[] tools = com.fahadali.xgram.editor.XgramPaintTools.TOOLS;
+    final int[] toolIcons = new int[tools.length], toolNames = new int[tools.length];
+    for (int i = 0; i < tools.length; i++) {
+      toolIcons[i] = com.fahadali.xgram.editor.XgramPaintTools.icon(tools[i], com.fahadali.xgram.editor.XgramPaintTools.savedShape());
+      toolNames[i] = com.fahadali.xgram.editor.XgramPaintTools.name(tools[i]);
+    }
+    FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, toolsRowHeight, Gravity.BOTTOM);
+    params.bottomMargin = colorRowHeight;
+    paintToolbar = new com.fahadali.xgram.editor.XgramPaintToolbar(context(), false);
+    paintToolbar.setItems(tools, toolIcons, toolNames);
+    paintToolbar.setCallback(xgramPaintToolbarCallback);
+    paintToolbar.setLayoutParams(params);
+    paintControlsWrap.addView(paintToolbar);
 
-    ids.append(R.id.paint_mode_path);
-    icons.append(R.drawable.baseline_adjust_24);
-    strings.append(R.string.PaintModeDoodle);
+    final int[] shapes = com.fahadali.xgram.editor.XgramPaintTools.SHAPES;
+    final int[] shapeIcons = new int[shapes.length], shapeNames = new int[shapes.length];
+    for (int i = 0; i < shapes.length; i++) {
+      shapeIcons[i] = com.fahadali.xgram.editor.XgramPaintTools.shapeIcon(shapes[i]);
+      shapeNames[i] = com.fahadali.xgram.editor.XgramPaintTools.shapeName(shapes[i]);
+    }
+    params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, toolsRowHeight, Gravity.BOTTOM);
+    params.bottomMargin = colorRowHeight + toolsRowHeight;
+    paintShapesBar = new com.fahadali.xgram.editor.XgramPaintToolbar(context(), true);
+    paintShapesBar.setItems(shapes, shapeIcons, shapeNames);
+    paintShapesBar.setCallback(xgramPaintToolbarCallback);
+    paintShapesBar.setLayoutParams(params);
+    paintShapesBar.setShown(false, false);
+    paintControlsWrap.addView(paintShapesBar);
 
-    ids.append(R.id.paint_mode_arrow);
-    icons.append(R.drawable.baseline_arrow_upward_24);
-    strings.append(R.string.PaintModeArrow);
+    params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, colorRowHeight, Gravity.BOTTOM);
+    params.leftMargin = params.rightMargin = margin;
+    paintToolHint = new NoScrollTextView(context());
+    paintToolHint.setGravity(Gravity.CENTER);
+    paintToolHint.setSingleLine(true);
+    paintToolHint.setEllipsize(android.text.TextUtils.TruncateAt.END);
+    paintToolHint.setTextColor(0xccffffff);
+    paintToolHint.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 14f);
+    paintToolHint.setTypeface(Fonts.getRobotoRegular());
+    com.fahadali.xgram.appearance.XgramR5Media.onMediaLabel(paintToolHint, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, .8f);
+    paintToolHint.setAlpha(0f);
+    paintToolHint.setLayoutParams(params);
+    paintControlsWrap.addView(paintToolHint);
 
-    ids.append(R.id.paint_mode_rect);
-    icons.append(R.drawable.baseline_crop_3_2_24);
-    strings.append(R.string.PaintModeRect);
+    // over the photo's start edge, between the header and the rows
+    params = FrameLayoutFix.newParams(Screen.dp(196f), ViewGroup.LayoutParams.MATCH_PARENT, (Lang.rtl() ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP);
+    params.topMargin = Screen.dp(64f);
+    params.bottomMargin = colorRowHeight + toolsRowHeight + Screen.dp(12f);
+    paintSizeSlider = new com.fahadali.xgram.editor.XgramBrushSizeSlider(context());
+    paintSizeSlider.setCallback(new com.fahadali.xgram.editor.XgramBrushSizeSlider.Callback() {
+      @Override
+      public void onBrushSizeChanged (com.fahadali.xgram.editor.XgramBrushSizeSlider slider, float value) {
+        colorPreviewView.setRadiusFactor(value);
+      }
 
-    if (currentPaintState != null && currentPaintState.isEmpty()) {
-      ids.append(R.id.paint_mode_fill);
-      icons.append(R.drawable.baseline_format_color_fill_24);
-      strings.append(R.string.PaintModeFill);
+      @Override
+      public float getBrushDiameter (float value) {
+        // the stroke keeps its size on screen whatever the zoom (EGLEditorView.ContentLayout)
+        return Screen.dpf(com.fahadali.xgram.editor.XgramPaintTools.size(paintTool, value));
+      }
+    });
+    paintSizeSlider.setLayoutParams(params);
+    paintControlsWrap.addView(paintSizeSlider);
+  }
+
+  private final com.fahadali.xgram.editor.XgramPaintToolbar.Callback xgramPaintToolbarCallback = new com.fahadali.xgram.editor.XgramPaintToolbar.Callback() {
+    @Override
+    public void onPaintToolbarClick (com.fahadali.xgram.editor.XgramPaintToolbar toolbar, int id) {
+      if (paintView != null && paintView.getContentWrap().isBusy()) {
+        return;
+      }
+      if (toolbar == paintShapesBar) {
+        xgramSetPaintShape(id);
+      } else {
+        xgramSetPaintTool(id, true);
+      }
     }
 
-    /*ids.append(R.id.paint_mode_zoom);
-    icons.append(R.drawable.ic_zoom_out_map_black_24dp);
-    strings.append(R.string.PaintModeZoomArea);*/
-
-    /*if (canErase) {
-      ids.append(R.id.paint_clear);
-      icons.append(R.drawable.ic_delete_white);
-      strings.append("Clear all");
-    }*/
-
-    showOptions(null, ids.get(), strings.get(), null, icons.get(), (itemView, id) -> {
-      final int paintMode;
-      if (id == R.id.paint_mode_path) {
-        paintMode = PaintMode.PATH;
-      } else if (id == R.id.paint_mode_arrow) {
-        paintMode = PaintMode.ARROW;
-      } else if (id == R.id.paint_mode_rect) {
-        paintMode = PaintMode.RECTANGLE;
-      } else if (id == R.id.paint_mode_zoom) {
-        paintMode = PaintMode.FREE_MOVEMENT;
-      } else if (id == R.id.paint_mode_fill) {
-        int color = colorPickerView.getPreview().getBrushColor();
-        SimpleDrawing drawing = new SimpleDrawing(SimpleDrawing.TYPE_FILLING);
-        drawing.setBrushParameters(color, 0);
-        currentPaintState.addSimpleDrawing(drawing);
-        currentPaintState.trackSimpleDrawingAction(drawing);
-        return true;
-        /*case R.id.paint_clear: {
-          undoAllPaintActions();
-          return true;
-        }*/
-      } else {
-        return true;
-      }
-      setPaintType(paintMode, true);
+    @Override
+    public boolean onPaintToolbarLongPress (com.fahadali.xgram.editor.XgramPaintToolbar toolbar, View button, int id) {
+      int name = toolbar == paintShapesBar ? com.fahadali.xgram.editor.XgramPaintTools.shapeName(id) : com.fahadali.xgram.editor.XgramPaintTools.name(id);
+      context().tooltipManager().builder(button).color(context().tooltipManager().overrideColorProvider(getForcedTheme())).show(tdlib, Lang.getString(name)).hideDelayed();
       return true;
-    }, getForcedTheme());
+    }
+  };
+
+  private void xgramRestorePaintTool () {
+    paintShape = com.fahadali.xgram.editor.XgramPaintTools.savedShape();
+    paintTool = -1;
+    xgramSetPaintTool(com.fahadali.xgram.editor.XgramPaintTools.savedTool(), false);
+  }
+
+  /** Remembers the current tool's size and colour (on a tool change and when the section closes). */
+  private void xgramSavePaintBrush () {
+    if (paintTool != -1 && colorPreviewView != null) {
+      com.fahadali.xgram.editor.XgramPaintTools.saveBrush(paintTool, colorPreviewView.getRadiusFactor(), colorPreviewView.getBrushColor(), colorPreviewView.getHue());
+    }
+  }
+
+  private void xgramSetPaintTool (int tool, boolean byUser) {
+    tool = com.fahadali.xgram.editor.XgramPaintTools.clampTool(tool);
+    if (paintTool == tool) {
+      return;
+    }
+    if (byUser) {
+      xgramSavePaintBrush();
+    }
+    paintTool = tool;
+    colorPreviewView.setColor(com.fahadali.xgram.editor.XgramPaintTools.savedColor(tool), com.fahadali.xgram.editor.XgramPaintTools.savedHue(tool));
+    colorPreviewView.setRadiusFactor(com.fahadali.xgram.editor.XgramPaintTools.savedSize(tool));
+    colorPickerView.invalidate();
+    paintToolbar.setIcon(com.fahadali.xgram.editor.XgramPaintTools.TOOL_SHAPES, com.fahadali.xgram.editor.XgramPaintTools.shapeIcon(paintShape));
+    paintToolbar.setChecked(tool, byUser);
+    paintShapesBar.setChecked(paintShape, false);
+    paintShapesBar.setShown(tool == com.fahadali.xgram.editor.XgramPaintTools.TOOL_SHAPES, byUser);
+    final int hint = com.fahadali.xgram.editor.XgramPaintTools.hint(tool);
+    if (hint != 0) {
+      paintToolHint.setText(Lang.getString(hint));
+    }
+    xgramSetColorRowVisible(com.fahadali.xgram.editor.XgramPaintTools.usesColor(tool), byUser);
+    xgramUpdateSizePreview();
+    if (byUser) {
+      com.fahadali.xgram.editor.XgramPaintTools.saveTool(tool, paintShape);
+      xgramPrepareBrushBase();
+      paintSizeSlider.flashDot(); // the new tool's size, for a moment
+    }
+    setPaintType(com.fahadali.xgram.editor.XgramPaintTools.paintMode(tool, paintShape));
+    onBrushChanged(colorPreviewView);
+    showDefaultBrushHint();
+  }
+
+  /** Makes the blurred or pixelated copy of the photo as Blur or Pixelate is picked, not on their first stroke. */
+  private void xgramPrepareBrushBase () {
+    final int kind;
+    if (paintTool == com.fahadali.xgram.editor.XgramPaintTools.TOOL_BLUR) {
+      kind = com.fahadali.xgram.editor.XgramPaintBase.KIND_BLUR;
+    } else if (paintTool == com.fahadali.xgram.editor.XgramPaintTools.TOOL_PIXELATE) {
+      kind = com.fahadali.xgram.editor.XgramPaintBase.KIND_PIXELATE;
+    } else {
+      return;
+    }
+    if (paintingBitmap == null || paintView == null) {
+      return;
+    }
+    final View content = paintView.getContentWrap();
+    final int width = content.getMeasuredWidth(), height = content.getMeasuredHeight();
+    if (width > 0 && height > 0) {
+      new com.fahadali.xgram.editor.XgramPaintBase(paintingBitmap, paintingMirrorHorizontally, paintingMirrorVertically, 0, 0, width, height).shader(kind, width, height, 0, 0);
+    }
+  }
+
+  private void xgramSetPaintShape (int shape) {
+    shape = com.fahadali.xgram.editor.XgramPaintTools.clampShape(shape);
+    if (paintShape == shape) {
+      return;
+    }
+    paintShape = shape;
+    paintShapesBar.setChecked(shape, true);
+    paintToolbar.setIcon(com.fahadali.xgram.editor.XgramPaintTools.TOOL_SHAPES, com.fahadali.xgram.editor.XgramPaintTools.shapeIcon(shape));
+    com.fahadali.xgram.editor.XgramPaintTools.saveTool(paintTool, shape);
+    setPaintType(com.fahadali.xgram.editor.XgramPaintTools.paintMode(paintTool, shape));
+  }
+
+  private void xgramUpdateSizePreview () {
+    if (paintSizeSlider == null || paintTool == -1) {
+      return;
+    }
+    final int style;
+    switch (paintTool) {
+      case com.fahadali.xgram.editor.XgramPaintTools.TOOL_MARKER:
+        style = com.fahadali.xgram.editor.XgramBrushSizeSlider.STYLE_MARKER;
+        break;
+      case com.fahadali.xgram.editor.XgramPaintTools.TOOL_NEON:
+        style = com.fahadali.xgram.editor.XgramBrushSizeSlider.STYLE_NEON;
+        break;
+      default:
+        style = com.fahadali.xgram.editor.XgramPaintTools.usesColor(paintTool) ? com.fahadali.xgram.editor.XgramBrushSizeSlider.STYLE_SOLID : com.fahadali.xgram.editor.XgramBrushSizeSlider.STYLE_OUTLINE;
+        break;
+    }
+    paintSizeSlider.setPreview(colorPreviewView.getBrushColor(), style);
+    paintSizeSlider.setValue(colorPreviewView.getRadiusFactor());
+  }
+
+  // The colour row fades out for the tools without a colour, and their line about the tool fades in
+
+  private BoolAnimator xgramColorRowAnimator;
+
+  private void xgramSetColorRowVisible (boolean visible, boolean animated) {
+    if (xgramColorRowAnimator == null) {
+      xgramColorRowAnimator = new BoolAnimator(0, (id, factor, fraction, callee) -> xgramSetColorRowFactor(factor), AnimatorUtils.DECELERATE_INTERPOLATOR, 180L, true);
+    }
+    com.fahadali.xgram.appearance.XgramAppMotion.use(xgramColorRowAnimator, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, true);
+    xgramColorRowAnimator.setValue(visible, animated);
+    xgramSetColorRowFactor(xgramColorRowAnimator.getFloatValue());
+  }
+
+  private void xgramSetColorRowFactor (float factor) {
+    final float alpha = MathUtils.clamp(factor);
+    final int visibility = alpha > 0f ? View.VISIBLE : View.INVISIBLE;
+    colorPickerView.setAlpha(alpha);
+    colorPickerView.setVisibility(visibility);
+    colorPreviewView.setAlpha(alpha);
+    colorPreviewView.setVisibility(visibility);
+    paintToolHint.setAlpha(1f - alpha);
+  }
+
+  // XGram: the layers over the drawing (com.fahadali.xgram.editor.XgramLayer). In the brush section Telegram X's dormant
+  // buttons come alive: Adjust's place adds a text (the text editor over the viewer), Crop's adds an emoji, a sticker or
+  // a GIF's first frame (the keyboard's picker). On the photo a layer is dragged, pinched and turned
+  // (EGLEditorView.ContentLayout), a tap on a text edits it, and let go over the trash, which takes the rows' place
+  // while a layer is dragged, it is deleted. Each change is an action, so undo and redo, Cancel and the sent photo all
+  // have the layers.
+
+  private @Nullable com.fahadali.xgram.editor.XgramTextEditor xgramTextEditor;
+  private @Nullable com.fahadali.xgram.editor.XgramStickerPicker xgramStickerPicker;
+  /** The drawing a picked sticker goes on: one that downloads after the section closed goes nowhere. */
+  private @Nullable PaintState xgramStickerTarget;
+  private @Nullable com.fahadali.xgram.editor.XgramLayerTrash xgramLayerTrash;
+  private int xgramLayerEditorBottom, xgramLayerPickerBottom, xgramImeHeight;
+  /** The text editor's keyboard doesn't move the photo and the controls behind it (dispatchSystemInsets). */
+  private boolean xgramHoldControlsOverIme;
+  private float xgramPaintControlsFactor = 1f, xgramLayerDragFactor;
+  private BoolAnimator xgramLayerDragAnimator;
+
+  /** The brush section's sticker and text buttons (Telegram X kept them behind Config.MASKS_TEXTS_AVAILABLE, off). */
+  private static boolean xgramLayers () {
+    return true;
+  }
+
+  private boolean xgramCanEditLayers () {
+    return currentSection == SECTION_PAINT && paintView != null && paintView.isEditorVisible() && currentPaintState != null &&
+      !paintView.getContentWrap().isBusy() && xgramTextEditor == null && (xgramStickerPicker == null || !xgramStickerPicker.isShowing());
+  }
+
+  /** Opens the text editor for a new text, or for {@code layer}, which hides on the photo meanwhile. */
+  private void xgramOpenTextEditor (@Nullable com.fahadali.xgram.editor.XgramTextLayer layer) {
+    if (!xgramCanEditLayers()) {
+      return;
+    }
+    if (layer != null) {
+      layer.setHidden(true);
+    }
+    if (brushToneHint != null) {
+      brushToneHint.hideNow();
+    }
+    xgramHoldControlsOverIme = true;
+    xgramTextEditor = new com.fahadali.xgram.editor.XgramTextEditor(context(), layer, xgramTextEditorCallback);
+    xgramTextEditor.setInsets(topOffset, xgramLayerEditorBottom);
+    if (layer == null) {
+      // a new text's lines break where they would on the photo (an edited one keeps its size there, not the field's)
+      final float photoWidth = paintView.getContentWrap().getPhotoScreenWidth();
+      if (photoWidth > 0f) {
+        xgramTextEditor.setFieldWidthLimit(Math.max(Screen.dp(160f), Math.round(photoWidth * .9f)));
+      }
+    }
+    contentView.addView(xgramTextEditor);
+    xgramTextEditor.open();
+  }
+
+  private final com.fahadali.xgram.editor.XgramTextEditor.Callback xgramTextEditorCallback = new com.fahadali.xgram.editor.XgramTextEditor.Callback() {
+    @Override
+    public void onTextEditorDone (com.fahadali.xgram.editor.XgramTextEditor editor, @Nullable com.fahadali.xgram.editor.XgramTextLayer layer, @NonNull String text) {
+      final PaintState state = currentPaintState;
+      if (layer != null) {
+        layer.setHidden(false);
+        if (state != null) {
+          if (text.isEmpty()) {
+            state.removeLayer(layer); // its text was deleted: the layer goes, undo brings it back
+          } else {
+            com.fahadali.xgram.editor.XgramLayer before = layer.copy();
+            layer.setText(text, editor.getFont(), editor.getStyle(), editor.getAlign(), editor.getColor(), editor.getWrapEms());
+            state.trackLayerChange(layer, before);
+          }
+        }
+      } else if (!text.isEmpty() && state != null && paintView != null) {
+        com.fahadali.xgram.editor.XgramTextLayer newLayer = new com.fahadali.xgram.editor.XgramTextLayer();
+        newLayer.setText(text, editor.getFont(), editor.getStyle(), editor.getAlign(), editor.getColor(), editor.getWrapEms());
+        // as big on the photo as it was in the field, with the same lines, but within the photo (90% of it at most)
+        paintView.getContentWrap().addLayer(newLayer, paintView.getContentWrap().fitLayerScreenSize(newLayer, editor.getTextSizePx()));
+      }
+      xgramCloseTextEditor(true);
+    }
+
+    @Override
+    public void onTextEditorCancel (com.fahadali.xgram.editor.XgramTextEditor editor, @Nullable com.fahadali.xgram.editor.XgramTextLayer layer) {
+      if (layer != null) {
+        layer.setHidden(false);
+      }
+      xgramCloseTextEditor(true);
+    }
+  };
+
+  private void xgramCloseTextEditor (boolean animated) {
+    final com.fahadali.xgram.editor.XgramTextEditor editor = xgramTextEditor;
+    if (editor != null) {
+      xgramTextEditor = null;
+      editor.dismiss(animated);
+      if (xgramImeHeight <= 0) {
+        xgramHoldControlsOverIme = false; // else once its keyboard has gone
+      }
+      showDefaultBrushHint();
+    }
+  }
+
+  /** Opens the emoji, sticker and GIF picker (made once per viewer and kept). */
+  private void xgramOpenStickerPicker () {
+    if (!xgramCanEditLayers()) {
+      return;
+    }
+    if (xgramStickerPicker == null) {
+      xgramStickerPicker = new com.fahadali.xgram.editor.XgramStickerPicker(context(), this, (picker, layer) -> xgramAddPictureLayer(layer));
+    }
+    if (brushToneHint != null) {
+      brushToneHint.hideNow();
+    }
+    xgramStickerTarget = currentPaintState;
+    xgramStickerPicker.setBottomInset(xgramLayerPickerBottom);
+    if (xgramStickerPicker.getParent() == null) {
+      contentView.addView(xgramStickerPicker);
+    }
+    xgramStickerPicker.show();
+  }
+
+  /** Puts a picked picture in the middle of the photo as it shows, upright, 40% of its shorter side. */
+  private void xgramAddPictureLayer (com.fahadali.xgram.editor.XgramStickerLayer layer) {
+    if (currentSection != SECTION_PAINT || paintView == null || !paintView.isEditorVisible() || currentPaintState == null || currentPaintState != xgramStickerTarget) {
+      return;
+    }
+    layer.preload();
+    paintView.getContentWrap().addLayer(layer, paintView.getContentWrap().getDefaultLayerScreenSize());
+  }
+
+  /** The section is closing: a held layer goes back, and the text editor and the picker close. */
+  private void xgramCloseLayerEditors () {
+    if (paintView != null) {
+      paintView.getContentWrap().cancelLayerGesture();
+    }
+    if (xgramTextEditor != null) {
+      xgramTextEditor.cancel();
+    }
+    if (xgramStickerPicker != null) {
+      xgramStickerPicker.hide(false);
+    }
+    xgramStickerTarget = null;
+    xgramSetLayerDragging(false, false);
+  }
+
+  private void xgramUpdateLayerEditorInsets () {
+    if (xgramTextEditor != null) {
+      xgramTextEditor.setInsets(topOffset, xgramLayerEditorBottom);
+    }
+    if (xgramStickerPicker != null) {
+      xgramStickerPicker.setBottomInset(xgramLayerPickerBottom);
+    }
+  }
+
+  private final EGLEditorView.ContentLayout.LayerListener xgramLayerListener = new EGLEditorView.ContentLayout.LayerListener() {
+    @Override
+    public void onLayerDragChanged (EGLEditorView.ContentLayout v, @Nullable com.fahadali.xgram.editor.XgramLayer layer) {
+      xgramSetLayerDragging(layer != null, true);
+      if (layer != null) {
+        if (brushToneHint != null) {
+          brushToneHint.hideNow();
+        }
+      } else {
+        showDefaultBrushHint();
+      }
+    }
+
+    @Override
+    public boolean isOverLayerTrash (EGLEditorView.ContentLayout v, float rawX, float rawY) {
+      return xgramLayerTrash != null && xgramLayerTrash.isOver(rawX, rawY);
+    }
+
+    @Override
+    public void onLayerOverTrashChanged (EGLEditorView.ContentLayout v, boolean isOver) {
+      if (xgramLayerTrash != null) {
+        xgramLayerTrash.setActive(isOver);
+      }
+    }
+
+    @Override
+    public void onLayerClick (EGLEditorView.ContentLayout v, com.fahadali.xgram.editor.XgramLayer layer) {
+      if (layer instanceof com.fahadali.xgram.editor.XgramTextLayer) {
+        xgramOpenTextEditor((com.fahadali.xgram.editor.XgramTextLayer) layer);
+      }
+    }
+  };
+
+  // The trash: in bottomWrap over the colour and tools rows, which fade out (with their scrim) while a layer is dragged
+
+  private void xgramAddLayerTrash () {
+    if (xgramLayerTrash == null) {
+      xgramLayerTrash = new com.fahadali.xgram.editor.XgramLayerTrash(context());
+    }
+    if (xgramLayerTrash.getParent() instanceof ViewGroup) {
+      ((ViewGroup) xgramLayerTrash.getParent()).removeView(xgramLayerTrash);
+    }
+    final int size = Screen.dp(com.fahadali.xgram.editor.XgramLayerTrash.VIEW_DP);
+    FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(size, size, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+    params.bottomMargin = Math.max(0, (getSectionHeight(SECTION_PAINT) - size) / 2); // in the middle of the rows
+    xgramLayerTrash.setLayoutParams(params);
+    xgramLayerTrash.setShown(false, false);
+    bottomWrap.addView(xgramLayerTrash);
+  }
+
+  private void xgramRemoveLayerTrash () {
+    xgramSetLayerDragging(false, false);
+    if (xgramLayerTrash != null && xgramLayerTrash.getParent() instanceof ViewGroup) {
+      ((ViewGroup) xgramLayerTrash.getParent()).removeView(xgramLayerTrash);
+    }
+  }
+
+  private void xgramSetLayerDragging (boolean dragging, boolean animated) {
+    if (xgramLayerDragAnimator == null) {
+      xgramLayerDragAnimator = new BoolAnimator(0, (id, factor, fraction, callee) -> xgramSetLayerDragFactor(factor), AnimatorUtils.DECELERATE_INTERPOLATOR, 180L);
+    }
+    com.fahadali.xgram.appearance.XgramAppMotion.use(xgramLayerDragAnimator, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, true);
+    xgramLayerDragAnimator.setValue(dragging, animated);
+    xgramSetLayerDragFactor(xgramLayerDragAnimator.getFloatValue());
+    if (xgramLayerTrash != null) {
+      xgramLayerTrash.setShown(dragging, animated);
+    }
+  }
+
+  private void xgramSetLayerDragFactor (float factor) {
+    factor = MathUtils.clamp(factor);
+    if (this.xgramLayerDragFactor != factor) {
+      this.xgramLayerDragFactor = factor;
+      if (paintControlsWrap != null) {
+        paintControlsWrap.setAlpha(xgramPaintControlsFactor * (1f - factor));
+      }
+      xgramUpdateBottomScrim();
+    }
   }
 
   private void checkCanUndo () {
-    setCanUndo(currentPaintState != null && !currentPaintState.isEmpty());
+    // XGram: by the actions to undo (Telegram X: any drawing, even one with nothing to undo), and redo
+    setCanUndo(currentPaintState != null && currentPaintState.canUndo());
+    setCanRedo(currentPaintState != null && currentPaintState.canRedo());
   }
 
   private boolean canUndo = true;
@@ -8006,6 +8445,16 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       this.canUndo = canUndo;
       undoButton.setAlpha(canUndo ? 1f : .4f);
       undoButton.setEnabled(canUndo);
+    }
+  }
+
+  private boolean canRedo = true;
+
+  private void setCanRedo (boolean canRedo) {
+    if (this.canRedo != canRedo && redoButton != null) {
+      this.canRedo = canRedo;
+      redoButton.setAlpha(canRedo ? 1f : .4f);
+      redoButton.setEnabled(canRedo);
     }
   }
 
@@ -8034,13 +8483,19 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   @Override
   public void onBrushChanged (ColorPreviewView v) {
     if (paintView != null) {
-      paintView.getContentWrap().setBrushParameters(v.getBrushColor(), v.getBrushRadius(getBrushScale()));
+      paintView.getContentWrap().setBrushParameters(v.getBrushColor(), xgramBrushSize(v));
     }
+    xgramUpdateSizePreview(); // XGram: the slider follows the colour handle's drag-up size gesture, the dot the colour
+  }
+
+  /** XGram: the brush size in dp, in the current tool's range (Telegram X: 4 to 20dp for every tool). */
+  private float xgramBrushSize (ColorPreviewView v) {
+    return paintTool != -1 ? com.fahadali.xgram.editor.XgramPaintTools.size(paintTool, v.getRadiusFactor()) : v.getBrushRadius(getBrushScale());
   }
 
   private boolean undoAllPaintActions () {
     if (paintView != null && !paintView.getContentWrap().isBusy()) {
-      currentPaintState.undoAllActions();
+      currentPaintState.clearAll(); // XGram: one action, so Undo brings the drawing back (Telegram X dropped the history)
       return true;
     }
     return false;
@@ -8049,6 +8504,12 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   private void undoLastPaintAction () {
     if (paintView != null && !paintView.getContentWrap().isBusy()) {
       currentPaintState.undoLastAction();
+    }
+  }
+
+  private void redoLastPaintAction () {
+    if (paintView != null && !paintView.getContentWrap().isBusy()) {
+      currentPaintState.redoLastAction();
     }
   }
 
@@ -8061,6 +8522,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   @Override
   public void onUndoAvailableStateChanged (PaintState state, boolean isAvailable, int totalActionsCount) {
     setCanUndo(isAvailable);
+    setCanRedo(state.canRedo()); // XGram
   }
 
   // etc
@@ -8092,7 +8554,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
         if (currentPaintState != null) {
           currentPaintState.removeUndoStateListener(this);
         }
+        xgramSavePaintBrush(); // XGram: the tool's size and colour for next time
         bottomWrap.removeView(paintControlsWrap);
+        xgramRemoveLayerTrash(); // XGram
         mediaView.getBaseCell().removeView(paintView);
         break;
       }
@@ -8498,7 +8962,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   }
 
   private void updateIconStates (boolean animated) {
-    boolean allowEditState = !Config.MASKS_TEXTS_AVAILABLE || currentSection != SECTION_PAINT;
+    boolean allowEditState = !xgramLayers() || currentSection != SECTION_PAINT; // XGram: the sticker and text buttons have no dot
     adjustOrTextButton.setEdited(allowEditState && hasAppliedFilters(), animated);
     cropOrStickerButton.setEdited(allowEditState && hasAppliedCrop(), animated);
     paintOrMuteButton.setEdited(hasAppliedPaints(), animated);
@@ -8650,7 +9114,8 @@ public class MediaViewController extends ViewController<MediaViewController.Args
         break;
       }
       case SECTION_PAINT: {
-        paintControlsWrap.setAlpha(factor);
+        xgramPaintControlsFactor = factor; // XGram: and out while a layer is dragged to the trash
+        paintControlsWrap.setAlpha(factor * (1f - xgramLayerDragFactor));
         break;
       }
     }
@@ -8868,11 +9333,11 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   }
 
   private void openMasks () {
-    // TODO
+    xgramOpenStickerPicker(); // XGram: an emoji, a sticker or a GIF on the photo
   }
 
   private void addText () {
-    // TODO
+    xgramOpenTextEditor(null); // XGram
   }
 
   private boolean toggleCheck () {
@@ -8942,7 +9407,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
         send(v, Td.newSendOptions(), false, false);
       }
     } else if (viewId == R.id.btn_crop) {
-      if (!Config.MASKS_TEXTS_AVAILABLE || currentSection != SECTION_PAINT) {
+      if (!xgramLayers() || currentSection != SECTION_PAINT) { // XGram: in the brush section it adds a sticker
         if (Config.MODERN_VIDEO_TRANSCODING_ENABLED || !stack.getCurrent().isVideoOrGif()) {
           openCrop();
         } else {
@@ -9056,7 +9521,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
         }, getForcedTheme());
       }
     } else if (viewId == R.id.btn_adjust) {
-      if (!Config.MASKS_TEXTS_AVAILABLE || currentSection != SECTION_PAINT) {
+      if (!xgramLayers() || currentSection != SECTION_PAINT) { // XGram: in the brush section it adds a text
         MediaItem item = stack.getCurrent();
         switch (item.getType()) {
           case MediaItem.TYPE_GALLERY_PHOTO: {
@@ -9086,10 +9551,10 @@ public class MediaViewController extends ViewController<MediaViewController.Args
           break;
         }
       }
-    } else if (viewId == R.id.btn_paintType) {
-      showPaintTypes();
     } else if (viewId == R.id.paint_undo) {
       undoLastPaintAction();
+    } else if (viewId == R.id.paint_redo) {
+      redoLastPaintAction(); // XGram
     }
   }
 
@@ -10035,7 +10500,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     cropOrStickerButton = new EditButton(context);
     cropOrStickerButton.setOnClickListener(this);
     cropOrStickerButton.setId(R.id.btn_crop);
-    // cropOrStickerButton.setSecondIcon(R.drawable.deproko_baseline_insert_sticker_24);
+    cropOrStickerButton.setSecondIcon(R.drawable.deproko_baseline_insert_sticker_24); // XGram: its sticker look in the brush section
     cropOrStickerButton.setIcon(R.drawable.baseline_crop_rotate_24, false, false);
     cropOrStickerButton.setLayoutParams(new LinearLayout.LayoutParams(Screen.dp(56f), ViewGroup.LayoutParams.MATCH_PARENT));
     com.fahadali.xgram.appearance.XgramM3MediaChrome.iconButton(cropOrStickerButton); // XGram

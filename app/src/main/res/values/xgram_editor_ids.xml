@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: the photo editor's drawing tools, see com.fahadali.xgram.editor.XgramPaintTools -->
+  <!-- Redo, next to Undo -->
+  <item type="id" name="paint_redo" />
+</resources>
