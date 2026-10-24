@@ -30,4 +30,18 @@
   <string name="XgramFwdRemember">Remember my last choice</string>
   <string name="XgramFwdSettingInfo">How the forward sheet starts. Hide sender sends copies, without \"Forwarded from\"; messages that can\'t be copied always show their sender.</string>
   <string name="XgramSearchKwForward">send as copy, forward without author, hide sender, hide name, without quoting, anonymous forward, hide captions, remove captions</string>
+
+  <!-- Select text → Forward (com.fahadali.xgram.chats.XgramForwardQuote): With sender sends the comment as a reply quoting the words in their own chat, Text only sends the words as the user's own message -->
+  <string name="XgramFwdQuoteWithSender">With sender</string>
+  <string name="XgramFwdQuoteTextOnly">Text only</string>
+  <!-- With sender: the comment is the message that carries the quote, so Send asks for one; also the preview's line while the comment is empty -->
+  <string name="XgramFwdQuoteNeedsComment">Write a message to go with the quote</string>
+  <!-- Why With sender is greyed out (one line) -->
+  <string name="XgramFwdQuoteSecretSource">Quotes can\'t leave a secret chat</string>
+  <string name="XgramFwdQuoteSecretTarget">Secret chats can\'t get quotes from other chats</string>
+  <string name="XgramFwdQuoteNotOriginal">Only the message\'s original text can be quoted</string>
+  <string name="XgramFwdQuoteCantReply">This message can\'t be quoted in other chats</string>
+  <string name="XgramFwdQuoteGone">The message was deleted, so it can\'t be quoted</string>
+  <!-- TalkBack: the preview card with With sender -->
+  <string name="XgramFwdQuotePreviewQuote">Quote from %1$s: %2$s</string>
 </resources>

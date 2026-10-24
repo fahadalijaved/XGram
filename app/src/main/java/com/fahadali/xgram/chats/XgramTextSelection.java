@@ -1187,16 +1187,31 @@ public final class XgramTextSelection {
     popup.show();
   }
 
-  /** Forward: XGram's own chat picker with exactly the selection (its formatting kept), not Android's share sheet. */
+  /**
+   * Forward: XGram's own chat picker with exactly the selection (its formatting kept), not Android's share sheet. It
+   * offers With sender, the comment as a reply quoting the words in their message, or Text only (XgramForwardQuote).
+   */
   private void forward () {
     final TdApi.FormattedText selected = selectedText();
     if (selected == null) {
       return;
     }
     final MessagesController c = controller;
+    // The quote With sender sends, as the menu's Quote takes it: none of a translation or an edit on its way (the
+    // words must be in the message's own text), and at most as long as TDLib takes
+    final TdApi.Message message = msg.getMessage(messageId);
+    final TdApi.FormattedText original = originalText();
+    XgramQuoteText.Quote quote = null;
+    if (message != null && original != null) {
+      quote = XgramQuoteText.quote(original, start, end, c.tdlib().options().messageReplyQuoteLengthMax);
+    }
     finish();
     final org.thunderdog.challegram.ui.ShareController share = new org.thunderdog.challegram.ui.ShareController(c.context(), c.tdlib());
-    share.setArguments(new org.thunderdog.challegram.ui.ShareController.Args(selected));
+    final org.thunderdog.challegram.ui.ShareController.Args args = new org.thunderdog.challegram.ui.ShareController.Args(selected);
+    if (message != null) {
+      args.xgramSetQuoteSource(message, quote);
+    }
+    share.setArguments(args);
     share.show();
   }
 

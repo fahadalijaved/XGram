@@ -271,9 +271,9 @@ public final class XgramForwardOptions {
   }
 
   /** Below this window height (dp, a phone in landscape) the preview is left out, and every option while typing. */
-  private static final int SHORT_WINDOW_DP = 560;
+  static final int SHORT_WINDOW_DP = 560;
   /** From this window height (dp) the reason line and Hide captions stay while typing; the preview never does. */
-  private static final int TALL_WINDOW_DP = 800;
+  static final int TALL_WINDOW_DP = 800;
 
   /**
    * The forward sheet's options: a preview of the first message as it will arrive (its "Forwarded from" line, its media
@@ -351,7 +351,7 @@ public final class XgramForwardOptions {
       hasInfo = reason != null;
       // TalkBack: why Hide sender is greyed out is read with the button, not as a line after it
       final String disabledReason = canHide ? null : reason;
-      sender.setHideReason(disabledReason);
+      sender.setDisabledReason(disabledReason);
       info.setImportantForAccessibility(disabledReason != null ? IMPORTANT_FOR_ACCESSIBILITY_NO : IMPORTANT_FOR_ACCESSIBILITY_AUTO);
       hasCaptions = properties != null && hasCopyableCaption(messages, properties);
       captions.setChecked(hideSender && hideCaptions, animated);
@@ -444,7 +444,7 @@ public final class XgramForwardOptions {
   };
 
   /** A 0..1 state: a spring with Expressive design (snapped with Reduce motion), Telegram X's 180ms otherwise. */
-  private static final class Factor {
+  static final class Factor {
     private final @Nullable XgramExpressive.Spring spring;
     private final @Nullable BoolAnimator animator;
 
@@ -480,8 +480,11 @@ public final class XgramForwardOptions {
 
   // Show sender | Hide sender
 
-  /** Show sender | Hide sender (0 and 1, in reading order; the first is on the right in RTL). */
-  private static final class SenderGroup extends ViewGroup {
+  /**
+   * Show sender | Hide sender (0 and 1, in reading order; the first is on the right in RTL), or another pair of choices
+   * (With sender | Text only, XgramForwardQuote). One of the two, {@code optional}, can be greyed out.
+   */
+  static final class SenderGroup extends ViewGroup {
     interface Listener {
       void onSenderSelected (int index);
     }
@@ -490,18 +493,24 @@ public final class XgramForwardOptions {
     private static final float M3_HEIGHT = 40f, M3_VERTICAL = 8f, M3_SIDE = 16f, CLASSIC_HEIGHT = 48f;
 
     private final boolean m3;
+    private final int optional;
     private final View[] cells = new View[2];
     private final TextView[] labels = new TextView[2];
     private final XgramExpressive.MorphDrawable[] morphs = new XgramExpressive.MorphDrawable[2];
     private final RadioView[] radios = new RadioView[2];
     private int selected = -1;
-    private boolean hideEnabled = true;
+    private boolean optionalEnabled = true;
 
     SenderGroup (Context context, boolean m3, Listener listener) {
+      this(context, m3, new int[] {R.string.XgramFwdShowSender, R.string.XgramFwdHideSender}, 1, listener);
+    }
+
+    /** {@code names}: the two labels; {@code optional}: the index of the one that can be greyed out. */
+    SenderGroup (Context context, boolean m3, int[] names, int optional, Listener listener) {
       super(context);
       this.m3 = m3;
+      this.optional = optional;
       final boolean rtl = Lang.rtl();
-      final int[] names = {R.string.XgramFwdShowSender, R.string.XgramFwdHideSender};
       for (int i = 0; i < 2; i++) {
         final int index = i;
         TextView label = new TextView(context);
@@ -562,17 +571,17 @@ public final class XgramForwardOptions {
       }
     }
 
-    void setState (int selected, boolean hideEnabled, boolean animated) {
-      if (this.selected == selected && this.hideEnabled == hideEnabled) {
+    void setState (int selected, boolean optionalEnabled, boolean animated) {
+      if (this.selected == selected && this.optionalEnabled == optionalEnabled) {
         return;
       }
       this.selected = selected;
-      this.hideEnabled = hideEnabled;
+      this.optionalEnabled = optionalEnabled;
       final boolean rtl = Lang.rtl();
       for (int i = 0; i < 2; i++) {
         final boolean on = i == selected;
         cells[i].setSelected(on);
-        cells[i].setEnabled(i == 0 || hideEnabled);
+        cells[i].setEnabled(i != optional || optionalEnabled);
         if (m3) {
           morphs[i].setCornerTarget(on ? XgramExpressive.CORNER_FULL : Float.NaN, animated && isAttachedToWindow());
           Drawable check = null;
@@ -593,10 +602,10 @@ public final class XgramForwardOptions {
       requestLayout(); // the check widens its button
     }
 
-    /** TalkBack: why Hide sender is greyed out, read with the button itself; null while it isn't. */
-    void setHideReason (@Nullable String reason) {
-      final CharSequence label = labels[1].getText();
-      cells[1].setContentDescription(reason != null ? label + ". " + reason : m3 ? null : label);
+    /** TalkBack: why the optional choice (Hide sender) is greyed out, read with the button itself; null while it isn't. */
+    void setDisabledReason (@Nullable String reason) {
+      final CharSequence label = labels[optional].getText();
+      cells[optional].setContentDescription(reason != null ? label + ". " + reason : m3 ? null : label);
     }
 
     /** Label and check colours (the containers read theirs when drawn). */

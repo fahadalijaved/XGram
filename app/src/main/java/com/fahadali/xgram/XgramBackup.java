@@ -66,8 +66,8 @@ public final class XgramBackup {
     XgramSettings.KEY_HIDE_LOCK_BUTTON, XgramSettings.KEY_MESSAGE_POPUP,
     // Header buttons (Chat list): the ghost mode indicator and Search ("xgram_header_hide_" + the button)
     XgramSettings.KEY_HEADER_BUTTON_HIDDEN,
-    // Forwarding (Messages): the last choice, for Remember my last choice
-    XgramSettings.KEY_FORWARD_LAST_HIDDEN,
+    // Forwarding (Messages): the last choice, for Remember my last choice (messages, and selected text)
+    XgramSettings.KEY_FORWARD_LAST_HIDDEN, XgramSettings.KEY_FORWARD_LAST_TEXT_ONLY,
     // Long press on text selects it (Messages > Gestures)
     XgramSettings.KEY_TEXT_SELECT_DRAG,
     // Add to group or channel (a bot's profile): as an admin, with every right

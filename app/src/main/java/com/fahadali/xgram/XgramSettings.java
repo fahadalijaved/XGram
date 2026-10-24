@@ -450,6 +450,18 @@ public final class XgramSettings {
     put(KEY_FORWARD_LAST_HIDDEN, value);
   }
 
+  /** Remember my last choice, for selected text (Select text → Forward, XgramForwardQuote): the last one went as Text only. */
+  public static final String KEY_FORWARD_LAST_TEXT_ONLY = "xgram_forward_last_text_only";
+
+  /** The last forward of selected text went as Text only (only stored while Remember my last choice is on). */
+  public boolean forwardLastTextOnly () {
+    return pmc().getBoolean(KEY_FORWARD_LAST_TEXT_ONLY, false);
+  }
+
+  public void setForwardLastTextOnly (boolean value) {
+    put(KEY_FORWARD_LAST_TEXT_ONLY, value);
+  }
+
   /** Pre-tick "Delete for everyone" in the delete dialog, also for messages of others (NagramX). */
   public boolean deleteForEveryoneByDefault () {
     return pmc().getBoolean("xgram_delete_for_everyone", false);

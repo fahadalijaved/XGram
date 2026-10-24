@@ -356,6 +356,17 @@ public class ShareController extends TelegramViewController<ShareController.Args
       return this;
     }
 
+    private @Nullable com.fahadali.xgram.chats.XgramForwardQuote.Source xgramQuoteSource;
+
+    /**
+     * XGram: the text is words selected in {@code message} (Select text → Forward): the sheet offers With sender, a
+     * reply quoting them ({@code quote}, null when they aren't the message's own text), or Text only (XgramForwardQuote).
+     */
+    public Args xgramSetQuoteSource (@NonNull TdApi.Message message, @Nullable com.fahadali.xgram.chats.XgramQuoteText.Quote quote) {
+      this.xgramQuoteSource = new com.fahadali.xgram.chats.XgramForwardQuote.Source(message, quote);
+      return this;
+    }
+
     public Args setMessageThreadId (long messageThreadId) {
       this.messageThreadId = messageThreadId;
       return this;
@@ -407,6 +418,9 @@ public class ShareController extends TelegramViewController<ShareController.Args
     } else if (args.xgramHideSender) {
       needHideAuthor = true; // XGram: Forward without sender, Hide sender starts set
       xgramForwardPreset = true;
+    }
+    if (args.xgramQuoteSource != null) {
+      xgramQuoteWithSender = com.fahadali.xgram.chats.XgramForwardQuote.withSenderByDefault(); // XGram: Forwarding (Messages)
     }
     this.displayingChatList = args.chatList != null ? args.chatList : ChatPosition.CHAT_LIST_MAIN;
   }
@@ -1071,6 +1085,9 @@ public class ShareController extends TelegramViewController<ShareController.Args
     if (xgramForwardPanel != null) {
       xgramForwardPanel.refreshColors(); // XGram
     }
+    if (xgramQuotePanel != null) {
+      xgramQuotePanel.refreshColors(); // XGram
+    }
   }
 
   private @Nullable com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable xgramSheetTop; // XGram: Expressive header background
@@ -1388,6 +1405,9 @@ public class ShareController extends TelegramViewController<ShareController.Args
         if (emojiLayout != null) {
           emojiLayout.onTextChanged(input);
         }
+        if (xgramQuotePanel != null) {
+          xgramQuotePanel.setComment(input); // XGram: With sender's preview shows the comment under the quote
+        }
       }
 
       @Override
@@ -1472,6 +1492,14 @@ public class ShareController extends TelegramViewController<ShareController.Args
       });
       xgramSyncForwardPanel(false);
       bottomWrap.addView(xgramForwardPanel, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    } else if (mode == MODE_TEXT && getArgumentsStrict().xgramQuoteSource != null) {
+      // XGram: selected text (Select text → Forward): With sender | Text only and a preview, above the comment field
+      xgramQuotePanel = new com.fahadali.xgram.chats.XgramForwardQuote.Panel(context, tdlib, this, getArgumentsStrict().xgramQuoteSource, getArgumentsStrict().text, xgramSheetColorId(), withSender -> {
+        xgramQuoteWithSender = withSender;
+        xgramSyncQuotePanel(true);
+      });
+      xgramSyncQuotePanel(false);
+      bottomWrap.addView(xgramQuotePanel, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
     }
     bottomWrap.addView(inputView);
 
@@ -1606,6 +1634,9 @@ public class ShareController extends TelegramViewController<ShareController.Args
     // Load message properties
 
     reloadMessageProperties(null);
+    if (xgramQuotePanel != null) {
+      getArgumentsStrict().xgramQuoteSource.load(tdlib, false, this, () -> xgramSyncQuotePanel(true)); // XGram: whether the words' message can be replied to elsewhere
+    }
 
     // Load chats
 
@@ -2017,7 +2048,7 @@ public class ShareController extends TelegramViewController<ShareController.Args
   private boolean hasSelectedAnything;
 
   private boolean processSingleTap (TGFoundChat chat) {
-    if (!hasSelectedAnything && chat.isSelfChat() && selectedChats.size() == 0) {
+    if (!hasSelectedAnything && chat.isSelfChat() && selectedChats.size() == 0 && !xgramQuoteSends()) { // XGram: With sender waits for its comment
       selectedChats.put(chat.getAnyId(), chat);
       selectedChatIds.append(chat.getAnyId());
       sendMessages(false, true, null);
@@ -2220,6 +2251,7 @@ public class ShareController extends TelegramViewController<ShareController.Args
     }
     checkAbilityToSend();
     updateHeader();
+    xgramSyncQuotePanel(true); // XGram: a secret chat (or a chat the words can't be quoted in) greys out With sender
     if (after != null) {
       after.runWithBool(result);
     }
@@ -2262,6 +2294,10 @@ public class ShareController extends TelegramViewController<ShareController.Args
   private boolean sendOnKeyboardCloseGoToChat;
 
   private void performSend (boolean needHideKeyboard, TdApi.MessageSendOptions finalSendOptions, boolean forceGoToChat) {
+    if (xgramQuoteSends() && inputView.isEmpty()) {
+      xgramAskForQuoteComment(); // XGram: With sender, the comment is the message: the keyboard stays for it
+      return;
+    }
     if (needHideKeyboard) {
       if (!sendOnKeyboardClose) {
         sendOnKeyboardClose = true;
@@ -3071,6 +3107,9 @@ public class ShareController extends TelegramViewController<ShareController.Args
       if (xgramForwardPanel != null && xgramForwardPanel.getVisibility() != View.GONE) {
         add += xgramForwardPanel.getMeasuredHeight(); // XGram: the forward options sit above the comment field
       }
+      if (xgramQuotePanel != null && xgramQuotePanel.getVisibility() != View.GONE) {
+        add += xgramQuotePanel.getMeasuredHeight(); // XGram: so do the selected text's
+      }
       float y = bottomWrap.getTranslationY() + add;
       okButton.setTranslationY(y);
       emojiButton.setTranslationY(y);
@@ -3356,6 +3395,9 @@ public class ShareController extends TelegramViewController<ShareController.Args
       this.isKeyboardReallyVisible = isVisible;
       if (xgramForwardPanel != null) {
         xgramForwardPanel.setTyping(isVisible); // XGram: while typing the forward options leave out their preview, and more below a tall window
+      }
+      if (xgramQuotePanel != null) {
+        xgramQuotePanel.setTyping(isVisible); // XGram: the same for the selected text's
       }
       if (isVisible) {
         ensureTopPosition();
@@ -3734,6 +3776,52 @@ public class ShareController extends TelegramViewController<ShareController.Args
     }
   }
 
+  // XGram: selected text (com.fahadali.xgram.chats.XgramForwardQuote): With sender | Text only above the comment field
+
+  private @Nullable com.fahadali.xgram.chats.XgramForwardQuote.Panel xgramQuotePanel;
+  /** The choice: With sender (Text only when false); used while {@link #xgramQuoteBlock()} allows it. */
+  private boolean xgramQuoteWithSender;
+
+  /** Why With sender can't be used for the chats picked now (XgramForwardQuote.BLOCK_*). */
+  private int xgramQuoteBlock () {
+    final com.fahadali.xgram.chats.XgramForwardQuote.Source source = mode == MODE_TEXT ? getArgumentsStrict().xgramQuoteSource : null;
+    if (source == null) {
+      return com.fahadali.xgram.chats.XgramForwardQuote.BLOCK_NONE;
+    }
+    int block = source.block();
+    for (int i = 0; i < selectedChatIds.size() && block == com.fahadali.xgram.chats.XgramForwardQuote.BLOCK_NONE; i++) {
+      final long chatId = selectedChatIds.get(i);
+      final com.fahadali.xgram.topics.XgramForums.PickedTopic topic = xgramSelectedTopics.get(chatId);
+      block = source.blockIn(chatId, topic != null ? topic.topicId : null);
+    }
+    return block;
+  }
+
+  /** Send sends With sender: the selected text's comment as a reply quoting the words. */
+  private boolean xgramQuoteSends () {
+    return mode == MODE_TEXT && getArgumentsStrict().xgramQuoteSource != null && xgramQuoteWithSender && xgramQuoteBlock() == com.fahadali.xgram.chats.XgramForwardQuote.BLOCK_NONE;
+  }
+
+  private void xgramSyncQuotePanel (boolean animated) {
+    if (xgramQuotePanel != null) {
+      xgramQuotePanel.setState(xgramQuoteWithSender, xgramQuoteBlock(), animated);
+    }
+  }
+
+  /** With sender and no comment: nothing to send yet, so the comment field takes the focus and says what it needs. */
+  private void xgramAskForQuoteComment () {
+    if (inputView == null) {
+      return;
+    }
+    final String hint = Lang.getString(R.string.XgramFwdQuoteNeedsComment);
+    if (inputView.isEnabled()) {
+      inputView.requestFocus();
+      Keyboard.show(inputView);
+    }
+    context().tooltipManager().builder(inputView).show(tdlib, hint).hideDelayed();
+    inputView.announceForAccessibility(hint);
+  }
+
   private void sendMessages (boolean forceGoToChat, boolean isSingleTap, @Nullable TdApi.MessageSendOptions finalSendOptions) {
     sendMessages(forceGoToChat, isSingleTap, finalSendOptions, true);
   }
@@ -3747,6 +3835,35 @@ public class ShareController extends TelegramViewController<ShareController.Args
       reloadMessageProperties(ignored -> sendMessages(forceGoToChat, isSingleTap, finalSendOptions, false));
       return;
     }
+
+    // XGram: With sender (selected text) sends the comment as a reply quoting the words: it needs one, and the words'
+    // message is read again first (an edit may have moved the words or taken them out, it may have been deleted)
+    final com.fahadali.xgram.chats.XgramForwardQuote.Source xgramQuoteSource = mode == MODE_TEXT ? getArgumentsStrict().xgramQuoteSource : null;
+    if (xgramQuoteSends()) {
+      if (inputView.isEmpty()) {
+        xgramAskForQuoteComment();
+        return;
+      }
+      if (reloadProperties) {
+        xgramQuoteSource.load(tdlib, true, this, () -> {
+          if (isSent) {
+            return;
+          }
+          xgramSyncQuotePanel(true);
+          if (xgramQuoteSends()) {
+            sendMessages(forceGoToChat, isSingleTap, finalSendOptions, false);
+          } else {
+            // Not possible any more: the options say why and turn to Text only, for the next Send
+            final String reason = com.fahadali.xgram.chats.XgramForwardQuote.blockReason(xgramQuoteBlock());
+            if (reason != null) {
+              context().tooltipManager().builder(isSendHidden ? okButton : sendButton).icon(R.drawable.baseline_warning_24).show(tdlib, reason).hideDelayed();
+            }
+          }
+        });
+        return;
+      }
+    }
+    final boolean xgramQuoteSend = xgramQuoteSends();
 
     // Double check if there are any new restrictions
     for (int i = 0; i < selectedChats.size(); i++) {
@@ -3784,6 +3901,12 @@ public class ShareController extends TelegramViewController<ShareController.Args
         tdlib.client().send(new TdApi.CreatePrivateChat(myUserId, true), tdlib.silentHandler());
       }
       TdApi.MessageSendOptions sendOptions = ChatId.isSecret(chatId) ? secretSendOptions : cloudSendOptions;
+      final TdApi.InputMessageReplyTo xgramQuoteReplyTo = xgramQuoteSend && hasComment ? xgramQuoteSource.replyTo(chatId, xgramTopicId) : null;
+      if (xgramQuoteReplyTo != null) {
+        // XGram: With sender, the comment goes as a reply quoting the words in their message, instead of the words
+        functions.addAll(TD.sendMessageText(chatId, xgramTopicId, xgramQuoteReplyTo, sendOptions, new TdApi.InputMessageText(comment, null, false), tdlib.maxMessageTextLength()));
+        continue;
+      }
       boolean messageReplyIncluded = false;
       if (hasComment) {
         TdApi.InputMessageReplyToMessage replyTo = null;
@@ -3892,6 +4015,9 @@ public class ShareController extends TelegramViewController<ShareController.Args
     }
     if (mode == MODE_MESSAGES && (!xgramForwardPreset || xgramForwardTouched) && com.fahadali.xgram.chats.XgramForwardOptions.canHideSender(args.messages, messageProperties)) {
       com.fahadali.xgram.chats.XgramForwardOptions.remember(needHideAuthor); // XGram: Forwarding's Remember my last choice
+    }
+    if (xgramQuoteSource != null && xgramQuoteBlock() == com.fahadali.xgram.chats.XgramForwardQuote.BLOCK_NONE) {
+      com.fahadali.xgram.chats.XgramForwardQuote.remember(xgramQuoteWithSender); // XGram: the same, for selected text
     }
     if (functions.size() == 1) {
       tdlib.client().send(functions.get(0), tdlib.messageHandler());
@@ -4117,6 +4243,9 @@ public class ShareController extends TelegramViewController<ShareController.Args
     cancelDownloadingFiles();
     if (xgramForwardPanel != null) {
       xgramForwardPanel.performDestroy(); // XGram
+    }
+    if (xgramQuotePanel != null) {
+      xgramQuotePanel.performDestroy(); // XGram
     }
     context().removeFullScreenView(this, false);
   }
