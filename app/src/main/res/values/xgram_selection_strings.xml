@@ -16,5 +16,6 @@
   <string name="XgramSearchKwSelectText">select text, text selection, copy part, partial copy, copy a word, highlight text, drag to select</string>
   <string name="XgramSelForward">Forward</string>
   <string name="XgramSelMore">More</string>
+  <string name="XgramSelBack">Back</string>
   <string name="XgramSelShareApps">Share to other apps</string>
 </resources>

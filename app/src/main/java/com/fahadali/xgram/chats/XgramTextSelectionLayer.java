@@ -271,15 +271,45 @@ final class XgramTextSelectionLayer extends FrameLayout implements ViewTreeObser
     if (actions == toolbarActions && maxWidth == toolbarMaxWidth) {
       return;
     }
+    if (actions != toolbarActions) {
+      overflow = false; // a new selection starts on the main page
+    }
     toolbarActions = actions;
     toolbarMaxWidth = maxWidth;
+    rebuildToolbar();
+  }
+
+  /** The toolbar's buttons as labels, or as icons when the labels don't fit in {@link #toolbarMaxWidth}. */
+  private void rebuildToolbar () {
     buildToolbar(false);
     final int unspecified = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED);
     toolbar.measure(unspecified, unspecified);
-    if (toolbar.getMeasuredWidth() > maxWidth) {
+    if (toolbar.getMeasuredWidth() > toolbarMaxWidth) {
       buildToolbar(true);
       toolbar.measure(unspecified, unspecified);
     }
+  }
+
+  /** ⋮ shows the toolbar's second page (‹ Select all, Share to other apps) in the same pill; ‹ goes back. */
+  private boolean overflow;
+
+  private void setOverflow (boolean overflow) {
+    if (this.overflow == overflow) {
+      return;
+    }
+    this.overflow = overflow;
+    if (com.fahadali.xgram.appearance.XgramMotion.reduce()) {
+      rebuildToolbar();
+      toolbar.requestLayout();
+      return;
+    }
+    // Fade through: the page fades out, the other one fades in at its own width (the pill is placed again each frame)
+    toolbar.animate().cancel();
+    toolbar.animate().alpha(0f).setDuration(90).setInterpolator(AnimatorUtils.ACCELERATE_INTERPOLATOR).withEndAction(() -> {
+      rebuildToolbar();
+      toolbar.requestLayout();
+      toolbar.animate().alpha(1f).setDuration(180).setInterpolator(AnimatorUtils.DECELERATE_INTERPOLATOR).start();
+    }).start();
   }
 
   int getToolbarWidth () {
@@ -333,11 +363,21 @@ final class XgramTextSelectionLayer extends FrameLayout implements ViewTreeObser
   private void onToolbarSettled () {
     if (!toolbarShown) {
       toolbar.setVisibility(View.INVISIBLE);
+      if (overflow) {
+        overflow = false; // shown again on its main page
+        rebuildToolbar();
+      }
     }
   }
 
   private void buildToolbar (boolean iconsOnly) {
     toolbar.removeAllViews();
+    if (overflow) {
+      addButton(~0, R.id.btn_xgramSelBack, R.string.XgramSelBack, R.drawable.baseline_arrow_back_24, true);
+      addButton(XgramTextSelection.ACTION_SELECT_ALL, R.id.btn_xgramSelAll, R.string.XgramSelAll, XgramTextSelection.ICON, iconsOnly);
+      addButton(XgramTextSelection.ACTION_SHARE, R.id.btn_xgramSelShare, R.string.XgramSelShareApps, R.drawable.baseline_share_24, iconsOnly);
+      return;
+    }
     addButton(XgramTextSelection.ACTION_COPY, R.id.btn_xgramSelCopy, R.string.Copy, R.drawable.baseline_content_copy_24, iconsOnly);
     addButton(XgramTextSelection.ACTION_QUOTE, R.id.btn_xgramSelQuote, R.string.XgramQuote, R.drawable.baseline_format_quote_close_24, iconsOnly);
     addButton(XgramTextSelection.ACTION_FORWARD, R.id.btn_xgramSelForward, R.string.XgramSelForward, R.drawable.baseline_forward_24, iconsOnly);
@@ -348,21 +388,7 @@ final class XgramTextSelectionLayer extends FrameLayout implements ViewTreeObser
     }
   }
 
-  /** ⋮: Select all (while not everything is selected) and Share to other apps. */
-  private void showMore (View anchor) {
-    final android.widget.PopupMenu menu = new android.widget.PopupMenu(getContext(), anchor);
-    if ((toolbarActions & XgramTextSelection.ACTION_SELECT_ALL) != 0) {
-      menu.getMenu().add(0, R.id.btn_xgramSelAll, 0, Lang.getString(R.string.XgramSelAll));
-    }
-    if ((toolbarActions & XgramTextSelection.ACTION_SHARE) != 0) {
-      menu.getMenu().add(0, R.id.btn_xgramSelShare, 1, Lang.getString(R.string.XgramSelShareApps));
-    }
-    menu.setOnMenuItemClickListener(item -> {
-      selection.onAction(item.getItemId());
-      return true;
-    });
-    menu.show();
-  }
+
 
   private void addButton (int action, @IdRes int id, @StringRes int name, @DrawableRes int icon, boolean iconOnly) {
     if ((toolbarActions & action) == 0) {
@@ -413,7 +439,9 @@ final class XgramTextSelectionLayer extends FrameLayout implements ViewTreeObser
     button.setId(id);
     button.setOnClickListener(v -> {
       if (v.getId() == R.id.btn_xgramSelMore) {
-        showMore(v);
+        setOverflow(true);
+      } else if (v.getId() == R.id.btn_xgramSelBack) {
+        setOverflow(false);
       } else {
         selection.onAction(v.getId());
       }
