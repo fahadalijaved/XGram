@@ -63,7 +63,7 @@ import me.vkryl.core.ColorUtils;
 public final class XgramM3Colors {
   private XgramM3Colors () { }
 
-  private static final int K_ROLE = 1, K_OVER = 2, K_TRANSPARENT = 3, K_HARMONIZE = 4;
+  private static final int K_ROLE = 1, K_OVER = 2, K_TRANSPARENT = 3, K_HARMONIZE = 4, K_ON_OUTGOING = 5;
   private static final int SIZE = 512;
 
   /** M3 state layer opacities (androidx.compose.material3 StateTokens): pressed .10, dragged .16. */
@@ -104,6 +104,26 @@ public final class XgramM3Colors {
     for (int colorId : colorIds) {
       put(colorId, entry);
     }
+  }
+
+  private static void onOutgoing (int... colorIds) {
+    for (int colorId : colorIds) {
+      put(colorId, K_ON_OUTGOING);
+    }
+  }
+
+  /** Per scheme (light, dark): whether primary reads on primaryContainer (3:1); reset with the role caches. */
+  private static final boolean[] primaryOnContainerValid = new boolean[2], primaryOnContainer = new boolean[2];
+
+  private static boolean primaryReadsOnContainer (boolean dark) {
+    int scheme = dark ? 1 : 0;
+    if (!primaryOnContainerValid[scheme]) {
+      int container = XgramExpressive.colorFor(PRIMARY_CONTAINER, dark) | 0xff000000;
+      int primary = XgramExpressive.colorFor(PRIMARY, dark) | 0xff000000;
+      primaryOnContainer[scheme] = androidx.core.graphics.ColorUtils.calculateContrast(primary, container) >= 3.0;
+      primaryOnContainerValid[scheme] = true;
+    }
+    return primaryOnContainer[scheme];
   }
 
   private static void pureBlackRole (int role, int... colorIds) {
@@ -179,11 +199,13 @@ public final class XgramM3Colors {
       ColorId.messageAuthor, ColorId.file, ColorId.fileAttach, ColorId.waveformActive, ColorId.blockQuoteLine,
       ColorId.introSectionActive, ColorId.headerTabActive, ColorId.fillingPositive, ColorId.iv_textLink,
       ColorId.iv_blockQuoteLine, ColorId.bubbleIn_progress, ColorId.bubbleIn_textLink,
-      ColorId.bubbleIn_fillingPositive, ColorId.bubbleIn_blockQuoteLine, ColorId.bubbleOut_textLink,
-      ColorId.bubbleOut_chatVerticalLine, ColorId.bubbleOut_inlineIcon, ColorId.bubbleOut_inlineOutline,
-      ColorId.bubbleOut_waveformActive, ColorId.bubbleOut_file, ColorId.bubbleOut_ticks, ColorId.bubbleOut_ticksRead,
-      ColorId.bubbleOut_messageAuthor, ColorId.bubbleOut_fillingPositive,
-      ColorId.bubbleOut_blockQuoteLine);
+      ColorId.bubbleIn_fillingPositive, ColorId.bubbleIn_blockQuoteLine);
+    // Accents inside outgoing bubbles (primaryContainer): primary while it stands out there, else the bubble's own
+    // onPrimaryContainer (Vibrant's dark scheme makes primary and primaryContainer both bright: pale ticks and names)
+    onOutgoing(ColorId.bubbleOut_textLink, ColorId.bubbleOut_chatVerticalLine, ColorId.bubbleOut_inlineIcon,
+      ColorId.bubbleOut_inlineOutline, ColorId.bubbleOut_waveformActive, ColorId.bubbleOut_file,
+      ColorId.bubbleOut_ticks, ColorId.bubbleOut_ticksRead, ColorId.bubbleOut_messageAuthor,
+      ColorId.bubbleOut_fillingPositive, ColorId.bubbleOut_blockQuoteLine);
     // State layers and highlights (M3 state layer tokens: hover .08, focus .10, pressed .10, dragged .16)
     // Text selection: Compose material3 TextSelectionColors, primary at .40.
     roleAlpha(PRIMARY, .40f, ColorId.textSelectionHighlight);
@@ -429,6 +451,8 @@ public final class XgramM3Colors {
       }
       case K_HARMONIZE:
         return harmonize(theme.getColor(colorId), colorId, dark);
+      case K_ON_OUTGOING:
+        return XgramExpressive.colorFor(primaryReadsOnContainer(dark) ? PRIMARY : ON_PRIMARY_CONTAINER, dark);
       case K_TRANSPARENT:
         return 0;
     }
@@ -500,6 +524,7 @@ public final class XgramM3Colors {
     for (int scheme = 0; scheme < 2; scheme++) {
       primaryHueValid[scheme] = false;
       java.util.Arrays.fill(harmonizedValid[scheme], false);
+      primaryOnContainerValid[scheme] = false;
     }
   }
 }
