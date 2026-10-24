@@ -33,11 +33,11 @@ import org.thunderdog.challegram.R
 import org.thunderdog.challegram.tool.UI
 
 /**
- * Appearance > Layout > Navigation bar (Expressive design): the floating navigation toolbar of narrow windows. A live
- * preview of it (the real pill and photo, a tap moves the selection), the switch and the colours, the tabs (up to 4,
- * Chats always, in the user's order), where the profile photo goes, where the chat list's New chat button goes, whether
- * the side menu stays, and a reset to XGram's layout (XgramSettings.resetNavBar). Every change reaches the toolbar at
- * once.
+ * Chat list > Navigation > Navigation bar (Expressive design): the floating navigation toolbar of narrow windows. A live
+ * preview of it (the real pill and photo, a tap moves the selection), the switch and the colors, the tabs (up to 4,
+ * Chats always, in the user's order), where the profile photo goes, whether the side menu stays, and a reset to XGram's
+ * layout (XgramSettings.resetNavBar). Every change reaches the toolbar at once. Where the New chat button goes is Chat
+ * list > Navigation's New chat button (XgramSettingDeps.newChatButton).
  */
 @Composable
 fun NavBarPage() {
@@ -77,7 +77,7 @@ fun NavBarPage() {
     header(R.string.XgramNavBarTabs)
     val profileMode = settings.navProfile()
     val allKeys = XgramNavToolbar.orderedKeys()
-    // Activity's row only while Activity is on (Chat list > Activity)
+    // Activity's row only while Activity is on (Activity and reminders)
     val activityOn = XgramActivity.isOn()
     val shownKeys = allKeys.filter { (it != PROFILE || profileMode == XgramSettings.NAV_PROFILE_TAB) && (it != ACTIVITY || activityOn) }
     val count = XgramNavToolbar.enabledTabCount()
@@ -115,24 +115,6 @@ fun NavBarPage() {
       }
     }
     description(R.string.XgramNavBarProfileInfo)
-
-    // The chat list's compose button: at the window's edge (stays when the bar hides), or with the bar's group
-    header(R.string.XgramNavBarFab)
-    val fabMode = settings.navFab()
-    group {
-      radio(
-        R.id.btn_xgramNavBarFab, s(R.string.XgramNavBarFabSide), selected = fabMode == XgramSettings.NAV_FAB_SIDE,
-        subtitle = s(R.string.XgramNavBarFabSideSub), key = "side"
-      ) {
-        setFabMode(host, settings, XgramSettings.NAV_FAB_SIDE)
-      }
-      radio(
-        R.id.btn_xgramNavBarFab, s(R.string.XgramNavBarFabWithBar), selected = fabMode == XgramSettings.NAV_FAB_WITH_BAR,
-        subtitle = s(R.string.XgramNavBarFabWithBarSub), key = "bar"
-      ) {
-        setFabMode(host, settings, XgramSettings.NAV_FAB_WITH_BAR)
-      }
-    }
 
     // No menu button and no edge swipe while the bar is shown: the side menu's items go to the chat list's overflow
     group {
@@ -218,14 +200,6 @@ private fun setProfileMode(host: XgramComposeHost, settings: XgramSettings, mode
     // The profile was the only tab beside Chats: Settings takes its place (as the bar would), and the page shows it
     settings.setNavTabOn(XgramNavToolbar.DEST_SETTINGS, true)
   }
-  updateToolbar(host)
-}
-
-private fun setFabMode(host: XgramComposeHost, settings: XgramSettings, mode: Int) {
-  if (mode == settings.navFab()) {
-    return
-  }
-  settings.setNavFab(mode)
   updateToolbar(host)
 }
 

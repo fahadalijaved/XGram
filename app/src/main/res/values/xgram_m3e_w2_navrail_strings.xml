@@ -12,9 +12,9 @@
   <string name="XgramNavRailUnread">%1$s, %2$s unread</string>
   <string name="XgramNavRailUnreadMuted">%1$s, unread in muted chats</string>
   <string name="XgramNavRailMissed">%1$s, %2$s missed</string>
-  <!-- Appearance > Layout -->
+  <!-- Chat list > Navigation -->
   <string name="XgramNavRailOption">Navigation rail</string>
-  <string name="XgramNavRailOptionSub">Icons beside the chat list on wide screens</string>
+  <string name="XgramNavRailOptionSub">Beside the chat list on wide screens</string>
   <string name="XgramNavRailNeedsExpressive">Needs Expressive design</string>
   <item type="id" name="btn_xgramNavRail" />
 </resources>

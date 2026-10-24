@@ -15,6 +15,7 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.fahadali.xgram.XgramComposeBridge
@@ -32,24 +33,40 @@ import com.fahadali.xgram.compose.ui.SettingsSearchPill
 import com.fahadali.xgram.compose.ui.s
 import com.fahadali.xgram.compose.ui.str
 import com.fahadali.xgram.search.SettingsSearch
-import org.thunderdog.challegram.BuildConfig
 import org.thunderdog.challegram.R
 import org.thunderdog.challegram.core.Lang
 import org.thunderdog.challegram.telegram.TdlibUi
 import org.thunderdog.challegram.tool.UI
+import org.thunderdog.challegram.util.AppUpdater
 
 private const val URL_BASED_ON = "https://github.com/TGX-Android/Telegram-X"
 internal const val URL_SUPPORT = "https://paypal.me/fahadalijaved23"
 
-/** Settings → XGram: search, What's new, the categories and About. */
+/**
+ * Settings → XGram: search, What's new, the categories (the look and the everyday screens, XGram's own features, the
+ * plumbing) and About, whose Version opens App updates.
+ */
 @Composable
 fun MainPage() {
   val host = LocalXgramHost.current
+  // About › Version says how updates stand: it follows the updater (not the download's progress)
+  val updater = host.activity.appUpdater()
+  DisposableEffect(updater) {
+    val listener = object : AppUpdater.Listener {
+      override fun onAppUpdateStateChanged(state: Int, oldState: Int, isApk: Boolean) {
+        host.changed()
+      }
+
+      override fun onAppUpdateDownloadProgress(bytesDownloaded: Long, totalBytesToDownload: Long) = Unit
+    }
+    updater.addListener(listener)
+    onDispose { updater.removeListener(listener) }
+  }
   SettingsPage(title = str(R.string.XgramSettings)) {
     val settings = XgramSettings.instance()
     // Values from Telegram X, worked out once per build of the page, not while rows are drawn.
-    val hidden = XgramComposeBridge.drawerHiddenCount()
     val ghost = settings.isAnyGhostEnabled()
+    val version = XgramComposeBridge.aboutVersionValue(host.activity)
 
     // Every setting, Telegram X's too: the universal search page, XGram's results first
     item("search") {
@@ -69,18 +86,18 @@ fun MainPage() {
       category(host, R.id.btn_xgramSectionAppearance, R.drawable.baseline_palette_24, R.string.XgramAppearance, s(R.string.XgramAppearanceSummary))
       category(host, R.id.btn_xgramSectionChatList, R.drawable.baseline_forum_24, R.string.XgramChatList, s(R.string.XgramChatListSummary))
       category(host, R.id.btn_xgramSectionChats, R.drawable.baseline_chat_bubble_24, R.string.XgramMessages, s(R.string.XgramMessagesSummary))
-      category(host, R.id.btn_xgramSectionTranslation, R.drawable.baseline_translate_24, R.string.XgramTranslation, s(R.string.XgramTranslationSummary))
       category(
-        host, R.id.btn_xgramSideMenu, R.drawable.baseline_format_list_bulleted_type_24, R.string.XgramSideMenu,
-        if (hidden > 0) s(R.string.XgramHiddenCount, hidden) else s(R.string.XgramSideMenuSummary)
+        host, R.id.btn_xgramSectionPrivacy, R.drawable.baseline_lock_24, R.string.XgramPrivacy,
+        s(if (ghost) R.string.XgramPrivacySummaryGhostOn else R.string.XgramPrivacySummary)
       )
     }
 
     group {
       category(
-        host, R.id.btn_xgramSectionPrivacy, R.drawable.baseline_lock_24, R.string.XgramPrivacy,
-        s(if (ghost) R.string.XgramPrivacySummaryGhostOn else R.string.XgramPrivacySummary)
+        host, R.id.btn_xgramSectionActivity, R.drawable.baseline_notifications_active_24, R.string.XgramActivitySection,
+        s(R.string.XgramActivitySectionSummary)
       )
+      category(host, R.id.btn_xgramSectionTranslation, R.drawable.baseline_translate_24, R.string.XgramTranslation, s(R.string.XgramTranslationSummary))
       category(host, R.id.btn_xgramSectionFilters, R.drawable.baseline_filter_variant_remove_24, R.string.XgramFilters, s(R.string.XgramFiltersSummary))
       category(host, R.id.btn_xgramSectionHistory, R.drawable.baseline_history_24, R.string.XgramHistory, s(R.string.XgramHistorySummary))
     }
@@ -92,7 +109,11 @@ fun MainPage() {
 
     header(R.string.XgramAbout)
     group {
-      value(R.id.btn_xgramAboutVersion, s(R.string.XgramAboutVersion), Lang.getAppBuildAndVersion(host.tdlib), icon = R.drawable.baseline_info_24) {
+      // A tap opens App updates (also on Telegram X's main Settings page), a long press copies the version
+      value(
+        R.id.btn_xgramAboutVersion, s(R.string.XgramAboutVersion), version, icon = R.drawable.baseline_info_24,
+        longClickLabel = s(R.string.Copy), onLongClick = { UI.copyText(Lang.getAppBuildAndVersion(host.tdlib), R.string.CopiedText) }
+      ) {
         mainPageAction(host, R.id.btn_xgramAboutVersion)
       }
       value(R.id.btn_xgramLogsShare, s(R.string.XgramLogsShare), s(R.string.XgramLogsShareInfo), icon = R.drawable.baseline_share_24) {
@@ -106,20 +127,7 @@ fun MainPage() {
       }
     }
     description(R.string.XgramAboutCredits)
-
-    // Debug builds: test tools, off by default (Telegram X's developer mode is always on in debug builds). The same
-    // id as the classic row, so a search result points at it.
-    if (BuildConfig.DEBUG) {
-      header(R.string.XgramDeveloper)
-      group {
-        switch(
-          R.id.btn_xgramSendMenuTests, s(R.string.XgramSendMenuTests), s(R.string.XgramSendMenuTestsSub),
-          icon = R.drawable.baseline_bug_report_24, checked = settings.sendMenuTests()
-        ) {
-          settings.setSendMenuTests(it)
-        }
-      }
-    }
+    // Debug builds' test switches (the send menu's, Activity's) are in Telegram X's Testing Utilities.
   }
 }
 
@@ -138,14 +146,14 @@ internal fun mainPageAction(host: XgramComposeHost, id: Int) {
     R.id.btn_xgramSectionChatList -> host.openPage(XgramPage.CHAT_LIST)
     R.id.btn_xgramSectionChats -> host.openPage(XgramPage.MESSAGES)
     R.id.btn_xgramSectionTranslation -> host.openPage(XgramPage.TRANSLATION)
-    R.id.btn_xgramSideMenu -> host.openPage(XgramPage.SIDE_MENU)
+    R.id.btn_xgramSectionActivity -> host.openPage(XgramPage.ACTIVITY)
     R.id.btn_xgramSectionPrivacy -> host.openPage(XgramPage.PRIVACY)
     R.id.btn_xgramSectionFilters -> host.openPage(XgramPage.FILTERS)
     R.id.btn_xgramSectionHistory -> host.openPage(XgramPage.HISTORY)
     R.id.btn_xgramSectionNetwork -> host.openPage(XgramPage.NETWORK)
     R.id.btn_xgramSectionUpdates -> host.openPage(XgramPage.UPDATES)
     R.id.btn_xgramSectionBackup -> host.openPage(XgramPage.BACKUP)
-    R.id.btn_xgramAboutVersion -> UI.copyText(Lang.getAppBuildAndVersion(host.tdlib), R.string.CopiedText)
+    R.id.btn_xgramAboutVersion -> host.openPage(XgramPage.UPDATES)
     // The privacy note as this page's dialog, then the file and the share sheet (nothing is uploaded by itself)
     R.id.btn_xgramLogsShare -> host.confirm(
       ConfirmSpec(title = s(R.string.XgramLogsShareConfirmTitle), text = s(R.string.XgramLogsShareConfirmText), confirm = s(R.string.XgramLogsShareAction)) {

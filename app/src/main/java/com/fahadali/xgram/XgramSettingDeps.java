@@ -157,6 +157,68 @@ public final class XgramSettingDeps {
     return connectionStatusPositionEnabled() ? 0 : R.string.XgramConnectionStatusExpressive;
   }
 
+  /**
+   * Every Long press on a chat choice starts from Telegram X's force touch, which only reaches a chat while its
+   * Interface › Chat Previews is on (BaseView.needForceTouch): with it off, a long press does neither.
+   */
+  public static boolean chatLongPressEnabled () {
+    return Settings.instance().needPreviewChatOnHold();
+  }
+
+  public static @StringRes int chatLongPressReason () {
+    return chatLongPressEnabled() ? 0 : R.string.XgramChatLongPressNeedsPreviews;
+  }
+
+  /**
+   * New chat button (Chat list › Navigation): one choice over two settings, Hide (KEY_HIDE_FAB) and where it goes
+   * (KEY_NAV_FAB). With the navigation bar is Expressive design's floating bar only (MainController.xgramFabAtSide),
+   * so it is offered and shown only while that bar is on; otherwise the button is at the side.
+   */
+  public static final int NEW_CHAT_SIDE = 0, NEW_CHAT_WITH_BAR = 1, NEW_CHAT_HIDDEN = 2;
+
+  public static boolean newChatWithBarAvailable () {
+    return XgramExpressive.isEnabled() && s().bottomNav();
+  }
+
+  public static int newChatButton () {
+    if (s().hideFab()) {
+      return NEW_CHAT_HIDDEN;
+    }
+    return newChatWithBarAvailable() && s().navFab() == XgramSettings.NAV_FAB_WITH_BAR ? NEW_CHAT_WITH_BAR : NEW_CHAT_SIDE;
+  }
+
+  /** The choices the row offers now, in order. */
+  public static int[] newChatButtonChoices () {
+    return newChatWithBarAvailable() ? new int[] {NEW_CHAT_SIDE, NEW_CHAT_WITH_BAR, NEW_CHAT_HIDDEN} : new int[] {NEW_CHAT_SIDE, NEW_CHAT_HIDDEN};
+  }
+
+  /** Hidden keeps where the button goes, for when it is shown again. */
+  public static void setNewChatButton (int mode) {
+    s().setHideFab(mode == NEW_CHAT_HIDDEN);
+    if (mode != NEW_CHAT_HIDDEN) {
+      s().setNavFab(mode == NEW_CHAT_WITH_BAR ? XgramSettings.NAV_FAB_WITH_BAR : XgramSettings.NAV_FAB_SIDE);
+    }
+  }
+
+  public static @StringRes int newChatButtonName (int mode) {
+    switch (mode) {
+      case NEW_CHAT_WITH_BAR: return R.string.XgramNavBarFabWithBar;
+      case NEW_CHAT_HIDDEN: return R.string.XgramNavBarFabHidden;
+      case NEW_CHAT_SIDE:
+      default: return R.string.XgramNavBarFabSide;
+    }
+  }
+
+  /** The line under a choice: what it does (At the side mentions the bar only while there is one). */
+  public static @StringRes int newChatButtonInfo (int mode) {
+    switch (mode) {
+      case NEW_CHAT_WITH_BAR: return R.string.XgramNavBarFabWithBarSub;
+      case NEW_CHAT_HIDDEN: return R.string.XgramNavBarFabHiddenSub;
+      case NEW_CHAT_SIDE:
+      default: return newChatWithBarAvailable() ? R.string.XgramNavBarFabSideSub : R.string.XgramNewChatSideSub;
+    }
+  }
+
   /** Activity's other rows only do something while Activity is on (com.fahadali.xgram.activity.XgramActivity.isOn). */
   public static boolean activityOptionsEnabled () {
     return s().activityOn();

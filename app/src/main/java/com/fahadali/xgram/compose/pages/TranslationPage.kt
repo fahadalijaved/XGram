@@ -28,7 +28,10 @@ import com.fahadali.xgram.translate.XgramTranslator
 import org.thunderdog.challegram.R
 import org.thunderdog.challegram.ui.SettingsLanguageTranslateController
 
-/** Translation: the service, auto-translate and its language, Translate in the message menu, the translation style. */
+/**
+ * Translation: the service (and Telegram X's page for the style and languages), auto-translate and its language,
+ * Translate in the message menu.
+ */
 @Composable
 fun TranslationPage() {
   val host = LocalXgramHost.current
@@ -61,8 +64,14 @@ fun TranslationPage() {
         settings.setTranslateFallback(it)
       }
     }
-    // Who translates: changes with the service (also on Telegram X's translation page).
+    // Who translates: changes with the service.
     description(XgramTranslator.info(provider), "trProviderInfo")
+    group {
+      // Telegram X's translation page: the style (popup, inline, off) and Do not translate
+      value(R.id.btn_xgramTrStyle, s(R.string.XgramTrStyle), styleName) {
+        host.open(SettingsLanguageTranslateController(host.activity, host.tdlib))
+      }
+    }
 
     header(R.string.XgramHeaderAutoTranslate)
     group {
@@ -75,20 +84,13 @@ fun TranslationPage() {
     }
     description(R.string.XgramTrAutoAllInfo)
 
-    header(R.string.XgramMessageMenu)
+    header(R.string.XgramHeaderInMessageMenu)
     group {
       switch(R.id.btn_xgramTrAlways, s(R.string.XgramTrAlways), s(R.string.XgramTrAlwaysSub), checked = settings.translateAlways()) {
         settings.setTranslateAlways(it)
       }
     }
     description(R.string.XgramTrAlwaysInfo)
-
-    header(R.string.XgramHeaderStyle)
-    group {
-      value(R.id.btn_xgramTrStyle, s(R.string.XgramTrStyle), styleName) {
-        host.open(SettingsLanguageTranslateController(host.activity, host.tdlib))
-      }
-    }
   }
 }
 

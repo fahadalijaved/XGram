@@ -126,15 +126,15 @@
   <string name="XgramNewIconStyles">Icon styles</string>
   <string name="XgramNewIconStylesInfo">Neon, Turbo, Retro, Pixel, Origami and Stardust icons. Turn on \"Theme too\" to switch the theme with the icon.</string>
   <string name="XgramNewSettings">Tidier XGram settings</string>
-  <string name="XgramNewSettingsInfo">Everything sorted into Appearance, Chat List, Messages, Translation, Privacy, Filters, History and more.</string>
+  <string name="XgramNewSettingsInfo">Everything sorted into Appearance, Chat list, Chats and messages, Privacy and ghost mode, Activity and reminders, Translation and more.</string>
   <string name="XgramStateOn">On</string>
   <string name="XgramStateOff">Off</string>
-  <string name="XgramPrivacy">Privacy</string>
+  <string name="XgramPrivacy">Privacy and ghost mode</string>
   <string name="XgramNetwork">Network</string>
   <string name="XgramLayout">Layout</string>
-  <string name="XgramChatList">Chat List</string>
-  <string name="XgramMessages">Messages</string>
-  <string name="XgramAppearanceSummary">Theme, icons, app icon, emoji</string>
+  <string name="XgramChatList">Chat list</string>
+  <string name="XgramMessages">Chats and messages</string>
+  <string name="XgramAppearanceSummary">Expressive design, colors, font, icons</string>
   <string name="XgramPrivacySummary">Ghost mode, screenshots, phone number</string>
   <string name="XgramNetworkSummary">Download boost, proxy rules, IPv6</string>
   <string name="XgramBackupSummary">Export, import, reset</string>
@@ -153,9 +153,9 @@
   <string name="XgramGhostDontType">Hide typing</string>
   <string name="XgramGhostOffline">Hide online status</string>
   <string name="XgramChats">Chats</string>
-  <string name="XgramHideSponsored">Hide sponsored messages</string>
+  <string name="XgramHideSponsored">Sponsored messages</string>
   <string name="XgramShowPeerIds">Show IDs</string>
-  <string name="XgramHistory">History</string>
+  <string name="XgramHistory">Saved history</string>
   <string name="XgramHistorySaveDeleted">Save deleted messages</string>
   <string name="XgramHistorySaveEdits">Save edit history</string>
   <string name="XgramHistorySaveMedia">Save media</string>
@@ -187,8 +187,8 @@
   <string name="XgramAboutSupportInfo">Donate via PayPal</string>
   <string name="XgramLoginAppCodeOnly">No Telegram app with this number? Telegram doesn\'t send codes by SMS to unofficial apps, and new accounts have to be created in the official Telegram app first. After that, log in here and the code arrives in that app.</string>
   <string name="XgramAllChatsLabel">Show All chats label</string>
-  <string name="XgramChatLook">Chat look</string>
-  <string name="XgramIconPack">Icons</string>
+  <string name="XgramChatLook">Message style</string>
+  <string name="XgramIconPack">Icon pack</string>
   <string name="XgramIconPackClassic">Classic</string>
   <string name="XgramIconPackLine">XGram Line</string>
   <string name="XgramIconPackDuotone">XGram Duotone</string>
@@ -245,7 +245,7 @@
   <string name="XgramProxyRules">Turn proxy off</string>
   <string name="XgramTranscribe">Transcribe</string>
   <string name="XgramHidePhone">Hide phone number</string>
-  <string name="XgramHistoryRetention">Keep copies</string>
+  <string name="XgramHistoryRetention">Keep unchanged messages</string>
   <string name="XgramPreferIpv6">Prefer IPv6</string>
   <string name="XgramSpeed">Downloads</string>
   <string name="XgramDownloadBoost">Download boost</string>
@@ -263,10 +263,10 @@
   <string name="XgramLimitMessageWidth">Limit message width</string>
   <string name="XgramMuteFor">Mute for %1$s</string>
   <string name="XgramMuteForever">Mute forever</string>
-  <string name="XgramSideMenu">Side Menu</string>
+  <string name="XgramSideMenu">Side menu</string>
   <string name="XgramSideMenuInfo">Drag an item by its handle to change the order.</string>
   <string name="XgramResetOrder">Reset order</string>
-  <string name="XgramChatActionsOrder">Chat actions</string>
+  <string name="XgramChatActionsOrder">Chat action order</string>
   <string name="XgramChatActionsOrderInfo">The order of the actions a long press on a chat shows, in the chat preview and in the quick actions. Drag an action by its handle, or hold it, to move it. Actions a chat does not have are left out.</string>
   <string name="XgramSideMenuItems">Items</string>
   <string name="XgramHistoryRetentionInfo">How long XGram keeps its copies of messages that were never deleted or edited. Deleted and edited ones are kept until you clear them.</string>
@@ -284,7 +284,7 @@
   <string name="XgramMaterialYouNight">Material You Night</string>
   <string name="XgramMaterialYouUnavailable">Material You needs Android 12 or newer</string>
   <string name="XgramGhostTypingForStickers">Typing for stickers</string>
-  <string name="XgramBackup">Backup</string>
+  <string name="XgramBackup">Backup and reset</string>
   <string name="XgramExportSettings">Export settings</string>
   <string name="XgramImportSettings">Import settings</string>
   <string name="XgramResetSettings">Reset XGram settings</string>
@@ -482,7 +482,7 @@
   <string name="XgramUnblockAllConfirm">Unblock everyone on this list?</string>
   <string name="XgramUnblockedCount">Unblocked: %1$d</string>
   <string name="XgramAvatarCorners">Avatar shape</string>
-  <string name="XgramHideBlocked">Hide blocked users</string>
+  <string name="XgramHideBlocked">Blocked users\' messages</string>
   <string name="XgramSavedByChat">Saved by chat</string>
   <string name="XgramSavedByChatEmpty">Nothing saved yet.</string>
   <string name="XgramMyNotes">My notes</string>
@@ -492,7 +492,7 @@
   <string name="XgramAvatarCornersRounded">Rounded</string>
   <string name="XgramAvatarCornersSquircle">Rounded square</string>
   <string name="XgramAvatarCornersSquare">Square</string>
-  <string name="XgramChatFabsAvatarShape">Chat buttons match avatar shape</string>
+  <string name="XgramChatFabsAvatarShape">Chat buttons match avatars</string>
   <string name="XgramChatFabsAvatarShapeSub">Scroll, mention and other floating buttons in chats</string>
   <string name="XgramBookmarksInfo">Bookmarks are stored on this device only. Long-press one to remove it.</string>
   <!-- XGram: Telegram AI tools -->
@@ -529,7 +529,7 @@
   <string name="XgramTrTelegramInfo">Translated by Telegram. Works for everyone; formatting is kept with Premium.</string>
   <string name="XgramTrThirdPartyInfo">The message text is sent to %1$s to be translated. Their privacy policy applies. Unofficial free service: it can be slow, limited or stop working. Plain text only. Never used in secret chats.</string>
   <string name="XgramTrUse">Use %1$s</string>
-  <string name="XgramTrFallback">Telegram fallback</string>
+  <string name="XgramTrFallback">Use Telegram if it fails</string>
   <string name="XgramTrFromBy">%1$s · %2$s</string>
   <string name="XgramTrError">%1$s: %2$s</string>
   <string name="XgramTrFellBack">%1$s. Telegram translated it instead.</string>
@@ -576,14 +576,25 @@
   <string name="XgramSettingsSearchHint">Search settings</string>
   <string name="XgramSettingsSearchPath">%1$s › %2$s</string>
   <!-- Settings pages (Settings → XGram): headers, summaries and subtitles -->
-  <string name="XgramChatListSummary">Folders, communities, long press</string>
-  <string name="XgramMessagesSummary">Message menu, swipes, links, message box</string>
-  <string name="XgramTranslationSummary">Service, style, languages</string>
+  <string name="XgramChatListSummary">View, folders, navigation, header</string>
+  <string name="XgramMessagesSummary">Message menu, swipes, sending, links</string>
+  <string name="XgramTranslationSummary">Service, auto-translate, style</string>
   <string name="XgramSideMenuSummary">Items, order</string>
   <string name="XgramPrivacySummaryGhostOn">Ghost mode on · screenshots, phone number</string>
   <string name="XgramFiltersSummary">Words, people, sponsored, blocked</string>
-  <string name="XgramHistorySummary">Deleted, edited, media, last seen</string>
+  <string name="XgramHistorySummary">Deleted and edited messages, last seen</string>
   <string name="XgramUpdatesSummary">Channel, downloads, version</string>
+  <string name="XgramActivitySection">Activity and reminders</string>
+  <string name="XgramActivitySectionSummary">Mentions, snoozed chats, Check In</string>
+  <string name="XgramLargeScreens">Large screens and foldables</string>
+  <string name="XgramLargeScreensSummary">Two panes, foldables, drag and drop</string>
+  <!-- About › Version: the version and how updates stand (a tap opens App updates, a long press copies it) -->
+  <string name="XgramAboutVersionValue">%1$s · %2$s</string>
+  <string name="XgramAboutUpToDate">Up to date</string>
+  <string name="XgramAboutUpdateAvailable">Update available</string>
+  <string name="XgramAboutUpdateChecking">Checking…</string>
+  <string name="XgramAboutUpdateReady">Ready to install</string>
+  <string name="XgramAboutUpdatesOff">Updates off</string>
   <string name="XgramHiddenCount">%1$d hidden</string>
   <string name="XgramOrderDefault">Default</string>
   <string name="XgramOrderCustom">Custom order</string>
@@ -593,7 +604,7 @@
   <string name="XgramFilterCount">%1$d filters</string>
   <string name="XgramPeopleCountOne">1 person</string>
   <string name="XgramPeopleCount">%1$d people</string>
-  <string name="XgramEmoji">Emoji</string>
+  <string name="XgramEmoji">Emoji set</string>
   <string name="XgramWordFilters">Word filters</string>
   <string name="XgramHeaderTheme">Theme</string>
   <string name="XgramHeaderFolders">Folders</string>
@@ -610,7 +621,7 @@
   <string name="XgramHeaderOnlineStatus">Online status</string>
   <string name="XgramHeaderSending">Sending</string>
   <string name="XgramHeaderProtectedContent">Protected content</string>
-  <string name="XgramHeaderDevice">Device</string>
+  <string name="XgramHeaderDevice">This device</string>
   <string name="XgramHeaderHide">Hide</string>
   <string name="XgramHeaderWords">Words</string>
   <string name="XgramHeaderPeople">People</string>
@@ -618,11 +629,27 @@
   <string name="XgramHeaderDisplay">Display</string>
   <string name="XgramHeaderLastSeen">Last seen</string>
   <string name="XgramHeaderConnection">Connection</string>
+  <string name="XgramHeaderTextIcons">Text and icons</string>
+  <string name="XgramHeaderMessagesAvatars">Messages and avatars</string>
+  <string name="XgramHeaderNavigation">Navigation</string>
+  <string name="XgramHeaderForwardDelete">Forwarding and deleting</string>
+  <string name="XgramHeaderDetails">Details</string>
+  <string name="XgramHeaderInMessageMenu">In the message menu</string>
+  <string name="XgramHeaderTwoPanes">Two panes</string>
+  <string name="XgramHeaderFoldables">Foldables</string>
+  <string name="XgramHeaderDragDrop">Drag and drop</string>
+  <string name="XgramHeaderInclude">Include</string>
+  <string name="XgramHeaderWhereItShows">Where it shows</string>
+  <!-- Appearance: the note under Expressive design (with it off, custom colors come with it) -->
+  <string name="XgramExpressiveNote">The app restarts to apply it.</string>
+  <string name="XgramExpressiveNoteClassic">Custom colors come with it. The app restarts to apply it.</string>
+  <!-- Chat list › Long press on a chat while Telegram X's Interface › Chat Previews is off (no long press reaches it) -->
+  <string name="XgramChatLongPressNeedsPreviews">Turn on Chat Previews in Interface</string>
   <string name="XgramMaterialYouSub">Colors from your wallpaper</string>
-  <string name="XgramChatLookSub">Text, bubbles, stickers</string>
-  <string name="XgramShowSecondsSub">In message time</string>
-  <string name="XgramShowPeerIdsSub">In profiles</string>
-  <string name="XgramTwoPaneSub">On tablets and foldables</string>
+  <string name="XgramChatLookSub">Text size, stickers, bubbles</string>
+  <string name="XgramShowSecondsSub">In message times</string>
+  <string name="XgramShowPeerIdsSub">In profiles and Settings</string>
+  <string name="XgramTwoPaneSub">Tablets and unfolded phones</string>
   <string name="XgramLimitMessageWidthSub">On wide screens</string>
   <string name="XgramHideFoldersSub">Folders stay on your account</string>
   <string name="XgramAllChatsLabelSub">Instead of the icon</string>
@@ -655,7 +682,7 @@
   <string name="XgramHidePhoneSub">In Settings and side menu</string>
   <string name="XgramBlockContentCaptureSub">Android system intelligence</string>
   <string name="XgramHideSponsoredSub">In channels</string>
-  <string name="XgramHideBlockedSub">Their messages in groups</string>
+  <string name="XgramHideBlockedSub">In groups</string>
   <string name="XgramHistoryViewSub">Browse by chat</string>
   <string name="XgramHistorySaveMediaSub">Of deleted messages</string>
   <string name="XgramHistoryRedDeletedSub">Otherwise a trash icon only</string>
@@ -666,14 +693,14 @@
   <string name="XgramPreferIpv6Sub">When available</string>
   <string name="XgramExportSettingsSub">Copy as text</string>
   <string name="XgramImportSettingsSub">From the clipboard</string>
-  <!-- In-app updates (Settings → XGram → Updates) -->
-  <string name="XgramUpdates">Updates</string>
+  <!-- In-app updates (Settings → App updates, and Settings → XGram → About → Version) -->
+  <string name="XgramUpdates">App updates</string>
   <string name="XgramUpdateChannel">Update channel</string>
   <string name="XgramUpdateChannelStable">Stable</string>
   <string name="XgramUpdateChannelCi">CI builds</string>
   <string name="XgramUpdateChannelOff">Off</string>
   <string name="XgramUpdateChannelInfo">Stable: releases only. CI builds: every build, newer but less tested. Off: no checks.</string>
-  <string name="XgramUpdateMode">Download updates</string>
+  <string name="XgramUpdateMode">Download automatically</string>
   <string name="XgramUpdateModeAsk">Ask first</string>
   <string name="XgramUpdateModeWifi">On Wi-Fi</string>
   <string name="XgramUpdateModeAlways">Always</string>
@@ -775,12 +802,12 @@
   <string name="xgram_login_PremiumSupport">Contact support</string>
   <string name="xgram_login_PremiumSupportText">I’m trying to log in with the phone number %1$s, and Telegram asks me to buy Telegram Premium first.\n\n%2$s</string>
   <string name="xgram_login_PremiumSupportTextNoPhone">I’m trying to log in, and Telegram asks me to buy Telegram Premium first.\n\n%1$s</string>
-  <string name="XgramChatLongPress">Long press</string>
+  <string name="XgramChatLongPress">Long press on a chat</string>
   <string name="XgramChatLongPressPreview">Preview</string>
-  <string name="XgramChatLongPressQuick">Quick actions</string>
-  <string name="XgramChatLongPressCompact">Compact preview</string>
-  <string name="XgramSwipeLeft">Swipe left</string>
-  <string name="XgramSwipeRight">Swipe right</string>
+  <string name="XgramChatLongPressQuick">Quick</string>
+  <string name="XgramChatLongPressCompact">Compact</string>
+  <string name="XgramSwipeLeft">Swipe a message left</string>
+  <string name="XgramSwipeRight">Swipe a message right</string>
   <string name="XgramSwipeInfo">A message that can\'t do the chosen action uses the usual one.</string>
   <string name="XgramSwipeReply">Reply</string>
   <string name="XgramSwipeCopy">Copy text</string>
@@ -801,27 +828,36 @@
   <string name="XgramFolderShow">Show in XGram</string>
   <string name="XgramFoldersAllHidden">All folder tabs are hidden. Turn off Hide folder tabs to pick which ones show.</string>
   <string name="XgramFolderHiddenMark">%1$s (hidden in XGram)</string>
-  <!-- XGram: shortcuts in Telegram X's own pages (Chat folders, Privacy and security, Proxy) -->
-  <string name="XgramTgxHideFoldersInfo">Shows only the main chat list; your folders are not changed. The eye next to a folder hides only that folder\'s tab.</string>
+  <!-- XGram: shortcuts in Telegram X's own pages (Chat folders, Privacy and security, Proxy, Translation, Passcode lock) -->
+  <string name="XgramTgxHideFoldersInfo">The eye next to a folder hides only that folder\'s tab, on this device. Your folders are not changed.</string>
   <string name="XgramTgxPrivacy">XGram privacy</string>
   <string name="XgramTgxPrivacyInfo">Ghost mode, screenshots, phone number</string>
   <string name="XgramTgxPrivacyInfoGhostOn">Ghost mode on · screenshots, phone number</string>
-  <string name="XgramTgxProxyRules">Proxy rules</string>
+  <string name="XgramTgxProxyRules">Turn proxy off automatically</string>
   <string name="XgramTgxProxyRulesOn">%1$d on</string>
+  <!-- Chat folders: Hide folder tabs and Hide All chats are on XGram's Chat list page; this row opens it -->
+  <string name="XgramTgxFolderTabs">Folder tabs</string>
+  <string name="XgramTgxFolderTabsShown">Shown</string>
+  <string name="XgramTgxFolderTabsHidden">Hidden</string>
+  <string name="XgramTgxFolderTabsNoAllChats">Shown, without All chats</string>
+  <!-- Language › Translation: the service is on XGram's Translation page; this row opens it -->
+  <string name="XgramTgxTranslation">XGram translation</string>
+  <!-- Passcode lock: the lock button's switch is on XGram's Header buttons page -->
+  <string name="XgramLockButtonMoved">The lock button is in XGram › Chat list › Header buttons.</string>
   <!-- XGram: Play videos in chat (Messages page) -->
   <string name="XgramHeaderVideos">Videos</string>
   <string name="XgramInlineVideo">Play videos in chat</string>
   <string name="XgramInlineVideoSub">Inside the message</string>
   <string name="XgramInlineVideoStart">Start playing</string>
-  <string name="XgramInlineVideoStartAuto">Automatically (muted)</string>
+  <string name="XgramInlineVideoStartAuto">Auto (muted)</string>
   <string name="XgramInlineVideoStartTap">On tap</string>
   <string name="XgramInlineVideoInfo">Videos play inside the message with a seek bar, and a tap turns the sound on or off. Autoplay follows Autoplay GIFs, Data Saver and, on mobile data, automatic media download.</string>
   <!-- XGram M3E part A: Expressive design switch (Appearance > Theme) -->
   <string name="XgramExpressive">Expressive design</string>
-  <string name="XgramExpressiveSub">The Material 3 Expressive look</string>
+  <string name="XgramExpressiveSub">Material 3 Expressive look</string>
   <string name="XgramExpressiveInfo">Colors, shapes, motion and lists follow Material 3 Expressive. Off: the classic look. The app restarts to apply the change.</string>
   <string name="XgramComposeTgx">New look for Telegram X pages</string>
-  <string name="XgramComposeTgxSub">Privacy, data, notifications and themes in Material 3 Expressive; off keeps the classic lists</string>
+  <string name="XgramComposeTgxSub">Privacy, data, notifications, themes</string>
   <!-- XGram: adaptive part 1, foldables (Appearance > Layout) -->
   <string name="XgramFoldHingeSplit">Split panes at the fold</string>
   <string name="XgramFoldHingeSplitSub">When half open like a book</string>
@@ -846,10 +882,10 @@
   <string name="XgramDropHere">Drop here to send</string>
   <string name="XgramDropSendTo">Send to %1$s?</string>
   <string name="XgramDropFailed">Couldn\'t read this file</string>
-  <!-- XGram: keyboard and mouse (adaptive part 3: Enter to send on the Messages page, Meta+/ shortcut list) -->
+  <!-- XGram: keyboard and mouse (adaptive part 3: Enter to send on the Chats and messages page, Meta+/ shortcut list) -->
   <string name="XgramEnterToSend">Enter to send</string>
   <string name="XgramEnterToSendAuto">Auto</string>
-  <string name="XgramEnterToSendInfo">Auto sends with Enter on a hardware keyboard, and the on-screen keyboard follows Send with Enter. Shift+Enter adds a new line and Ctrl+Enter always sends.</string>
+  <string name="XgramEnterToSendInfo">Auto sends with Enter on a hardware keyboard and adds a new line on the on-screen keyboard. Shift+Enter adds a new line and Ctrl+Enter always sends.</string>
   <string name="XgramKeysNavigation">Navigation</string>
   <string name="XgramKeySend">Send</string>
   <string name="XgramKeyNewLine">New line</string>

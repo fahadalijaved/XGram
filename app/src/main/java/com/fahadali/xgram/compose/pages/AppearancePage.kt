@@ -40,21 +40,22 @@ import com.fahadali.xgram.compose.ui.PageScope
 import com.fahadali.xgram.compose.ui.SettingsPage
 import com.fahadali.xgram.compose.ui.s
 import com.fahadali.xgram.compose.ui.str
-import com.fahadali.xgram.layout.XgramNavRail
-import com.fahadali.xgram.layout.XgramNavToolbar
-import com.fahadali.xgram.layout.XgramWindow
 import org.thunderdog.challegram.R
 import org.thunderdog.challegram.ui.MessagesController
 import org.thunderdog.challegram.ui.SettingsCloudEmojiController
 import org.thunderdog.challegram.ui.SettingsThemeController
 
-/** Appearance: theme, Material You, Expressive design, icons and emoji; chat look; layout. */
+/**
+ * Appearance: Expressive design (and Telegram X's pages in Compose), the colors, text and icons, messages and avatars,
+ * then the page for large screens. Rows a look can't use are left out, not greyed: Colors, Night mode and Pure black
+ * are Expressive design's, Themes and Material You the classic look's.
+ */
 @Composable
 fun AppearancePage() {
   val host = LocalXgramHost.current
   // Material You rebuilds the themes: a loading indicator stands in for its switch until that is done.
   var materialYouBusy by remember { mutableStateOf(false) }
-  // Colours > More colours: its dialog is open
+  // Colors > More colors: its dialog is open
   var moreColors by remember { mutableStateOf(false) }
   SettingsPage(title = str(R.string.XgramAppearance)) {
     val settings = XgramSettings.instance()
@@ -62,33 +63,18 @@ fun AppearancePage() {
     val themeName = XgramComposeBridge.currentThemeName()
     val emojiSetName = XgramComposeBridge.emojiSetName()
     val avatarCornersName = XgramComposeBridge.avatarCornersName(settings.avatarCorners())
+    val expressiveOn = XgramExpressive.isEnabled()
 
-    header(R.string.XgramHeaderTheme)
-    if (XgramMaterialYou.isAvailable()) {
-      // Expressive design draws with the Material You colors whatever the theme: Themes and Material You are locked
-      // (shown on, nothing saved), and night mode is what is left to pick. Expressive needs Android 13, so only here.
-      val themesLocked = XgramSettingDeps.themesLocked()
+    expressive(host)
+
+    header(R.string.XgramColors)
+    if (expressiveOn) {
+      // Expressive design's colors: the wallpaper's or a picked one (AppearanceColors.kt)
+      colorSource(host) { moreColors = true }
       group {
-        themes(host, themeName)
-        switch(
-          R.id.btn_xgramMaterialYou, s(R.string.XgramMaterialYou),
-          s(if (themesLocked) R.string.XgramMaterialYouExpressive else R.string.XgramMaterialYouSub),
-          checked = themesLocked || XgramMaterialYou.isEnabled(), enabled = !themesLocked, busy = materialYouBusy
-        ) {
-          materialYouBusy = true
-          XgramMaterialYou.toggle(host.controller) {
-            materialYouBusy = false
-            if (!host.controller.isDestroyed) {
-              host.changed()
-              host.themeChanged()
-            }
-          }
-        }
-        if (themesLocked) {
-          // Telegram X's night mode: its Themes page has Auto night mode (the side menu has the switch).
-          value(R.id.btn_xgramAutoNightMode, s(R.string.XgramAutoNightMode), s(XgramSettingDeps.autoNightModeName())) {
-            host.open(SettingsThemeController(host.activity, host.tdlib))
-          }
+        // Telegram X's night mode: its Themes page has Auto night mode (the side menu has the switch).
+        value(R.id.btn_xgramAutoNightMode, s(R.string.XgramAutoNightMode), s(XgramSettingDeps.autoNightModeName())) {
+          host.open(SettingsThemeController(host.activity, host.tdlib))
         }
         if (XgramAmoled.isAvailable()) {
           // Black Material You surfaces in night mode; the whole app (this page too) repaints at once.
@@ -101,30 +87,41 @@ fun AppearancePage() {
           }
         }
       }
-      description(if (themesLocked) R.string.XgramThemeExpressiveInfo else R.string.XgramMaterialYouInfo)
-      expressive(host)
-      // Expressive design's colours: the wallpaper's or a picked one (AppearanceColors.kt)
-      colorSource(host) { moreColors = true }
+      description(R.string.XgramThemeExpressiveInfo)
+    } else if (XgramMaterialYou.isAvailable()) {
       group {
-        iconPack(host)
-        appIcon(host)
-        notificationIcon(host)
-        emojiSet(host, emojiSetName)
-        font(host)
+        themes(host, themeName)
+        switch(
+          R.id.btn_xgramMaterialYou, s(R.string.XgramMaterialYou), s(R.string.XgramMaterialYouSub),
+          checked = XgramMaterialYou.isEnabled(), busy = materialYouBusy
+        ) {
+          materialYouBusy = true
+          XgramMaterialYou.toggle(host.controller) {
+            materialYouBusy = false
+            if (!host.controller.isDestroyed) {
+              host.changed()
+              host.themeChanged()
+            }
+          }
+        }
       }
+      description(R.string.XgramMaterialYouInfo)
     } else {
       group {
         themes(host, themeName)
-        iconPack(host)
-        appIcon(host)
-        notificationIcon(host)
-        emojiSet(host, emojiSetName)
-        font(host)
       }
-      expressive(host)
     }
 
-    header(R.string.XgramChats)
+    header(R.string.XgramHeaderTextIcons)
+    group {
+      font(host)
+      iconPack(host)
+      emojiSet(host, emojiSetName)
+      appIcon(host)
+      notificationIcon(host)
+    }
+
+    header(R.string.XgramHeaderMessagesAvatars)
     group {
       link(R.id.btn_xgramChatLook, s(R.string.XgramChatLookRow), s(R.string.XgramChatLookSub)) {
         val c = MessagesController(host.activity, host.tdlib)
@@ -146,7 +143,7 @@ fun AppearancePage() {
       }
       // The chat's floating buttons in the avatars' shape: only Expressive design draws them as M3 FABs. Open chats
       // (the other pane) redraw now; their buttons take the shape before they draw (CircleButton.draw).
-      if (XgramExpressive.isEnabled()) {
+      if (expressiveOn) {
         switch(
           R.id.btn_xgramChatFabsAvatarShape, s(R.string.XgramChatFabsAvatarShape), s(R.string.XgramChatFabsAvatarShapeSub),
           checked = settings.chatFabsAvatarShape()
@@ -155,115 +152,26 @@ fun AppearancePage() {
           XgramUi.invalidateAll(host.activity)
         }
       }
-      switch(R.id.btn_xgramShowSeconds, s(R.string.XgramShowSeconds), s(R.string.XgramShowSecondsSub), checked = settings.showSeconds()) {
-        settings.setShowSeconds(it)
-      }
-      switch(R.id.btn_xgramShowPeerIds, s(R.string.XgramShowPeerIds), s(R.string.XgramShowPeerIdsSub), checked = settings.showPeerIds()) {
-        settings.setShowPeerIds(it)
-      }
     }
 
-    header(R.string.XgramLayout)
+    // Two panes, the fold, drag and drop: mostly for tablets and unfolded phones, so a page of their own
     group {
-      switch(R.id.btn_xgramTwoPane, s(R.string.XgramTwoPane), s(R.string.XgramTwoPaneSub), checked = settings.twoPaneLayout()) {
-        settings.setTwoPaneLayout(it)
-        host.activity.xgramTwoPane()?.update()
-      }
-      // Expressive design's navigation rail on wide windows (only there); off: the chat list's own header (tabs, ☰)
-      // is back at once
-      if (XgramExpressive.isEnabled()) {
-        val railReason = XgramNavRail.settingReason()
-        switch(
-          R.id.btn_xgramNavRail, s(R.string.XgramNavRailOption),
-          s(if (railReason != 0) railReason else R.string.XgramNavRailOptionSub),
-          checked = settings.navRail(), enabled = railReason == 0
-        ) {
-          settings.setNavRail(it)
-          host.activity.xgramTwoPane()?.update()
-        }
-      }
-      // The floating navigation bar at the bottom of the chat list on narrow windows (both looks); with the rail on
-      // too, the rail shows on wide windows and the bar on narrow ones. Expressive design: the M3E floating toolbar,
-      // whose page sets it up (its tabs, the photo, the colours); the same id, so settings search still finds it
-      if (XgramExpressive.isEnabled()) {
-        link(R.id.btn_xgramBottomNav, s(R.string.XgramBottomNavOption), subtitle = XgramNavToolbar.summary()) {
-          host.openPage(XgramPage.NAV_BAR)
-        }
-      } else {
-        switch(
-          R.id.btn_xgramBottomNav, s(R.string.XgramBottomNavOption), s(R.string.XgramBottomNavOptionSub),
-          checked = settings.bottomNav()
-        ) {
-          settings.setBottomNav(it)
-          host.activity.xgramTwoPane()?.update()
-        }
-      }
-    }
-    description(R.string.XgramTwoPaneInfo)
-    // How wide the panes are: half each, or the width set with the handle on the line between them. Both only with
-    // two panes; Split evenly leaves nothing to resize.
-    val twoPaneReason = XgramSettingDeps.twoPaneOptionReason()
-    val resizeReason = XgramSettingDeps.paneResizableReason()
-    group {
-      switch(
-        R.id.btn_xgramPaneSplitEvenly, s(R.string.XgramPaneSplitEvenly),
-        s(if (twoPaneReason != 0) twoPaneReason else R.string.XgramPaneSplitEvenlySub),
-        checked = settings.paneSplitEvenly(), enabled = XgramSettingDeps.twoPaneOptionsEnabled()
+      link(
+        R.id.btn_xgramLargeScreens, s(R.string.XgramLargeScreens), s(R.string.XgramLargeScreensSummary),
+        icon = R.drawable.baseline_devices_other_24
       ) {
-        settings.setPaneSplitEvenly(it)
-        host.activity.xgramTwoPane()?.update()
-      }
-      switch(
-        R.id.btn_xgramPaneResizable, s(R.string.XgramPaneResizable),
-        s(if (resizeReason != 0) resizeReason else R.string.XgramPaneResizableSub),
-        checked = settings.paneResizable(), enabled = XgramSettingDeps.paneResizableEnabled()
-      ) {
-        settings.setPaneResizable(it)
-        host.activity.xgramTwoPane()?.update()
+        host.openPage(XgramPage.LARGE_SCREENS)
       }
     }
-    description(XgramSettingDeps.paneInfo())
-    group {
-      switch(R.id.btn_xgramLimitMessageWidth, s(R.string.XgramLimitMessageWidth), s(R.string.XgramLimitMessageWidthSub), checked = settings.limitMessageWidth()) {
-        settings.setLimitMessageWidth(it)
-      }
-    }
-    // Foldables: only where a fold can be reported (as the classic page).
-    if (XgramWindow.isPostureSupported()) {
-      group {
-        switch(
-          R.id.btn_xgramFoldHingeSplit, s(R.string.XgramFoldHingeSplit),
-          s(if (twoPaneReason != 0) twoPaneReason else R.string.XgramFoldHingeSplitSub),
-          checked = settings.foldHingeSplit(), enabled = XgramSettingDeps.twoPaneOptionsEnabled()
-        ) {
-          settings.setFoldHingeSplit(it)
-          host.activity.xgramTwoPane()?.update()
-        }
-        switch(R.id.btn_xgramFoldTabletop, s(R.string.XgramFoldTabletop), s(R.string.XgramFoldTabletopSub), checked = settings.foldTabletop()) {
-          settings.setFoldTabletop(it)
-        }
-      }
-      description(R.string.XgramFoldInfo)
-    }
-    group {
-      switch(R.id.btn_xgramDragDrop, s(R.string.XgramDragDrop), s(R.string.XgramDragDropSub), checked = settings.dragDrop()) {
-        settings.setDragDrop(it)
-      }
-      switch(R.id.btn_xgramOpenBeside, s(R.string.XgramOpenBeside), s(R.string.XgramOpenBesideSub), checked = settings.openBeside()) {
-        settings.setOpenBeside(it)
-      }
-    }
-    description(R.string.XgramDragDropInfo)
   }
   if (moreColors) {
     XgramMoreColorsDialog { moreColors = false }
   }
 }
 
+/** The classic look's themes (with Expressive design, its colors are Material You's whatever the theme: not shown). */
 private fun GroupScope.themes(host: XgramComposeHost, name: String) {
-  // Locked with Expressive design (XgramSettingDeps.themesLocked): the reason instead of the theme's name.
-  val locked = XgramSettingDeps.themesLocked()
-  value(R.id.btn_xgramThemes, s(R.string.XgramThemes), if (locked) s(R.string.XgramThemesExpressive) else name, enabled = !locked) {
+  value(R.id.btn_xgramThemes, s(R.string.XgramThemes), name) {
     host.open(XgramThemesController(host.activity, host.tdlib))
   }
 }
@@ -345,7 +253,10 @@ private fun GroupScope.font(host: XgramComposeHost) {
   }
 }
 
-/** Expressive design (Android 13+): turning it off restarts the app with the classic pages. */
+/**
+ * Expressive design (Android 13+), the page's first group: turning it off restarts the app with the classic pages. With
+ * it, Telegram X's own pages in Compose.
+ */
 private fun PageScope.expressive(host: XgramComposeHost) {
   if (!XgramExpressive.isAvailable()) {
     return
@@ -370,5 +281,6 @@ private fun PageScope.expressive(host: XgramComposeHost) {
       }
     }
   }
-  description(R.string.XgramExpressiveInfo)
+  // Without it, Colors isn't on the page: the note says custom colors come with it
+  description(if (XgramExpressive.isEnabled()) R.string.XgramExpressiveNote else R.string.XgramExpressiveNoteClassic)
 }

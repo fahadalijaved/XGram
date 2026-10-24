@@ -33,9 +33,9 @@ import java.util.List;
 
 /**
  * Settings → XGram → Chat list → Header buttons: which buttons the chat list's top row shows next to the folder tabs.
- * The lock and Activity's bell keep their own settings (Passcode lock's Lock button in the chat list, Activity's In the
- * chat list header), so both pages stay in step. The ⋮ is not here: while the side menu is hidden it is the only way to
- * the side menu's items. The chat list follows at once.
+ * The only switches for the lock (XgramSettings.hideLockButton; Passcode lock has a note pointing here) and Activity's
+ * bell (XgramSettings.activityHeader; so has Activity and reminders). The ⋮ is not here: while the side menu is hidden
+ * it is the only way to the side menu's items. The chat list follows at once.
  */
 public final class XgramHeaderButtonsController extends RecyclerViewController<Void> implements View.OnClickListener {
   // XGram: public for the Compose Header buttons page (xgram-m3e)

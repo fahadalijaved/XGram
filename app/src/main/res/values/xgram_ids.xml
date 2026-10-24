@@ -314,4 +314,9 @@
   <item type="id" name="btn_xgramNotificationIconTelegramX" />
   <!-- Message menu > Reaction bar -->
   <item type="id" name="btn_xgramReactionBar" />
+  <!-- Settings restructure: Activity and reminders (main page), Large screens and foldables (Appearance) -->
+  <item type="id" name="btn_xgramSectionActivity" />
+  <item type="id" name="btn_xgramLargeScreens" />
+  <!-- Chat folders: the row that opens XGram's Chat list > Folders -->
+  <item type="id" name="btn_xgramTgxFolderTabs" />
 </resources>

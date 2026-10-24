@@ -3,8 +3,8 @@
 <resources>
   <!-- The Saved messages destination's label under its icon (the full name stays its description) -->
   <string name="XgramBottomNavSaved">Saved</string>
-  <!-- Appearance > Layout -->
+  <!-- Chat list > Navigation -->
   <string name="XgramBottomNavOption">Navigation bar</string>
-  <string name="XgramBottomNavOptionSub">Your side menu\'s destinations at the bottom on phones</string>
+  <string name="XgramBottomNavOptionSub">At the bottom on phones and the cover screen</string>
   <item type="id" name="btn_xgramBottomNav" />
 </resources>

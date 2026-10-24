@@ -20,7 +20,7 @@ import org.thunderdog.challegram.R
 
 /**
  * Header buttons: which buttons the chat list's top row shows next to the folder tabs (the same rows as the classic
- * page). The lock and Activity's bell keep their own settings; the ⋮ always stays. The chat list follows at once.
+ * page). The only switches for the lock and Activity's bell; the ⋮ always stays. The chat list follows at once.
  */
 @Composable
 fun HeaderButtonsPage() {

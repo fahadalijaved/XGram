@@ -21,7 +21,8 @@ import org.thunderdog.challegram.telegram.Tdlib
 /**
  * A settings search result: the page that holds the row (null: a row of the main page itself) and the row. [entry]: the
  * classic search's own row data (XgramSettingsSearch.Entry), for the classic XGram page's results. [pathParts]: the
- * crumbs of [path] one by one, so the universal search can set each in the app's direction.
+ * crumbs of [path] one by one, so the universal search can set each in the app's direction. [open]: a page that isn't an
+ * XGram settings page opens it itself (Message style), in both looks.
  */
 class XgramSearchHit(
   val page: XgramPage?,
@@ -35,7 +36,8 @@ class XgramSearchHit(
   val titleLower: String,
   val path: String,
   val entry: Any? = null,
-  val pathParts: List<String> = listOf(path)
+  val pathParts: List<String> = listOf(path),
+  val open: ((ViewController<*>) -> ViewController<*>)? = null
 )
 
 /**
@@ -60,6 +62,10 @@ object XgramComposeBridge {
 
   @JvmStatic
   fun drawerHiddenCount(): Int = XgramDrawerItemsController.hiddenCount()
+
+  /** About › Version: the version and how updates stand. */
+  @JvmStatic
+  fun aboutVersionValue(activity: BaseActivity): String = XgramSettingsController.aboutVersionValue(activity.appUpdater())
 
   /**
    * The settings search index, read from the classic pages' own row lists (so every row is found, sub-pages too).
@@ -121,7 +127,6 @@ object XgramComposeBridge {
     }
     val category = XgramSettingsController.sectionOfMainRow(hit.id)
     when {
-      category == XgramSettingsController.SECTION_MAIN && hit.id == R.id.btn_xgramSideMenu -> from.navigateTo(XgramDrawerItemsController(context, tdlib))
       category != XgramSettingsController.SECTION_MAIN -> from.navigateTo(XgramSettingsController.section(context, tdlib, category))
       hit.id == R.id.btn_xgramWhatsNew -> from.navigateTo(XgramWhatsNewController(context, tdlib))
       else -> from.navigateTo(XgramSettingsController.section(context, tdlib, XgramSettingsController.SECTION_MAIN, hit.id))
@@ -131,7 +136,8 @@ object XgramComposeBridge {
   /** The settings pages themselves, as search shortcuts (shown before anything is typed), in Main's order. */
   @JvmStatic
   fun searchShortcuts(): List<XgramSearchHit> = XgramSettingsController.SEARCH_SECTIONS
-    .filter { it != XgramSettingsController.SECTION_MAIN }
+    // The categories and App updates; a category's own pages (Large screens and foldables) are found by their rows
+    .filter { it != XgramSettingsController.SECTION_MAIN && XgramSettingsController.sectionParent(it) == XgramSettingsController.SECTION_MAIN }
     .map { section ->
       val title = Lang.getString(XgramSettingsController.sectionTitleRes(section))
       XgramSearchHit(

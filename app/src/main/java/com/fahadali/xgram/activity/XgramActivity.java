@@ -322,13 +322,13 @@ public final class XgramActivity {
   }
 
   /**
-   * Debug builds: the sync, and Mark all as read, act as if Telegram asked to wait two minutes (Chat list > Activity).
+   * Debug builds: the sync, and Mark all as read, act as if Telegram asked to wait two minutes (Testing Utilities).
    */
   public static void debugInjectFlood () {
     XgramActivitySync.injectFlood();
   }
 
-  /** Debug builds: whether every update callback of Activity's collectors throws (Chat list > Activity). */
+  /** Debug builds: whether every update callback of Activity's collectors throws (Testing Utilities). */
   public static boolean debugCollectorThrows () {
     return org.thunderdog.challegram.BuildConfig.DEBUG && XgramActivityCollector.debugThrow;
   }

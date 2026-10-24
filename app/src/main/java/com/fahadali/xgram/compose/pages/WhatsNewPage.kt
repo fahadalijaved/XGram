@@ -75,7 +75,7 @@ private fun openEntry(host: XgramComposeHost, action: Int) {
   when (action) {
     XgramWhatsNewController.OPEN_ACTIVITY -> com.fahadali.xgram.activity.XgramActivity.open(host.controller)
     XgramWhatsNewController.OPEN_UNDO_SEND -> host.openPage(XgramPage.MESSAGES, R.id.btn_xgramUndoSend)
-    XgramWhatsNewController.OPEN_CHECK_IN -> host.openPage(XgramPage.MESSAGES, R.id.btn_xgramCheckInTimer) // it starts from a chat's menu
+    XgramWhatsNewController.OPEN_CHECK_IN -> host.openPage(XgramPage.ACTIVITY, R.id.btn_xgramCheckInTimer) // it starts from a chat's menu
     XgramWhatsNewController.OPEN_LATER -> host.open(XgramLaterController(activity, tdlib))
     XgramWhatsNewController.OPEN_SETTINGS -> host.openPage(XgramPage.MAIN)
     XgramWhatsNewController.OPEN_THEMES -> host.open(XgramThemesController(activity, tdlib))

@@ -49,7 +49,9 @@ import me.vkryl.core.ObjectUtils;
 /**
  * Settings search (NagramX). The index is read from the pages' own row lists
  * ({@link XgramSettingsController#buildSectionItems} and {@link XgramSettingsController#buildSubPageItems}),
- * so a row is searchable as soon as a page shows it, also on the pages a section opens (Side Menu, Message menu, ...).
+ * so a row is searchable as soon as a page shows it, also on the pages a section opens (Side menu, Message menu, ...).
+ * Rows only the Compose pages draw (custom color rows, Message style's rows) are added by
+ * com.fahadali.xgram.search.XgramSearchIndex.
  */
 final class XgramSettingsSearch {
   private XgramSettingsSearch () { }
@@ -89,6 +91,15 @@ final class XgramSettingsSearch {
     Set<String> seen = new HashSet<>();
     for (int section : XgramSettingsController.SEARCH_SECTIONS) {
       String sectionName = Lang.getString(XgramSettingsController.sectionTitleRes(section));
+      int parent = XgramSettingsController.sectionParent(section);
+      if (parent != XgramSettingsController.SECTION_MAIN) {
+        // A page of a category (Appearance › Large screens and foldables): two levels deep already, as the pages
+        // further in, so without its own headers
+        String parentName = Lang.getString(XgramSettingsController.sectionTitleRes(parent));
+        addEntries(entries, seen, controller.buildSectionItems(section), section, 0, Lang.getString(R.string.XgramSettingsSearchPath, parentName, sectionName),
+          Arrays.asList(parentName, sectionName), XgramSettingsController.sectionIcon(parent), false);
+        continue;
+      }
       addEntries(entries, seen, controller.buildSectionItems(section), section, 0, sectionName, Collections.singletonList(sectionName), XgramSettingsController.sectionIcon(section), true);
     }
     for (int subPage : XgramSettingsController.SEARCH_SUB_PAGES) {
@@ -126,7 +137,7 @@ final class XgramSettingsSearch {
       }
       String key = keyOf(item);
       String rowKey = item.getId() + ":" + key;
-      // A row shown on a section page and on a page further in (Hide phone number) is found once, on the section page.
+      // A row shown on a section page and on a page further in is found once, on the section page.
       boolean isNew = subPage == 0 ? seen.add(rowKey) : !seen.contains(rowKey) && seen.add(subPage + "/" + rowKey);
       if (!isNew) {
         continue;

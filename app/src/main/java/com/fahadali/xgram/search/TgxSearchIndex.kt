@@ -13,6 +13,7 @@ package com.fahadali.xgram.search
 
 import android.os.Build
 import com.fahadali.xgram.XgramSettingsController
+import com.fahadali.xgram.appearance.XgramFonts
 import com.fahadali.xgram.compose.XgramSettingsPages
 import org.drinkless.tdlib.TdApi
 import org.thunderdog.challegram.R
@@ -518,15 +519,12 @@ internal object TgxSearchIndex {
     val t = themes
     row(t, "themes/bubbles", R.string.ChatStyleBubbles, RowRef(R.id.theme_chat_classic), group = R.string.ChatMode, kw = kw(R.string.XgramSearchKwBubbles))
     row(t, "themes/bubblesChannels", R.string.ChatStyleBubblesChannel, RowRef(R.id.btn_forcePlainChannels), group = R.string.ChatMode, kw = kw(R.string.XgramSearchKwBubbles))
-    row(t, "themes/icons", R.string.Icons, RowRef(R.id.btn_icon), group = R.string.ChatMode, kw = kw(R.string.XgramSearchKwIcons))
-    row(t, "themes/chatListStyle", R.string.ChatListStyle, RowRef(R.id.btn_chatListStyle), group = R.string.ChatMode,
-      kw = kw(R.string.XgramSearchKwFolders, R.string.XgramSearchKwChatListView), visible = { !it.expressive })
+    // XGram's names for the pages these rows open (Icon pack, Message style); Chat list view opens XGram's Chat list
+    row(t, "themes/icons", R.string.XgramIconPack, RowRef(R.id.btn_icon), group = R.string.ChatMode, kw = kw(R.string.XgramSearchKwIcons))
+    row(t, "themes/chatListStyle", R.string.XgramChatListView, RowRef(R.id.btn_chatListStyle), group = R.string.ChatMode,
+      kw = kw(R.string.XgramSearchKwFolders, R.string.XgramSearchKwChatListView))
     row(t, "themes/wallpaper", R.string.Wallpaper, RowRef(R.id.btn_chatBackground), group = R.string.ChatMode, kw = kw(R.string.XgramSearchKwWallpaper))
-    row(t, "themes/fontSize", R.string.TextSize, RowRef(R.id.btn_chatFontSize), group = R.string.ChatMode, kw = kw(R.string.XgramSearchKwFont))
-    row(t, "themes/chatListView", R.string.XgramChatListView, RowRef(R.id.btn_xgramChatListView),
-      kw = kw(R.string.XgramSearchKwChatListView), visible = { it.expressive })
-    row(t, "themes/biggerText", R.string.XgramChatListBigText, RowRef(R.id.btn_xgramChatListBigText), group = R.string.XgramChatListView,
-      kw = kw(R.string.XgramSearchKwFont), visible = { it.expressive })
+    row(t, "themes/fontSize", R.string.XgramChatLookRow, RowRef(R.id.btn_chatFontSize), group = R.string.ChatMode, kw = kw(R.string.XgramSearchKwFont))
     row(t, "themes/colorTheme", R.string.ColorTheme, RowRef(afterHeader = R.string.ColorTheme), kw = kw(R.string.XgramSearchKwDark))
     // The built-in themes; their names are read when the index is built
     for (info in ThemeManager.instance().builtinThemes) {
@@ -561,7 +559,6 @@ internal object TgxSearchIndex {
     row(u, "ui/explicitDice", R.string.UseExplicitDice, RowRef(R.id.btn_toggleNewSetting, longId = Settings.SETTING_FLAG_EXPLICIT_DICE), group = R.string.Chats,
       visible = { Settings.instance().getNewSetting(Settings.SETTING_FLAG_EXPLICIT_DICE) })
     row(u, "ui/swipes", R.string.ChatQuickActions, RowRef(R.id.btn_chatSwipes), group = R.string.Chats, kw = kw(R.string.XgramSearchKwSwipes))
-    row(u, "ui/sendByEnter", R.string.SendByEnter, RowRef(R.id.btn_sendByEnter), group = R.string.Chats, kw = kw(R.string.XgramSearchKwKeyboard))
     row(u, "ui/hideKeyboard", R.string.HideChatKeyboard, RowRef(R.id.btn_hideChatKeyboard), group = R.string.Chats, kw = kw(R.string.XgramSearchKwKeyboard))
     row(u, "ui/saveEdited", R.string.SaveOutgoingPhotos, RowRef(R.id.btn_saveToGallery), group = R.string.Chats, kw = kw(R.string.XgramSearchKwGallery))
     row(u, "ui/instantView", R.string.AutoInstantView, RowRef(R.id.btn_instantViewMode), group = R.string.Chats, kw = kw(R.string.XgramSearchKwInstantView))
@@ -590,7 +587,9 @@ internal object TgxSearchIndex {
     row(u, "ui/cameraRatio", R.string.CameraRatio, RowRef(R.id.btn_cameraRatio), group = R.string.Camera, kw = kw(R.string.XgramSearchKwCamera), visible = cameraSettings)
     row(u, "ui/cameraFlip", R.string.CameraFlip, RowRef(R.id.btn_cameraSetting, longId = Settings.SETTING_FLAG_CAMERA_NO_FLIP),
       group = R.string.Camera, kw = kw(R.string.XgramSearchKwCamera), visible = cameraSettings)
-    row(u, "ui/systemFonts", R.string.UseSystemFonts, RowRef(R.id.btn_systemFonts), group = R.string.Other, kw = kw(R.string.XgramSearchKwFont))
+    // Only while XGram's Font is System, the only font it changes (SettingsThemeController)
+    row(u, "ui/systemFonts", R.string.UseSystemFonts, RowRef(R.id.btn_systemFonts), group = R.string.Other, kw = kw(R.string.XgramSearchKwFont),
+      visible = { !XgramFonts.isGoogleSans(XgramFonts.current()) })
     row(u, "ui/builtinDecoding", R.string.ForceBuiltinDecoding, RowRef(R.id.btn_forceExoPlayerExtensions), group = R.string.Other, kw = kw(R.string.XgramSearchKwCodec))
     row(u, "ui/noHls", R.string.DisableHlsVideo, RowRef(R.id.btn_toggleNewSetting, longId = Settings.SETTING_FLAG_FORCE_DISABLE_HLS_VIDEO),
       group = R.string.Other, kw = kw(R.string.XgramSearchKwCodec), visible = { Config.HLS_VIDEO_ENABLED })
@@ -624,7 +623,7 @@ internal object TgxSearchIndex {
     entry(language, "language/translation", translation)
     val t = translation
     row(t, "translate/style", R.string.ChatTranslateStyle1, RowRef(R.id.btn_chatTranslateStylePopup), kw = kw(R.string.XgramSearchKwTranslateStyle))
-    row(t, "translate/service", R.string.XgramTrProvider, RowRef(R.id.btn_xgramTgxTrProvider), kw = kw(R.string.XgramSearchKwTranslateProvider))
+    row(t, "translate/service", R.string.XgramTgxTranslation, RowRef(R.id.btn_xgramTgxTrProvider), kw = kw(R.string.XgramSearchKwTranslateProvider))
     val shown: (SearchEnv) -> Boolean = { Settings.instance().chatTranslateMode != Settings.TRANSLATE_MODE_NONE }
     row(t, "translate/quick", R.string.QuickTranslate, RowRef(R.id.btn_quickTranslate), kw = kw(R.string.XgramSearchKwTranslate), visible = shown)
     row(t, "translate/doNot", R.string.DoNotTranslate, RowRef(afterHeader = R.string.DoNotTranslate), kw = kw(R.string.XgramSearchKwTranslate), visible = shown)
@@ -637,9 +636,8 @@ internal object TgxSearchIndex {
     row(f, "folders/badge", R.string.BadgeCounter, RowRef(R.id.btn_appBadge), group = R.string.ChatFoldersSettings, kw = kw(R.string.XgramSearchKwBadge))
     row(f, "folders/archiveAsFolder", R.string.ArchiveAsFolder, RowRef(R.id.btn_archiveAsFolder), group = R.string.ChatFoldersSettings,
       kw = kw(R.string.XgramSearchKwArchive))
-    row(f, "folders/hideAllChats", R.string.XgramHideAllChats, RowRef(R.id.btn_xgramHideAllChats), group = R.string.ChatFoldersSettings,
-      kw = kw(R.string.XgramSearchKwFolders))
-    row(f, "folders/hideTabs", R.string.XgramHideFolders, RowRef(R.id.btn_xgramHideFolders), group = R.string.ChatFoldersSettings,
+    // XGram's Hide folder tabs and Hide All chats are on its Chat list page; this row opens it
+    row(f, "folders/tabs", R.string.XgramTgxFolderTabs, RowRef(R.id.btn_xgramTgxFolderTabs), group = R.string.ChatFoldersSettings,
       kw = kw(R.string.XgramSearchKwFolders))
     row(f, "folders/create", R.string.CreateNewFolder, RowRef(R.id.btn_createNewFolder), R.drawable.baseline_add_24, group = R.string.ChatFolders,
       kw = kw(R.string.XgramSearchKwNewFolder))

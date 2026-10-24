@@ -46,21 +46,33 @@ import java.util.List;
 
 /**
  * XGram's own settings: a short list of categories, each opening its own page (the same controller with a section).
- * Layout and wording follow docs/xgram/settings_structure.md.
+ * Every setting has one home page: Settings › XGram › category › page at most. A row that also fits elsewhere (Telegram
+ * X's pages, another category) is a link there that opens its home and points at it. The Compose pages
+ * (com.fahadali.xgram.compose.pages) show the same rows with the same words.
  */
-public final class XgramSettingsController extends RecyclerViewController<Integer> implements View.OnClickListener, AppUpdater.Listener {
+public final class XgramSettingsController extends RecyclerViewController<Integer> implements View.OnClickListener, View.OnLongClickListener, AppUpdater.Listener {
+  // Never renumber: new sections get the next number (search recents and deep links keep them).
   public static final int SECTION_MAIN = 0, SECTION_APPEARANCE = 1, SECTION_GHOST = 2, SECTION_HISTORY = 3,
     SECTION_CHATS = 4, SECTION_PRIVACY = 5, SECTION_NETWORK = 6, SECTION_BACKUP = 7, SECTION_UPDATES = 8,
-    SECTION_CHAT_LIST = 9, SECTION_TRANSLATION = 10, SECTION_FILTERS = 11;
-  /** Messages: the page that was Chats (same id). */
+    SECTION_CHAT_LIST = 9, SECTION_TRANSLATION = 10, SECTION_FILTERS = 11, SECTION_ACTIVITY = 12, SECTION_LARGE_SCREENS = 13;
+  /** Chats and messages: the page that was Chats, then Messages (same id). */
   public static final int SECTION_MESSAGES = SECTION_CHATS;
   // SECTION_GHOST: Ghost mode is the top of Privacy now. Opening it opens Privacy (see section() and ghost()).
 
   /** Pages the settings search reads, in the main page's order. Add a new section here. */
   static final int[] SEARCH_SECTIONS = {
-    SECTION_MAIN, SECTION_APPEARANCE, SECTION_CHAT_LIST, SECTION_MESSAGES, SECTION_TRANSLATION,
-    SECTION_PRIVACY, SECTION_FILTERS, SECTION_HISTORY, SECTION_NETWORK, SECTION_UPDATES, SECTION_BACKUP
+    SECTION_MAIN, SECTION_APPEARANCE, SECTION_LARGE_SCREENS, SECTION_CHAT_LIST, SECTION_MESSAGES, SECTION_PRIVACY,
+    SECTION_ACTIVITY, SECTION_TRANSLATION, SECTION_FILTERS, SECTION_HISTORY, SECTION_NETWORK, SECTION_BACKUP,
+    SECTION_UPDATES
   };
+
+  /**
+   * The section whose page opens [section] (Large screens and foldables is a page of Appearance), or SECTION_MAIN for the
+   * categories (App updates too: About › Version and Telegram X's App updates open it).
+   */
+  static int sectionParent (int section) {
+    return section == SECTION_LARGE_SCREENS ? SECTION_APPEARANCE : SECTION_MAIN;
+  }
 
   /** Pages further in (their own controllers) that the settings search reads too. */
   static final int SUB_SIDE_MENU = 1, SUB_CHAT_ACTIONS = 2, SUB_MESSAGE_MENU = 3, SUB_INPUT_BUTTONS = 4,
@@ -136,6 +148,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       case SECTION_NETWORK: return R.string.XgramNetwork;
       case SECTION_BACKUP: return R.string.XgramBackup;
       case SECTION_UPDATES: return R.string.XgramUpdates;
+      case SECTION_ACTIVITY: return R.string.XgramActivitySection;
+      case SECTION_LARGE_SCREENS: return R.string.XgramLargeScreens;
       default: return R.string.XgramSettings;
     }
   }
@@ -154,22 +168,24 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       case SECTION_NETWORK: return R.drawable.baseline_public_24;
       case SECTION_BACKUP: return R.drawable.baseline_import_export_24;
       case SECTION_UPDATES: return R.drawable.baseline_system_update_24;
+      case SECTION_ACTIVITY: return R.drawable.baseline_notifications_active_24;
+      case SECTION_LARGE_SCREENS: return R.drawable.baseline_devices_other_24;
       default: return R.drawable.baseline_settings_24;
     }
   }
 
   // Pages further in, for the settings search
 
-  /** The section whose page opens it (SECTION_MAIN for the side menu, a category of its own). */
+  /** The section whose page opens it. */
   static int subPageParent (int subPage) {
     switch (subPage) {
+      case SUB_SIDE_MENU:
       case SUB_CHAT_ACTIONS:
       case SUB_HEADER_BUTTONS: return SECTION_CHAT_LIST;
       case SUB_MESSAGE_MENU:
       case SUB_INPUT_BUTTONS: return SECTION_MESSAGES;
       case SUB_WORD_FILTERS:
       case SUB_HIDDEN_PEOPLE: return SECTION_FILTERS;
-      case SUB_SIDE_MENU:
       default: return SECTION_MAIN;
     }
   }
@@ -188,7 +204,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
   }
 
   static @DrawableRes int subPageIcon (int subPage) {
-    return subPage == SUB_SIDE_MENU ? R.drawable.baseline_format_list_bulleted_type_24 : sectionIcon(subPageParent(subPage));
+    return sectionIcon(subPageParent(subPage));
   }
 
   /** Rows of a page further in, read from that page's own list. */
@@ -242,6 +258,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return SECTION_MESSAGES;
     } else if (id == R.id.btn_xgramSectionTranslation) {
       return SECTION_TRANSLATION;
+    } else if (id == R.id.btn_xgramSectionActivity) {
+      return SECTION_ACTIVITY;
     } else if (id == R.id.btn_xgramSectionPrivacy) {
       return SECTION_PRIVACY;
     } else if (id == R.id.btn_xgramSectionFilters) {
@@ -278,6 +296,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.setData(R.string.XgramMessagesSummary);
         } else if (id == R.id.btn_xgramSectionTranslation) {
           view.setData(R.string.XgramTranslationSummary);
+        } else if (id == R.id.btn_xgramSectionActivity) {
+          view.setData(R.string.XgramActivitySectionSummary);
         } else if (id == R.id.btn_xgramSideMenu) {
           int hidden = XgramDrawerItemsController.hiddenCount();
           view.setData(hidden > 0 ? Lang.getString(R.string.XgramHiddenCount, hidden) : Lang.getString(R.string.XgramSideMenuSummary));
@@ -326,6 +346,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.setEnabled(com.fahadali.xgram.appearance.XgramAmoled.isAvailable());
         } else if (id == R.id.btn_xgramExpressive) {
           view.getToggler().setRadioEnabled(com.fahadali.xgram.appearance.XgramExpressive.isEnabled(), isUpdate);
+        } else if (id == R.id.btn_xgramComposeTgx) {
+          view.getToggler().setRadioEnabled(settings.composeTgxPages(), isUpdate);
         } else if (id == R.id.btn_xgramColorSource) {
           view.setData(com.fahadali.xgram.appearance.XgramColorSource.summary());
           view.setEnabled(com.fahadali.xgram.appearance.XgramColorSource.isAvailable());
@@ -341,7 +363,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
         } else if (id == R.id.btn_xgramNotificationIcon) {
           view.setData(notificationIconName(settings.notificationIcon()));
         } else if (id == R.id.btn_xgramAboutVersion) {
-          view.setData(Lang.getAppBuildAndVersion(tdlib));
+          view.setData(aboutVersionValue(context().appUpdater()));
         } else if (id == R.id.btn_xgramLogsShare) {
           view.setData(R.string.XgramLogsShareInfo);
         } else if (id == R.id.btn_xgramAboutBasedOn) {
@@ -354,8 +376,15 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.getToggler().setRadioEnabled(settings.chatFabsAvatarShape(), isUpdate);
         } else if (id == R.id.btn_xgramChatListView) {
           view.setData(com.fahadali.xgram.chats.XgramChatListMode.name(org.thunderdog.challegram.unsorted.Settings.instance().getChatListMode()));
+        } else if (id == R.id.btn_xgramChatListBigText) {
+          // Only three lines have bigger text; otherwise the switch keeps the choice for when they are picked
+          boolean bigText = com.fahadali.xgram.chats.XgramChatListMode.isBigTextEnabled();
+          view.getToggler().setRadioEnabled(com.fahadali.xgram.chats.XgramChatListMode.isBigTextChecked(), isUpdate);
+          view.setData(bigText ? R.string.XgramChatListBigTextSub : R.string.XgramChatListBigTextOff);
+          view.setEnabled(bigText);
         } else if (id == R.id.btn_xgramChatLongPress) {
           view.setData(com.fahadali.xgram.chats.XgramChatLongPress.modeName(settings.chatLongPress()));
+          setReason(view, XgramSettingDeps.chatLongPressReason()); // all three need Telegram X's Chat Previews
         } else if (id == R.id.btn_xgramChatActionsOrder) {
           view.setData(XgramReorder.hasOrder(XgramReorder.CHAT_ACTIONS) ? R.string.XgramOrderCustom : R.string.XgramOrderDefault);
         } else if (id == R.id.btn_xgramMessageMenu) {
@@ -437,11 +466,13 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.getToggler().setRadioEnabled(settings.navRail(), isUpdate);
           setReason(view, com.fahadali.xgram.layout.XgramNavRail.settingReason());
         } else if (id == R.id.btn_xgramBottomNav) {
-          view.getToggler().setRadioEnabled(settings.bottomNav(), isUpdate);
+          if (view.getToggler() != null) {
+            view.getToggler().setRadioEnabled(settings.bottomNav(), isUpdate);
+          } else {
+            view.setData(com.fahadali.xgram.layout.XgramNavToolbar.summary()); // Expressive design: its page's link
+          }
         } else if (id == R.id.btn_xgramHideFab) {
-          view.getToggler().setRadioEnabled(settings.hideFab(), isUpdate);
-        } else if (id == R.id.btn_xgramSendMenuTests) {
-          view.getToggler().setRadioEnabled(settings.sendMenuTests(), isUpdate);
+          view.setData(XgramSettingDeps.newChatButtonName(XgramSettingDeps.newChatButton()));
         } else if (id == R.id.btn_xgramConnectionStatusStart) {
           view.getToggler().setRadioEnabled(settings.connectionStatusAtStart(), isUpdate);
           setReason(view, XgramSettingDeps.connectionStatusPositionReason());
@@ -472,11 +503,11 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
         } else if (id == R.id.btn_xgramActivityBadge) {
           view.getToggler().setRadioEnabled(settings.activityBadge(), isUpdate);
           setReason(view, XgramSettingDeps.activityOptionsReason());
-        } else if (id == R.id.btn_xgramActivityHeader) {
-          view.getToggler().setRadioEnabled(settings.activityHeader(), isUpdate);
+        } else if (id == R.id.btn_xgramActivityNavBar) {
+          // Expressive design: the floating bar's Activity tab, chosen with the other tabs on the Navigation bar page
+          boolean tab = (settings.navTabs() & (1 << com.fahadali.xgram.layout.XgramNavToolbar.DEST_ACTIVITY)) != 0;
+          view.setData(tab ? R.string.XgramActivityNavBarTab : R.string.XgramActivityBarOff);
           setReason(view, XgramSettingDeps.activityOptionsReason());
-        } else if (id == R.id.btn_xgramActivityDebugThrow) {
-          view.getToggler().setRadioEnabled(com.fahadali.xgram.activity.XgramActivity.debugCollectorThrows(), isUpdate);
         } else if (id == R.id.btn_xgramActivityBar) {
           view.setData(settings.activityBar() == XgramSettings.ACTIVITY_BAR_CALLS ? R.string.XgramActivityBarCalls : R.string.XgramActivityBarOff);
           setReason(view, XgramSettingDeps.activityOptionsReason());
@@ -566,7 +597,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           // Only applies while the alert carries a location.
           setReason(view, settings.checkInLocation() ? 0 : R.string.XgramCheckInFollowUpNeeds);
         } else if (id == R.id.btn_xgramEnterToSend) {
-          view.setData(com.fahadali.xgram.layout.XgramKeyboard.enterToSendName(settings.enterToSend()));
+          view.setData(com.fahadali.xgram.layout.XgramKeyboard.enterToSendName(com.fahadali.xgram.layout.XgramKeyboard.enterToSend()));
         } else if (id == R.id.btn_xgramUndoSend) {
           view.setData(com.fahadali.xgram.chats.XgramUndoSend.delayName(settings.undoSendSeconds()));
         } else if (id == R.id.btn_xgramUndoSendBubbles) {
@@ -633,8 +664,11 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       }
     };
 
+    if (section() != SECTION_MAIN) {
+      adapter.setOnLongClickListener(null); // only the main page's About › Version has a long press
+    }
     adapter.setItems(buildSectionItems(section()), false);
-    if (section() == SECTION_UPDATES) {
+    if (section() == SECTION_UPDATES || section() == SECTION_MAIN) { // the main page's About › Version follows it too
       context().appUpdater().addListener(this);
     }
 
@@ -655,8 +689,10 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     List<ListItem> items = new ArrayList<>();
     switch (section) {
       case SECTION_APPEARANCE: buildAppearance(items); break;
+      case SECTION_LARGE_SCREENS: buildLargeScreens(items); break;
       case SECTION_CHAT_LIST: buildChatList(items); break;
       case SECTION_MESSAGES: buildMessages(items); break;
+      case SECTION_ACTIVITY: buildActivity(items); break;
       case SECTION_TRANSLATION: buildTranslation(items); break;
       case SECTION_GHOST:
       case SECTION_PRIVACY: buildPrivacy(items); break;
@@ -720,117 +756,115 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
   private void buildMain (List<ListItem> items) {
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
     addRows(items, new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramWhatsNew, R.drawable.baseline_whatshot_24, R.string.XgramWhatsNew));
+    // The look and the everyday screens, then XGram's own features, then the plumbing
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
     addRows(items,
       category(R.id.btn_xgramSectionAppearance, R.drawable.baseline_palette_24, R.string.XgramAppearance),
       category(R.id.btn_xgramSectionChatList, R.drawable.baseline_forum_24, R.string.XgramChatList),
       category(R.id.btn_xgramSectionChats, R.drawable.baseline_chat_bubble_24, R.string.XgramMessages),
-      category(R.id.btn_xgramSectionTranslation, R.drawable.baseline_translate_24, R.string.XgramTranslation),
-      category(R.id.btn_xgramSideMenu, R.drawable.baseline_format_list_bulleted_type_24, R.string.XgramSideMenu)
+      category(R.id.btn_xgramSectionPrivacy, R.drawable.baseline_lock_24, R.string.XgramPrivacy)
     );
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
     addRows(items,
-      category(R.id.btn_xgramSectionPrivacy, R.drawable.baseline_lock_24, R.string.XgramPrivacy),
+      category(R.id.btn_xgramSectionActivity, R.drawable.baseline_notifications_active_24, R.string.XgramActivitySection),
+      category(R.id.btn_xgramSectionTranslation, R.drawable.baseline_translate_24, R.string.XgramTranslation),
       category(R.id.btn_xgramSectionFilters, R.drawable.baseline_filter_variant_remove_24, R.string.XgramFilters),
       category(R.id.btn_xgramSectionHistory, R.drawable.baseline_history_24, R.string.XgramHistory)
     );
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
     addRows(items,
       category(R.id.btn_xgramSectionNetwork, R.drawable.baseline_public_24, R.string.XgramNetwork),
-      // Updates: on Telegram X's main Settings page (App updates), not here
       category(R.id.btn_xgramSectionBackup, R.drawable.baseline_import_export_24, R.string.XgramBackup)
     );
     items.add(header(R.string.XgramAbout));
     addRows(items,
+      // A tap opens App updates (also on Telegram X's main Settings page), a long press copies the version
       new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramAboutVersion, R.drawable.baseline_info_24, R.string.XgramAboutVersion),
       new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramLogsShare, R.drawable.baseline_share_24, R.string.XgramLogsShare),
       new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramAboutBasedOn, R.drawable.baseline_code_24, R.string.XgramAboutBasedOn),
       new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramAboutSupport, R.drawable.baseline_favorite_24, R.string.XgramAboutSupport)
     );
     items.add(description(R.string.XgramAboutCredits));
-    if (BuildConfig.DEBUG) {
-      // Debug builds: test tools, off by default (Telegram X's developer mode is always on in debug builds)
-      items.add(header(R.string.XgramDeveloper));
-      addRows(items, toggle(R.id.btn_xgramSendMenuTests, R.drawable.baseline_bug_report_24, R.string.XgramSendMenuTests, R.string.XgramSendMenuTestsSub));
-    }
+    // Debug builds' test switches (the send menu's, Activity's) are in Telegram X's Testing Utilities.
   }
 
-  /** Expressive design (Android 13+): its own card with its note right under it. */
-  private static void addExpressiveRow (List<ListItem> items) {
-    if (com.fahadali.xgram.appearance.XgramExpressive.isAvailable()) {
-      addRows(items, toggle(R.id.btn_xgramExpressive, R.string.XgramExpressive, R.string.XgramExpressiveSub));
-      items.add(description(R.string.XgramExpressiveInfo));
-      // Colours: the wallpaper's or a picked colour (XgramColorSource). Only Expressive design has them, and with it on
-      // the Compose page is the one shown, so here the row is disabled and says why.
-      addRows(items, link(R.id.btn_xgramColorSource, R.string.XgramColors));
-      items.add(description(com.fahadali.xgram.appearance.XgramColorSource.isAvailable() ? R.string.XgramColorsWallpaperInfo : R.string.XgramColorsNeedsExpressive));
-    }
-  }
-
+  /**
+   * Appearance: Expressive design first (it decides what the rest offers), the colors, text and icons, messages and
+   * avatars, then the page for large screens. Rows a look can't use are left out, not greyed: Colors, Night mode and
+   * Pure black are Expressive design's, Themes and Material You the classic look's.
+   */
   private void buildAppearance (List<ListItem> items) {
-    items.add(header(R.string.XgramHeaderTheme));
-    List<ListItem> pickers = new ArrayList<>();
-    pickers.add(link(R.id.btn_xgramIconPack, R.string.XgramIconPack));
-    pickers.add(link(R.id.btn_xgramAppIcon, R.string.XgramAppIcon));
-    pickers.add(link(R.id.btn_xgramNotificationIcon, R.string.XgramNotificationIcon));
-    pickers.add(link(R.id.btn_xgramEmojiSet, R.string.XgramEmoji));
-    if (com.fahadali.xgram.appearance.XgramFonts.isAvailable()) {
-      pickers.add(link(R.id.btn_xgramFont, R.string.XgramFont)); // the app font (Android 8+: font variations)
-    }
-    if (com.fahadali.xgram.appearance.XgramMaterialYou.isAvailable()) {
-      // Android 12+. Its note goes right under it, so the card is split there.
-      List<ListItem> theme = new ArrayList<>();
-      theme.add(link(R.id.btn_xgramThemes, R.string.XgramThemes));
-      theme.add(toggle(R.id.btn_xgramMaterialYou, R.string.XgramMaterialYou, R.string.XgramMaterialYouSub));
-      // Expressive design (Android 13+) locks both (XgramSettingDeps.themesLocked): night mode is what is left to pick.
-      boolean themesLocked = XgramSettingDeps.themesLocked();
-      if (themesLocked) {
-        theme.add(link(R.id.btn_xgramAutoNightMode, R.string.XgramAutoNightMode));
+    final boolean expressive = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    if (com.fahadali.xgram.appearance.XgramExpressive.isAvailable()) { // Android 13+
+      items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
+      if (expressive) {
+        // Telegram X's own pages drawn in Compose (com.fahadali.xgram.compose.tgx): only with Expressive design
+        addRows(items,
+          toggle(R.id.btn_xgramExpressive, R.string.XgramExpressive, R.string.XgramExpressiveSub),
+          toggle(R.id.btn_xgramComposeTgx, R.string.XgramComposeTgx, R.string.XgramComposeTgxSub)
+        );
+      } else {
+        addRows(items, toggle(R.id.btn_xgramExpressive, R.string.XgramExpressive, R.string.XgramExpressiveSub));
       }
-      if (com.fahadali.xgram.appearance.XgramAmoled.isAvailable()) {
-        // Black Material You surfaces in night mode (only with Expressive design, whose colors they are)
-        theme.add(toggle(R.id.btn_xgramPureBlack, R.string.XgramPureBlack, R.string.XgramPureBlackSub));
-      }
-      addRows(items, theme.toArray(new ListItem[0]));
-      items.add(description(themesLocked ? R.string.XgramThemeExpressiveInfo : R.string.XgramMaterialYouInfo));
-      addExpressiveRow(items);
-    } else {
-      pickers.add(0, link(R.id.btn_xgramThemes, R.string.XgramThemes));
-    }
-    addRows(items, pickers.toArray(new ListItem[0]));
-    if (!com.fahadali.xgram.appearance.XgramMaterialYou.isAvailable()) {
-      addExpressiveRow(items);
+      items.add(description(expressive ? R.string.XgramExpressiveNote : R.string.XgramExpressiveNoteClassic));
     }
 
-    items.add(header(R.string.XgramChats));
+    items.add(header(R.string.XgramColors));
+    if (expressive) {
+      // Expressive design's colors: the wallpaper's or a picked one (XgramColorSource). The Compose page is the one shown
+      // then; these rows are what the settings search finds (the custom color rows: XgramSearchIndex.composeRows).
+      addRows(items, link(R.id.btn_xgramColorSource, R.string.XgramColorsSource));
+      items.add(description(R.string.XgramColorsWallpaperInfo));
+      List<ListItem> night = new ArrayList<>();
+      // Telegram X's night mode settings (Auto night mode) are on its Themes page.
+      night.add(link(R.id.btn_xgramAutoNightMode, R.string.XgramAutoNightMode));
+      if (com.fahadali.xgram.appearance.XgramAmoled.isAvailable()) {
+        night.add(toggle(R.id.btn_xgramPureBlack, R.string.XgramPureBlack, R.string.XgramPureBlackSub)); // black Material You surfaces at night
+      }
+      addRows(items, night.toArray(new ListItem[0]));
+      items.add(description(R.string.XgramThemeExpressiveInfo));
+    } else if (com.fahadali.xgram.appearance.XgramMaterialYou.isAvailable()) {
+      // Android 12+: Material You's note goes right under it.
+      addRows(items,
+        link(R.id.btn_xgramThemes, R.string.XgramThemes),
+        toggle(R.id.btn_xgramMaterialYou, R.string.XgramMaterialYou, R.string.XgramMaterialYouSub)
+      );
+      items.add(description(R.string.XgramMaterialYouInfo));
+    } else {
+      addRows(items, link(R.id.btn_xgramThemes, R.string.XgramThemes));
+    }
+
+    items.add(header(R.string.XgramHeaderTextIcons));
+    List<ListItem> text = new ArrayList<>();
+    if (com.fahadali.xgram.appearance.XgramFonts.isAvailable()) {
+      text.add(link(R.id.btn_xgramFont, R.string.XgramFont)); // the app font (Android 8+: font variations)
+    }
+    text.add(link(R.id.btn_xgramIconPack, R.string.XgramIconPack));
+    text.add(link(R.id.btn_xgramEmojiSet, R.string.XgramEmoji));
+    text.add(link(R.id.btn_xgramAppIcon, R.string.XgramAppIcon));
+    text.add(link(R.id.btn_xgramNotificationIcon, R.string.XgramNotificationIcon));
+    addRows(items, text.toArray(new ListItem[0]));
+
+    items.add(header(R.string.XgramHeaderMessagesAvatars));
     List<ListItem> chats = new ArrayList<>();
     chats.add(link(R.id.btn_xgramChatLook, 0, R.string.XgramChatLookRow, R.string.XgramChatLookSub));
     chats.add(link(R.id.btn_xgramAvatarCorners, R.string.XgramAvatarCorners));
-    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+    if (expressive) {
       // XGram M3E: the chat's floating buttons in the avatars' shape (only Expressive design draws them as M3 FABs)
       chats.add(toggle(R.id.btn_xgramChatFabsAvatarShape, R.string.XgramChatFabsAvatarShape, R.string.XgramChatFabsAvatarShapeSub));
     }
-    chats.add(toggle(R.id.btn_xgramShowSeconds, R.string.XgramShowSeconds, R.string.XgramShowSecondsSub));
-    chats.add(toggle(R.id.btn_xgramShowPeerIds, R.string.XgramShowPeerIds, R.string.XgramShowPeerIdsSub));
     addRows(items, chats.toArray(new ListItem[0]));
 
-    items.add(header(R.string.XgramLayout));
-    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-      // XGram M3E: the navigation rail of wide windows (only with Expressive design); the bottom navigation bar of
-      // narrow ones (both looks)
-      addRows(items,
-        toggle(R.id.btn_xgramTwoPane, R.string.XgramTwoPane, R.string.XgramTwoPaneSub),
-        toggle(R.id.btn_xgramNavRail, R.string.XgramNavRailOption, R.string.XgramNavRailOptionSub),
-        toggle(R.id.btn_xgramBottomNav, R.string.XgramBottomNavOption, R.string.XgramBottomNavOptionSub)
-      );
-    } else {
-      addRows(items,
-        toggle(R.id.btn_xgramTwoPane, R.string.XgramTwoPane, R.string.XgramTwoPaneSub),
-        toggle(R.id.btn_xgramBottomNav, R.string.XgramBottomNavOption, R.string.XgramBottomNavOptionSub)
-      );
-    }
-    items.add(description(R.string.XgramTwoPaneInfo));
+    // Two panes, the fold, drag and drop: mostly for tablets and unfolded phones, so a page of their own
+    items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
+    addRows(items, link(R.id.btn_xgramLargeScreens, R.drawable.baseline_devices_other_24, R.string.XgramLargeScreens, R.string.XgramLargeScreensSummary));
+  }
+
+  /** Appearance › Large screens and foldables: two panes, the fold's postures, drag and drop. */
+  private void buildLargeScreens (List<ListItem> items) {
+    items.add(header(R.string.XgramHeaderTwoPanes));
     addRows(items,
+      toggle(R.id.btn_xgramTwoPane, R.string.XgramTwoPane, R.string.XgramTwoPaneSub),
       toggle(R.id.btn_xgramPaneSplitEvenly, R.string.XgramPaneSplitEvenly, R.string.XgramPaneSplitEvenlySub),
       toggle(R.id.btn_xgramPaneResizable, R.string.XgramPaneResizable, R.string.XgramPaneResizableSub)
     );
@@ -839,12 +873,14 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     addRows(items, toggle(R.id.btn_xgramLimitMessageWidth, R.string.XgramLimitMessageWidth, R.string.XgramLimitMessageWidthSub));
     // Foldables: the posture rows only where a fold can be reported (androidx.window, minSdk 23 builds).
     if (com.fahadali.xgram.layout.XgramWindow.isPostureSupported()) {
+      items.add(header(R.string.XgramHeaderFoldables));
       addRows(items,
         toggle(R.id.btn_xgramFoldHingeSplit, R.string.XgramFoldHingeSplit, R.string.XgramFoldHingeSplitSub),
         toggle(R.id.btn_xgramFoldTabletop, R.string.XgramFoldTabletop, R.string.XgramFoldTabletopSub)
       );
       items.add(description(R.string.XgramFoldInfo));
     }
+    items.add(header(R.string.XgramHeaderDragDrop));
     addRows(items,
       toggle(R.id.btn_xgramDragDrop, R.string.XgramDragDrop, R.string.XgramDragDropSub),
       toggle(R.id.btn_xgramOpenBeside, R.string.XgramOpenBeside, R.string.XgramOpenBesideSub)
@@ -853,9 +889,20 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
   }
 
   private void buildChatList (List<ListItem> items) {
-    // One line, two lines or three lines: Telegram X's popup with One line added (Expressive design has the tiles)
-    items.add(header(R.string.XgramChatListView));
-    addRows(items, link(R.id.btn_xgramChatListView, R.string.XgramChatListView));
+    final boolean expressive = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    // One line, two lines or three lines: Telegram X's popup with One line added. No header: the row says it (the
+    // Compose page's header names its card of tiles, which has no title of its own).
+    items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
+    if (expressive) {
+      // Bigger text for three lines: the Compose page's switch under the card, here for the settings search
+      addRows(items,
+        link(R.id.btn_xgramChatListView, R.string.XgramChatListView),
+        new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_xgramChatListBigText, 0, R.string.XgramChatListBigText)
+      );
+    } else {
+      addRows(items, link(R.id.btn_xgramChatListView, R.string.XgramChatListView));
+    }
+    items.add(description(R.string.XgramChatListViewInfo));
 
     items.add(header(R.string.XgramHeaderFolders));
     addRows(items, toggle(R.id.btn_xgramHideFolders, R.string.XgramHideFolders, R.string.XgramHideFoldersSub));
@@ -865,28 +912,132 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       toggle(R.id.btn_xgramAllChatsLabel, R.string.XgramAllChatsLabel, R.string.XgramAllChatsLabelSub)
     );
 
+    // Getting around: the bars, the side menu, the buttons above the list and the new chat button
+    items.add(header(R.string.XgramHeaderNavigation));
+    List<ListItem> navigation = new ArrayList<>();
+    if (expressive) {
+      // Expressive design's floating bar has a page of its own (tabs, colors, profile); the rail is only there
+      navigation.add(link(R.id.btn_xgramBottomNav, R.string.XgramBottomNavOption));
+      navigation.add(toggle(R.id.btn_xgramNavRail, R.string.XgramNavRailOption, R.string.XgramNavRailOptionSub));
+    } else {
+      navigation.add(toggle(R.id.btn_xgramBottomNav, R.string.XgramBottomNavOption, R.string.XgramBottomNavOptionSub));
+    }
+    navigation.add(link(R.id.btn_xgramSideMenu, R.string.XgramSideMenu));
+    navigation.add(link(R.id.btn_xgramHeaderButtons, R.string.XgramHeaderButtons)); // the chat list's top row: lock, ghost mode, Activity, Search
+    navigation.add(link(R.id.btn_xgramHideFab, R.string.XgramNavBarFab)); // at the side, with the navigation bar or hidden
+    if (XgramSettingDeps.connectionStatusPositionEnabled()) {
+      // Only the status bar text reads it, and Expressive design shows the connection in the app instead.
+      navigation.add(toggle(R.id.btn_xgramConnectionStatusStart, R.string.XgramConnectionStatusStart, R.string.XgramConnectionStatusStartSub));
+    }
+    addRows(items, navigation.toArray(new ListItem[0]));
+
     items.add(header(R.string.XgramChats));
     addRows(items,
       toggle(R.id.btn_xgramMergeCommunities, R.string.XgramMergeCommunities, R.string.XgramMergeCommunitiesSub),
       link(R.id.btn_xgramChatLongPress, R.string.XgramChatLongPress),
       link(R.id.btn_xgramChatActionsOrder, R.string.XgramChatActionsOrder)
     );
+  }
 
-    // XGram: Activity (com.fahadali.xgram.activity), every mention, reply and reaction in one place
-    items.add(header(R.string.XgramActivity));
+  private void buildMessages (List<ListItem> items) {
+    // No header: the row is called Message menu already.
+    items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
+    addRows(items, link(R.id.btn_xgramMessageMenu, R.string.XgramMessageMenu));
+
+    items.add(header(R.string.XgramHeaderGestures));
+    addRows(items,
+      link(R.id.btn_xgramSwipeLeft, R.string.XgramSwipeLeft),
+      link(R.id.btn_xgramSwipeRight, R.string.XgramSwipeRight)
+    );
+    items.add(description(R.string.XgramSwipeInfo));
+    addRows(items,
+      toggle(R.id.btn_xgramTextSelectDrag, R.string.XgramSelTextDrag, R.string.XgramSelTextDragSub), // Select text without the menu
+      toggle(R.id.btn_xgramPullToNext, R.string.XgramPullToNext, R.string.XgramPullToNextSub)
+    );
+
+    items.add(header(R.string.XgramHeaderSending));
+    addRows(items,
+      link(R.id.btn_xgramInputButtons, R.string.XgramInputButtons),
+      toggle(R.id.btn_xgramTapToRecord, R.string.XgramTapToRecord, R.string.XgramTapToRecordSub)
+    );
+    items.add(description(R.string.XgramTapToRecordInfo));
+    // The only Enter control: Telegram X's Interface › Send with Enter is hidden (XgramKeyboard.enterToSend)
+    addRows(items, link(R.id.btn_xgramEnterToSend, R.string.XgramEnterToSend));
+    items.add(description(R.string.XgramEnterToSendInfo));
+    addRows(items,
+      link(R.id.btn_xgramUndoSend, R.string.XgramUndoSend),
+      toggle(R.id.btn_xgramUndoSendBubbles, R.string.XgramUndoSendBubbles, R.string.XgramUndoSendBubblesSub),
+      toggle(R.id.btn_xgramUndoSendNewest, R.string.XgramUndoSendNewest, R.string.XgramUndoSendNewestSub),
+      toggle(R.id.btn_xgramUndoSendVoice, R.string.XgramUndoSendVoice, R.string.XgramUndoSendVoiceSub)
+    );
+    items.add(description(R.string.XgramUndoSendInfo));
+
+    items.add(header(R.string.XgramHeaderForwardDelete));
+    addRows(items,
+      link(R.id.btn_xgramForwardSender, R.string.XgramFwdSetting), // Show sender, Hide sender or the last choice
+      toggle(R.id.btn_xgramDeleteForEveryone, R.string.XgramDeleteForEveryone, R.string.XgramCheckedByDefault)
+    );
+
+    // The page's media part: the photo editor and the camera have no settings of their own
+    items.add(header(R.string.XgramHeaderVideos));
+    addRows(items,
+      toggle(R.id.btn_xgramInlineVideo, R.string.XgramInlineVideo, R.string.XgramInlineVideoSub),
+      link(R.id.btn_xgramInlineVideoStart, R.string.XgramInlineVideoStart)
+    );
+    // What the rows do, or that Telegram X's Autoplay GIFs keeps videos from starting by themselves (updated with them).
+    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, R.id.btn_xgramInlineVideoInfo, 0, XgramSettingDeps.inlineVideoInfo()));
+    addRows(items, toggle(R.id.btn_xgramVideoAutoHide, R.string.XgramVideoAutoHide, R.string.XgramVideoAutoHideSub));
+    items.add(description(R.string.XgramVideoAutoHideInfo));
+
+    items.add(header(R.string.XgramHeaderLinks));
+    addRows(items,
+      toggle(R.id.btn_xgramCleanLinks, R.string.XgramCleanLinks, R.string.XgramCleanLinksSub),
+      toggle(R.id.btn_xgramFixLinkPreviews, R.string.XgramFixLinkPreviews, R.string.XgramFixLinkPreviewsSub)
+    );
+    items.add(description(R.string.XgramFixLinkPreviewsInfo));
+
+    items.add(header(R.string.XgramR7ChReactHeader));
+    addRows(items, toggle(R.id.btn_xgramR7ChannelReactions, R.string.XgramR7ChReactTitle, R.string.XgramR7ChReactSub));
+    items.add(description(R.string.XgramR7ChReactInfo));
+
+    // Showing more about a message or a profile
+    items.add(header(R.string.XgramHeaderDetails));
+    addRows(items,
+      toggle(R.id.btn_xgramShowSeconds, R.string.XgramShowSeconds, R.string.XgramShowSecondsSub),
+      toggle(R.id.btn_xgramTapTimeDetails, R.string.XgramTapTimeDetails, R.string.XgramTapTimeDetailsSub),
+      toggle(R.id.btn_xgramShowPeerIds, R.string.XgramShowPeerIds, R.string.XgramShowPeerIdsSub)
+    );
+
+    items.add(header(R.string.XgramHeaderTelegramAi));
+    addRows(items, toggle(R.id.btn_xgramAiTools, R.string.XgramAiTools, R.string.XgramAiToolsSub));
+    items.add(description(R.string.XgramAiToolsInfo));
+  }
+
+  /**
+   * Activity and reminders: Activity (com.fahadali.xgram.activity, every mention, reply and reaction in one place),
+   * Later's snoozed chats (com.fahadali.xgram.later) and Check In's timer (com.fahadali.xgram.checkin, started from a
+   * chat's ⋮ menu).
+   */
+  private void buildActivity (List<ListItem> items) {
+    // No header: the switch says what it is.
+    items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
     addRows(items, toggle(R.id.btn_xgramActivityShow, R.string.XgramActivityShow, R.string.XgramActivityShowInfo));
+    items.add(header(R.string.XgramHeaderInclude));
     addRows(items,
       toggle(R.id.btn_xgramActivityReactions, R.string.XgramActivityIncludeReactions, R.string.XgramActivityIncludeReactionsInfo),
       toggle(R.id.btn_xgramActivityMuted, R.string.XgramActivityIncludeMuted, R.string.XgramActivityIncludeMutedInfo),
       toggle(R.id.btn_xgramActivityDiscussion, R.string.XgramActivityIncludeDiscussion, R.string.XgramActivityIncludeDiscussionInfo),
-      toggle(R.id.btn_xgramActivityLookBack, R.string.XgramActivityLookBack, R.string.XgramActivityLookBackInfo),
-      toggle(R.id.btn_xgramActivityBadge, R.string.XgramActivityBadge, R.string.XgramActivityBadgeInfo),
-      toggle(R.id.btn_xgramActivityHeader, R.string.XgramActivityHeader, R.string.XgramActivityHeaderInfo)
+      toggle(R.id.btn_xgramActivityLookBack, R.string.XgramActivityLookBack, R.string.XgramActivityLookBackInfo)
     );
-    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-      // The classic bottom bar (Expressive design has the floating toolbar, whose Activity tab is on its own page)
-      addRows(items, link(R.id.btn_xgramActivityBar, R.string.XgramActivityBar));
-    }
+    items.add(header(R.string.XgramHeaderWhereItShows));
+    final boolean expressive = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    addRows(items,
+      toggle(R.id.btn_xgramActivityBadge, R.string.XgramActivityBadge, R.string.XgramActivityBadgeInfo),
+      // Expressive design: a tab of the floating bar, chosen on its page; the classic bottom bar: in Calls' place
+      expressive ? link(R.id.btn_xgramActivityNavBar, R.string.XgramActivityNavBar) : link(R.id.btn_xgramActivityBar, R.string.XgramActivityBar)
+    );
+    // The bell above the chat list: its only switch is on Header buttons
+    items.add(description(expressive ? R.string.XgramActivityNavBarInfo : R.string.XgramActivityWhereInfo));
     addRows(items,
       link(R.id.btn_xgramActivityHidden, R.string.XgramActivityHiddenChats),
       new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramActivityClearAll, 0, R.string.XgramActivityClearAll)
@@ -894,13 +1045,6 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
         .setTextColorId(org.thunderdog.challegram.theme.ColorId.textNegative)
     );
     items.add(description(R.string.XgramActivityLocalNote));
-    if (BuildConfig.DEBUG) {
-      // Debug builds: a flood wait without asking Telegram for one (the sync, Mark all as read), and collector errors
-      addRows(items,
-        new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramActivityDebugFlood, R.drawable.baseline_bug_report_24, R.string.XgramActivityDebugFlood),
-        toggle(R.id.btn_xgramActivityDebugThrow, R.drawable.baseline_bug_report_24, R.string.XgramActivityDebugThrow, R.string.XgramActivityDebugThrowInfo)
-      );
-    }
 
     // Later: snoozed chats and reminders
     items.add(header(R.string.XgramLaterHeader));
@@ -912,74 +1056,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       link(R.id.btn_xgramLaterChannel, 0, R.string.XgramLaterChannelLink, R.string.XgramLaterChannelLinkSub)
     );
 
-    items.add(header(R.string.XgramHeaderScreen));
-    addRows(items,
-      link(R.id.btn_xgramHeaderButtons, R.string.XgramHeaderButtons), // the chat list's top row: lock, ghost mode, Activity, Search
-      toggle(R.id.btn_xgramHideFab, R.string.XgramHideFab, R.string.XgramHideFabSub),
-      toggle(R.id.btn_xgramConnectionStatusStart, R.string.XgramConnectionStatusStart, R.string.XgramConnectionStatusStartSub)
-    );
-  }
-
-  private void buildMessages (List<ListItem> items) {
-    // No header: the row is called Message menu already.
-    items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
-    addRows(items, link(R.id.btn_xgramMessageMenu, R.string.XgramMessageMenu));
-
-    items.add(header(R.string.XgramR7ChReactHeader));
-    addRows(items, toggle(R.id.btn_xgramR7ChannelReactions, R.string.XgramR7ChReactTitle, R.string.XgramR7ChReactSub));
-    items.add(description(R.string.XgramR7ChReactInfo));
-
-    items.add(header(R.string.XgramHeaderGestures));
-    addRows(items,
-      link(R.id.btn_xgramSwipeLeft, R.string.XgramSwipeLeft),
-      link(R.id.btn_xgramSwipeRight, R.string.XgramSwipeRight)
-    );
-    items.add(description(R.string.XgramSwipeInfo));
-    addRows(items,
-      toggle(R.id.btn_xgramTapTimeDetails, R.string.XgramTapTimeDetails, R.string.XgramTapTimeDetailsSub),
-      toggle(R.id.btn_xgramPullToNext, R.string.XgramPullToNext, R.string.XgramPullToNextSub),
-      toggle(R.id.btn_xgramTextSelectDrag, R.string.XgramSelTextDrag, R.string.XgramSelTextDragSub) // Select text without the menu
-    );
-
-    items.add(header(R.string.XgramHeaderDefaults));
-    addRows(items,
-      toggle(R.id.btn_xgramDeleteForEveryone, R.string.XgramDeleteForEveryone, R.string.XgramCheckedByDefault),
-      link(R.id.btn_xgramForwardSender, R.string.XgramFwdSetting) // Show sender, Hide sender or the last choice
-    );
-
-    items.add(header(R.string.XgramHeaderLinks));
-    addRows(items,
-      toggle(R.id.btn_xgramCleanLinks, R.string.XgramCleanLinks, R.string.XgramCleanLinksSub),
-      toggle(R.id.btn_xgramFixLinkPreviews, R.string.XgramFixLinkPreviews, R.string.XgramFixLinkPreviewsSub)
-    );
-    items.add(description(R.string.XgramFixLinkPreviewsInfo));
-
-    items.add(header(R.string.XgramHeaderVideos));
-    addRows(items,
-      toggle(R.id.btn_xgramInlineVideo, R.string.XgramInlineVideo, R.string.XgramInlineVideoSub),
-      link(R.id.btn_xgramInlineVideoStart, R.string.XgramInlineVideoStart)
-    );
-    // What the rows do, or that Telegram X's Autoplay GIFs keeps videos from starting by themselves (updated with them).
-    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, R.id.btn_xgramInlineVideoInfo, 0, XgramSettingDeps.inlineVideoInfo()));
-    addRows(items, toggle(R.id.btn_xgramVideoAutoHide, R.string.XgramVideoAutoHide, R.string.XgramVideoAutoHideSub));
-    items.add(description(R.string.XgramVideoAutoHideInfo));
-
-    items.add(header(R.string.XgramMessageBox));
-    addRows(items,
-      link(R.id.btn_xgramInputButtons, R.string.XgramInputButtons),
-      toggle(R.id.btn_xgramTapToRecord, R.string.XgramTapToRecord, R.string.XgramTapToRecordSub)
-    );
-    items.add(description(R.string.XgramTapToRecordInfo));
-    addRows(items, link(R.id.btn_xgramEnterToSend, R.string.XgramEnterToSend));
-    items.add(description(R.string.XgramEnterToSendInfo));
-    addRows(items,
-      link(R.id.btn_xgramUndoSend, R.string.XgramUndoSend),
-      toggle(R.id.btn_xgramUndoSendBubbles, R.string.XgramUndoSendBubbles, R.string.XgramUndoSendBubblesSub),
-      toggle(R.id.btn_xgramUndoSendNewest, R.string.XgramUndoSendNewest, R.string.XgramUndoSendNewestSub),
-      toggle(R.id.btn_xgramUndoSendVoice, R.string.XgramUndoSendVoice, R.string.XgramUndoSendVoiceSub)
-    );
-    items.add(description(R.string.XgramUndoSendInfo));
-
+    // Check In: a safety timer, started from a chat's ⋮ menu
     items.add(header(R.string.XgramCheckInHeader));
     addRows(items,
       link(R.id.btn_xgramCheckInTimer, R.string.XgramCheckInTimer),
@@ -990,10 +1067,6 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       toggle(R.id.btn_xgramCheckInFollowUp, R.string.XgramCheckInFollowUp, R.string.XgramCheckInFollowUpSub)
     );
     items.add(description(R.string.XgramCheckInInfo));
-
-    items.add(header(R.string.XgramHeaderTelegramAi));
-    addRows(items, toggle(R.id.btn_xgramAiTools, R.string.XgramAiTools, R.string.XgramAiToolsSub));
-    items.add(description(R.string.XgramAiToolsInfo));
   }
 
   private void buildTranslation (List<ListItem> items) {
@@ -1003,6 +1076,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       toggle(R.id.btn_xgramTrFallback, R.string.XgramTrFallback, R.string.XgramTrFallbackSub)
     );
     items.add(new ListItem(ListItem.TYPE_DESCRIPTION, R.id.btn_xgramTrProviderInfo, 0, com.fahadali.xgram.translate.XgramTranslator.info(XgramSettings.instance().translateProvider()), false));
+    // Telegram X's translation page: the style (popup, inline, off) and Do not translate
+    addRows(items, link(R.id.btn_xgramTrStyle, R.string.XgramTrStyle));
 
     items.add(header(R.string.XgramHeaderAutoTranslate));
     addRows(items,
@@ -1011,17 +1086,15 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     );
     items.add(description(R.string.XgramTrAutoAllInfo));
 
-    items.add(header(R.string.XgramMessageMenu));
+    items.add(header(R.string.XgramHeaderInMessageMenu));
     addRows(items, toggle(R.id.btn_xgramTrAlways, R.string.XgramTrAlways, R.string.XgramTrAlwaysSub));
     items.add(description(R.string.XgramTrAlwaysInfo));
-
-    items.add(header(R.string.XgramHeaderStyle));
-    addRows(items, link(R.id.btn_xgramTrStyle, R.string.XgramTrStyle));
   }
 
   private void buildPrivacy (List<ListItem> items) {
     // Ghost mode first: the main screen's ghost button, the side menu switch and the Quick Settings tile open this page.
-    items.add(header(R.string.XgramGhostMode));
+    // No header: the switch is called Ghost mode already.
+    items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
     addRows(items, toggle(R.id.btn_xgramGhostMode, R.drawable.baseline_ghost_24, R.string.XgramGhostModeToggle, R.string.XgramGhostModeSub));
     items.add(description(R.string.XgramGhostModeInfo));
     items.add(header(R.string.XgramHeaderReading));
@@ -1050,7 +1123,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     );
     items.add(header(R.string.XgramHeaderDevice));
     addRows(items,
-      toggle(R.id.btn_xgramHidePhone, R.string.XgramHidePhone, R.string.XgramHidePhoneSub),
+      toggle(R.id.btn_xgramHidePhone, R.string.XgramHidePhone, R.string.XgramHidePhoneSub), // its only switch (the side menu's header)
       toggle(R.id.btn_xgramBlockContentCapture, R.string.XgramBlockContentCapture, R.string.XgramBlockContentCaptureSub)
     );
     items.add(description(R.string.XgramPrivacyInfo));
@@ -1118,7 +1191,6 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
 
   /** Telegram, Google Translate or Yandex Translate; a third-party service asks once, saying the text goes to it. */
   private void showTranslateProviderOptions () {
-    // Shared with Telegram X's Translate messages page
     com.fahadali.xgram.translate.XgramTranslateProviderPicker.show(this, this::setTranslateProvider);
   }
 
@@ -1129,7 +1201,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     updateTranslateProviderInfo();
   }
 
-  /** The note under Translation service says who translates; the service can also change on Telegram X's translation page. */
+  /** The note under Translation service says who translates. */
   private void updateTranslateProviderInfo () {
     int index = adapter.indexOfViewById(R.id.btn_xgramTrProviderInfo);
     if (index != -1) {
@@ -1173,7 +1245,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     adapter.updateValuedSettingById(R.id.btn_xgramActivityDiscussion);
     adapter.updateValuedSettingById(R.id.btn_xgramActivityLookBack);
     adapter.updateValuedSettingById(R.id.btn_xgramActivityBadge);
-    adapter.updateValuedSettingById(R.id.btn_xgramActivityHeader);
+    adapter.updateValuedSettingById(R.id.btn_xgramActivityNavBar);
     adapter.updateValuedSettingById(R.id.btn_xgramActivityBar);
   }
 
@@ -1296,6 +1368,36 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       }
     }
     return count;
+  }
+
+  /**
+   * About › Version: this build's version and how updates stand, the states Telegram X's main Settings shows on its
+   * App updates row (XGram's own way in to App updates).
+   */
+  static String aboutVersionValue (AppUpdater updater) { // XGram: package, for XgramComposeBridge
+    @StringRes int status;
+    if (XgramUpdates.channel() == XgramUpdates.CHANNEL_OFF) {
+      status = R.string.XgramAboutUpdatesOff;
+    } else {
+      switch (updater.state()) {
+        case AppUpdater.State.CHECKING:
+          status = R.string.XgramAboutUpdateChecking;
+          break;
+        case AppUpdater.State.AVAILABLE:
+        case AppUpdater.State.DOWNLOADING:
+          status = R.string.XgramAboutUpdateAvailable;
+          break;
+        case AppUpdater.State.READY_TO_INSTALL:
+        case AppUpdater.State.INSTALLING:
+          status = R.string.XgramAboutUpdateReady;
+          break;
+        case AppUpdater.State.NONE:
+        default:
+          status = R.string.XgramAboutUpToDate;
+          break;
+      }
+    }
+    return Lang.getString(R.string.XgramAboutVersionValue, BuildConfig.VERSION_NAME, Lang.getString(status));
   }
 
   /** The "Check for updates" row follows the updater, as in Telegram X's own settings. */
@@ -1429,6 +1531,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     }
     if (adapter != null) {
       adapter.updateValuedSettingById(R.id.btn_xgramUpdateCheck);
+      adapter.updateValuedSettingById(R.id.btn_xgramAboutVersion);
     }
   }
 
@@ -1988,10 +2091,22 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       }
       return;
     } else if (id == R.id.btn_xgramHideFab) {
-      settings.setHideFab(adapter.toggleView(v));
-      return;
-    } else if (id == R.id.btn_xgramSendMenuTests) {
-      settings.setSendMenuTests(adapter.toggleView(v));
+      // New chat button: at the side, with the navigation bar (Expressive design's, while it is on) or hidden
+      final int[] modes = XgramSettingDeps.newChatButtonChoices();
+      String[] titles = new String[modes.length];
+      int[] ids = new int[modes.length];
+      for (int i = 0; i < modes.length; i++) {
+        titles[i] = Lang.getString(XgramSettingDeps.newChatButtonName(modes[i]));
+        ids[i] = i + 1;
+      }
+      showOptions(null, ids, titles, null, null, (itemView, optionId) -> {
+        XgramSettingDeps.setNewChatButton(modes[optionId - 1]);
+        if (context.xgramTwoPane() != null) {
+          context.xgramTwoPane().update(); // where the button goes; Hide reaches the chat list by itself
+        }
+        adapter.updateValuedSettingById(R.id.btn_xgramHideFab);
+        return true;
+      });
       return;
     } else if (id == R.id.btn_xgramConnectionStatusStart) {
       if (XgramSettingDeps.connectionStatusPositionEnabled()) {
@@ -2051,15 +2166,14 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           return true;
         });
       return;
-    } else if (id == R.id.btn_xgramActivityDebugFlood) {
-      com.fahadali.xgram.activity.XgramActivity.debugInjectFlood();
-      org.thunderdog.challegram.tool.UI.showToast(Lang.getString(R.string.XgramActivityDebugFlood), android.widget.Toast.LENGTH_SHORT);
-      return;
-    } else if (id == R.id.btn_xgramActivityDebugThrow) {
-      com.fahadali.xgram.activity.XgramActivity.setDebugCollectorThrows(adapter.toggleView(v));
+    } else if (id == R.id.btn_xgramActivityNavBar) {
+      // Expressive design's floating bar: its Activity tab is chosen with the other tabs, on the Navigation bar page
+      if (XgramSettingDeps.activityOptionsEnabled()) {
+        navigateTo(com.fahadali.xgram.compose.XgramComposeController.create(context, tdlib, com.fahadali.xgram.compose.XgramPage.NAV_BAR));
+      }
       return;
     } else if (id == R.id.btn_xgramActivityReactions || id == R.id.btn_xgramActivityMuted || id == R.id.btn_xgramActivityDiscussion ||
-      id == R.id.btn_xgramActivityLookBack || id == R.id.btn_xgramActivityBadge || id == R.id.btn_xgramActivityHeader) {
+      id == R.id.btn_xgramActivityLookBack || id == R.id.btn_xgramActivityBadge) {
       if (!XgramSettingDeps.activityOptionsEnabled()) {
         return; // the reason is under the title
       }
@@ -2072,10 +2186,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
         settings.setActivityDiscussion(value);
       } else if (id == R.id.btn_xgramActivityLookBack) {
         settings.setActivityLookBack(value);
-      } else if (id == R.id.btn_xgramActivityBadge) {
-        settings.setActivityBadge(value);
       } else {
-        settings.setActivityHeader(value);
+        settings.setActivityBadge(value);
       }
       return;
     } else if (id == R.id.btn_xgramR7ChannelReactions) {
@@ -2098,6 +2210,11 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       }
       return;
     } else if (id == R.id.btn_xgramBottomNav) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // Expressive design's floating bar has its own page (tabs, colors, profile, the side menu)
+        navigateTo(com.fahadali.xgram.compose.XgramComposeController.create(context, tdlib, com.fahadali.xgram.compose.XgramPage.NAV_BAR));
+        return;
+      }
       settings.setBottomNav(adapter.toggleView(v));
       if (context.xgramTwoPane() != null) {
         context.xgramTwoPane().update(); // the bottom navigation bar comes or goes at once (the chat list hears it too)
@@ -2129,7 +2246,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       tdlib.ui().openUrl(this, "https://github.com/TGX-Android/Telegram-X", new org.thunderdog.challegram.telegram.TdlibUi.UrlOpenParameters().disableInstantView());
       return;
     } else if (id == R.id.btn_xgramAboutVersion) {
-      org.thunderdog.challegram.tool.UI.copyText(Lang.getAppBuildAndVersion(tdlib), R.string.CopiedText);
+      navigateTo(section(context, tdlib, SECTION_UPDATES)); // a long press copies the version (onLongClick)
       return;
     } else if (id == R.id.btn_xgramLogsShare) {
       XgramLogs.confirmAndShare(this);
@@ -2184,6 +2301,14 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       adapter.toggleView(v);
       com.fahadali.xgram.appearance.XgramExpressive.setEnabled(this, !com.fahadali.xgram.appearance.XgramExpressive.isEnabled());
       return;
+    } else if (id == R.id.btn_xgramComposeTgx) {
+      settings.setComposeTgxPages(adapter.toggleView(v)); // applies to Telegram X pages opened next
+      return;
+    } else if (id == R.id.btn_xgramChatListBigText) {
+      if (com.fahadali.xgram.chats.XgramChatListMode.isBigTextEnabled()) {
+        com.fahadali.xgram.chats.XgramChatListMode.setBigText(adapter.toggleView(v));
+      }
+      return;
     } else if (id == R.id.btn_xgramColorSource) {
       // Only with Expressive design, whose settings are the Compose pages: Appearance there, at this row
       if (com.fahadali.xgram.appearance.XgramColorSource.isAvailable()) {
@@ -2217,6 +2342,12 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     } else if (id == R.id.btn_xgramSectionTranslation) {
       navigateTo(section(context, tdlib, SECTION_TRANSLATION));
+      return;
+    } else if (id == R.id.btn_xgramSectionActivity) {
+      navigateTo(section(context, tdlib, SECTION_ACTIVITY));
+      return;
+    } else if (id == R.id.btn_xgramLargeScreens) {
+      navigateTo(section(context, tdlib, SECTION_LARGE_SCREENS));
       return;
     } else if (id == R.id.btn_xgramSectionPrivacy) {
       navigateTo(section(context, tdlib, SECTION_PRIVACY));
@@ -2267,7 +2398,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       com.fahadali.xgram.chats.XgramChatListMode.showModePicker(this, () -> adapter.updateValuedSettingById(R.id.btn_xgramChatListView));
       return;
     } else if (id == R.id.btn_xgramChatLongPress) {
-      com.fahadali.xgram.chats.XgramChatLongPress.showModePicker(this, () -> adapter.updateValuedSettingById(R.id.btn_xgramChatLongPress));
+      if (XgramSettingDeps.chatLongPressEnabled()) { // off: the reason is under the title
+        com.fahadali.xgram.chats.XgramChatLongPress.showModePicker(this, () -> adapter.updateValuedSettingById(R.id.btn_xgramChatLongPress));
+      }
       return;
     } else if (id == R.id.btn_xgramChatActionsOrder) {
       navigateTo(new com.fahadali.xgram.chats.XgramChatActionsController(context, tdlib));
@@ -2308,6 +2441,15 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       XgramGhost.applyOnlineState();
     }
     updateGhostToggles();
+  }
+
+  @Override
+  public boolean onLongClick (View v) {
+    if (v.getId() == R.id.btn_xgramAboutVersion && !showingResults) {
+      org.thunderdog.challegram.tool.UI.copyText(Lang.getAppBuildAndVersion(tdlib), R.string.CopiedText);
+      return true;
+    }
+    return false;
   }
 
   static String avatarCornersName (int percent) { // XGram: package, for XgramComposeBridge

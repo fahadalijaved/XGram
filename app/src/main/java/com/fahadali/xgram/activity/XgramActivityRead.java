@@ -292,7 +292,7 @@ final class XgramActivityRead {
     return error != null && (error.code == 429 || XgramActivityClassifier.retryAfterSeconds(error) >= 0);
   }
 
-  // Debug builds: Simulate Telegram wait (Chat list > Activity) stops Mark all as read too
+  // Debug builds: Simulate Telegram wait (Testing Utilities) stops Mark all as read too
 
   private static volatile int debugFloodAccountId = -1;
   /** SystemClock.elapsedRealtime() until which the account's calls are answered with a wait. */

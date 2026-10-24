@@ -90,7 +90,7 @@ import tgx.td.ChatId;
 
 /**
  * Material 3 Expressive floating toolbar used for navigation on narrow windows (a phone, a Fold's cover screen, a
- * low window in landscape), as in Google Photos and Essentials (Appearance > Layout > Navigation bar, Expressive
+ * low window in landscape), as in Google Photos and Essentials (Chat list > Navigation > Navigation bar, Expressive
  * design only; the classic look keeps {@link XgramNavBar}, wide windows the rail).
  * <ul>
  *   <li>A 64dp full-corner pill with 8dp of padding holds 2 to 4 tabs (Chats, Contacts and Settings unless chosen
@@ -160,7 +160,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
   /** Row titles of the settings page. */
   private static final int[] DEST_TITLE = {R.string.Chats, R.string.Calls, R.string.Contacts, R.string.XgramNavRailSavedMessages, R.string.Settings, R.string.XgramNavProfileLabel, R.string.XgramActivity};
 
-  /** A destination that can be a tab now: Activity only while it is on (its switch, Chat list > Activity). */
+  /** A destination that can be a tab now: Activity only while it is on (its switch, Activity and reminders). */
   private static boolean isAvailable (int dest) {
     return dest != DEST_ACTIVITY || com.fahadali.xgram.activity.XgramActivity.isOn();
   }

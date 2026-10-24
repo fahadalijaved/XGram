@@ -25,10 +25,10 @@
   <!-- The swipe's label, next to its icon (short) -->
   <string name="XgramFwdSwipe">Without sender</string>
 
-  <!-- Settings → XGram → Messages → Defaults -->
-  <string name="XgramFwdSetting">Forwarding</string>
-  <string name="XgramFwdRemember">Remember my last choice</string>
-  <string name="XgramFwdSettingInfo">How the forward sheet starts. Hide sender sends copies, without \"Forwarded from\"; messages that can\'t be copied always show their sender.</string>
+  <!-- Settings → XGram → Chats and messages → Forwarding and deleting -->
+  <string name="XgramFwdSetting">Sender in forwards</string>
+  <string name="XgramFwdRemember">Your last choice</string>
+  <string name="XgramFwdSettingInfo">How the forward sheet starts. Hide sender sends copies, without \"Forwarded from\"; messages that can\'t be copied always show their sender. Forwarding selected text starts the same way, with With sender or Text only.</string>
   <string name="XgramSearchKwForward">send as copy, forward without author, hide sender, hide name, without quoting, anonymous forward, hide captions, remove captions</string>
 
   <!-- Select text → Forward (com.fahadali.xgram.chats.XgramForwardQuote): With sender sends the comment as a reply quoting the words in their own chat, Text only sends the words as the user's own message -->

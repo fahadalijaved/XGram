@@ -28,7 +28,7 @@ import org.thunderdog.challegram.v.CustomRecyclerView;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Settings → XGram → Messages → Message box buttons: which buttons the message box shows. Open chats update at once. */
+/** Settings → XGram → Chats and messages → Message box buttons: which buttons the message box shows. Open chats update at once. */
 public final class XgramInputButtonsController extends RecyclerViewController<Void> implements View.OnClickListener {
   // XGram: public for the Compose Message box buttons page (xgram-m3e)
   public static final String[] KEYS = {XgramSettings.INPUT_BUTTON_COMMANDS, XgramSettings.INPUT_BUTTON_SCHEDULED, XgramSettings.INPUT_BUTTON_CAMERA, XgramSettings.INPUT_BUTTON_VOICE};

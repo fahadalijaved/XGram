@@ -77,18 +77,34 @@ public final class XgramKeyboard {
   }
 
   /**
+   * Enter to send, the only control for it: Telegram X's Interface › Send with Enter is hidden and Auto no longer reads
+   * it. Once, its old value is carried over (Auto with it on behaved as On) and it is turned off, so it never decides
+   * again; nothing new is saved for this.
+   */
+  public static int enterToSend () {
+    XgramSettings settings = XgramSettings.instance();
+    if (Settings.instance().needSendByEnter()) {
+      if (settings.enterToSend() == XgramSettings.ENTER_TO_SEND_AUTO) {
+        settings.setEnterToSend(XgramSettings.ENTER_TO_SEND_ON);
+      }
+      Settings.instance().setNeedSendByEnter(false);
+    }
+    return settings.enterToSend();
+  }
+
+  /**
    * Whether a new line typed at the end of the message box sends it (Telegram X's "Send with Enter" path, used by
-   * on-screen keyboards). Auto keeps Telegram X's own switch, and sends whenever a hardware keyboard is attached,
-   * for keyboards whose Enter arrives as text.
+   * on-screen keyboards). Auto sends whenever a hardware keyboard is attached, for keyboards whose Enter arrives as
+   * text; the on-screen keyboard's Enter adds a new line.
    */
   public static boolean typedEnterSends (Context context) {
-    switch (XgramSettings.instance().enterToSend()) {
+    switch (enterToSend()) {
       case XgramSettings.ENTER_TO_SEND_ON:
         return true;
       case XgramSettings.ENTER_TO_SEND_OFF:
         return false;
       default:
-        return Settings.instance().needSendByEnter() || hasHardwareKeyboard(context);
+        return hasHardwareKeyboard(context);
     }
   }
 
@@ -108,7 +124,7 @@ public final class XgramKeyboard {
         return COMPOSER_NEW_LINE;
       }
       if (event.hasNoModifiers()) {
-        return XgramSettings.instance().enterToSend() != XgramSettings.ENTER_TO_SEND_OFF ? COMPOSER_SEND : COMPOSER_NEW_LINE;
+        return enterToSend() != XgramSettings.ENTER_TO_SEND_OFF ? COMPOSER_SEND : COMPOSER_NEW_LINE;
       }
       return COMPOSER_DEFAULT;
     }

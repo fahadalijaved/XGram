@@ -156,13 +156,11 @@ public class SettingsFoldersController extends RecyclerViewController<Void> impl
     items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
     items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_archiveAsFolder, 0, R.string.ArchiveAsFolder));
     items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL)); // XGram
-    // XGram: All chats hides like a folder while another folder has a tab (greyed, with the reason, otherwise)
-    items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_xgramHideAllChats, 0, R.string.XgramHideAllChats));
-    items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL)); // XGram
-    xgramHideFolders = com.fahadali.xgram.XgramSettings.instance().hideFolders(tdlib.accountId()); // XGram
-    items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_xgramHideFolders, 0, R.string.XgramHideFolders)); // XGram
+    // XGram: Hide folder tabs and Hide All chats live on XGram's Chat list page (Folders): this row opens it
+    xgramHideFolders = com.fahadali.xgram.XgramSettings.instance().hideFolders(tdlib.accountId());
+    items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramTgxFolderTabs, 0, R.string.XgramTgxFolderTabs));
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
-    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramTgxHideFoldersInfo)); // XGram: also explains the eye on the folder rows
+    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramTgxHideFoldersInfo)); // XGram: the eye on the folder rows
 
     items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.ChatFolders));
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP, chatFoldersPreviousItemId));
@@ -411,14 +409,10 @@ public class SettingsFoldersController extends RecyclerViewController<Void> impl
         } else if (item.getId() == R.id.btn_archiveAsFolder) {
           boolean showArchiveAsFolder = tdlib.settings().isChatListEnabled(ChatPosition.CHAT_LIST_ARCHIVE);
           view.getToggler().setRadioEnabled(showArchiveAsFolder, isUpdate);
-        } else if (item.getId() == R.id.btn_xgramHideFolders) {
-          view.getToggler().setRadioEnabled(com.fahadali.xgram.XgramSettings.instance().hideFolders(tdlib.accountId()), isUpdate);
-        } else if (item.getId() == R.id.btn_xgramHideAllChats) {
-          // XGram: greyed with the reason while no other folder has a tab: All chats stays the only list then
-          int reason = com.fahadali.xgram.XgramSettingDeps.hideAllChatsReason(tdlib);
-          view.setData(reason != 0 ? reason : R.string.XgramHideAllChatsSub);
-          view.setEnabledAnimated(reason == 0, isUpdate);
-          view.getToggler().setRadioEnabled(com.fahadali.xgram.XgramSettings.instance().hideAllChats(tdlib.accountId()), isUpdate);
+        } else if (item.getId() == R.id.btn_xgramTgxFolderTabs) {
+          // XGram: how the tabs stand: hidden, shown without All chats, or shown
+          view.setData(com.fahadali.xgram.XgramSettings.instance().hideFolders(tdlib.accountId()) ? R.string.XgramTgxFolderTabsHidden :
+            com.fahadali.xgram.XgramSettingDeps.allChatsHidden(tdlib) ? R.string.XgramTgxFolderTabsNoAllChats : R.string.XgramTgxFolderTabsShown);
         }
       }
     };
@@ -531,14 +525,14 @@ public class SettingsFoldersController extends RecyclerViewController<Void> impl
   private boolean xgramHideFolders;
 
   /**
-   * XGram: Hide All chats as its switch (greyed while no other folder has a tab) and the All chats row with its eye
-   * show it; the folders, their eyes and Hide folder tabs change whether it applies.
+   * XGram: Hide All chats as the Folder tabs row's value and the All chats row with its eye show it; the folders, their
+   * eyes and Hide folder tabs change whether it applies.
    */
   private void xgramUpdateAllChatsRows () {
     if (adapter == null) {
       return;
     }
-    adapter.updateValuedSettingById(R.id.btn_xgramHideAllChats);
+    adapter.updateValuedSettingById(R.id.btn_xgramTgxFolderTabs);
     int startIndex = indexOfFirstChatFolder();
     if (startIndex == RecyclerView.NO_POSITION) {
       return;
@@ -555,7 +549,7 @@ public class SettingsFoldersController extends RecyclerViewController<Void> impl
       return;
     }
     xgramHideFolders = hideFolders;
-    adapter.updateValuedSettingById(R.id.btn_xgramHideFolders);
+    adapter.updateValuedSettingById(R.id.btn_xgramTgxFolderTabs);
     xgramUpdateAllChatsRows();
     int startIndex = indexOfFirstChatFolder();
     if (startIndex == RecyclerView.NO_POSITION) {
@@ -690,14 +684,9 @@ public class SettingsFoldersController extends RecyclerViewController<Void> impl
       boolean showArchiveAsFolder = adapter.toggleView(v);
       tdlib.settings().setChatListEnabled(ChatPosition.CHAT_LIST_ARCHIVE, showArchiveAsFolder);
       updateChatFolders();
-    } else if (v.getId() == R.id.btn_xgramHideFolders) {
-      com.fahadali.xgram.XgramSettings.instance().setHideFolders(tdlib.accountId(), adapter.toggleView(v));
-      xgramCheckHideFolders();
-    } else if (v.getId() == R.id.btn_xgramHideAllChats) {
-      if (com.fahadali.xgram.XgramSettingDeps.hideAllChatsEnabled(tdlib)) {
-        com.fahadali.xgram.XgramSettings.instance().setHideAllChats(tdlib.accountId(), adapter.toggleView(v));
-        xgramUpdateAllChatsRows();
-      }
+    } else if (v.getId() == R.id.btn_xgramTgxFolderTabs) {
+      // XGram: Chat list › Folders, pointing at Hide folder tabs; the rows here follow on return (onFocus)
+      navigateTo(com.fahadali.xgram.compose.XgramSettingsPages.open(context, tdlib, com.fahadali.xgram.XgramSettingsController.SECTION_CHAT_LIST, R.id.btn_xgramHideFolders));
     } else if (v.getId() == R.id.xgram_r6b6_folderLinks) {
       // XGram M3E: the invite links button opens the folder, where its links are
       Object tag = v.getTag();

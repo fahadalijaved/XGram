@@ -98,11 +98,12 @@ import org.thunderdog.challegram.R
 import kotlin.math.roundToInt
 
 /**
- * Appearance > Colours (XgramColorSource), under Expressive design: Wallpaper or Custom as a connected button group;
- * with Custom, the swatches (each split into the primary, secondary and tertiary of the scheme it makes; the picked
- * one morphs into a cookie with a check), the style chips and More colours ([XgramMoreColorsDialog]). Every change
- * repaints the app at once, as a wallpaper change does. With Expressive design off the choice is disabled and the
- * description says why. Before Android 13 (no Expressive design) there is nothing.
+ * Appearance > Colors (XgramColorSource), under Expressive design: Color source, Wallpaper or Custom as a connected
+ * button group (the Colors header is above it); with Custom, the swatches (each split into the primary, secondary and
+ * tertiary of the scheme it makes; the picked one morphs into a cookie with a check), the style chips and More colors
+ * ([XgramMoreColorsDialog]). Every change repaints the app at once, as a wallpaper change does. The page only shows it
+ * with Expressive design (with it off the choice would be disabled and the description says why). Before Android 13
+ * (no Expressive design) there is nothing.
  */
 internal fun PageScope.colorSource(host: XgramComposeHost, onMore: () -> Unit) {
   if (!XgramExpressive.isAvailable()) {
@@ -113,7 +114,7 @@ internal fun PageScope.colorSource(host: XgramComposeHost, onMore: () -> Unit) {
   val isCustom = settings.colorSource() == XgramSettings.COLOR_SOURCE_CUSTOM
   group(key = "colors") {
     buttons(
-      R.id.btn_xgramColorSource, s(R.string.XgramColors),
+      R.id.btn_xgramColorSource, s(R.string.XgramColorsSource),
       listOf(
         s(R.string.XgramColorsWallpaper) to XgramSettings.COLOR_SOURCE_WALLPAPER,
         s(R.string.XgramColorsCustom) to XgramSettings.COLOR_SOURCE_CUSTOM
@@ -205,7 +206,7 @@ private fun SwatchesRow(shapes: ListItemShapes) {
         }
       }
     },
-    colors = settingsRowColors(R.id.btn_xgramColorSeed),
+    colors = settingsRowColors(R.id.btn_xgramColorSeed, "colors_seed"),
     content = { Text(str(R.string.XgramColorsSeed)) }
   )
 }
@@ -298,7 +299,7 @@ private fun StyleRow(shapes: ListItemShapes) {
         host.changed()
       }
     },
-    colors = settingsRowColors(R.id.btn_xgramColorStyle),
+    colors = settingsRowColors(R.id.btn_xgramColorStyle, "colors_style"),
     content = { Text(str(R.string.XgramColorsStyle)) }
   )
 }

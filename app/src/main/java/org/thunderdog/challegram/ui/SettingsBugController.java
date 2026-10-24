@@ -496,6 +496,12 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
         } else if (itemId == R.id.btn_xgramCameraXTest) {
           view.getToggler().setRadioEnabled(com.fahadali.xgram.XgramSettings.instance().cameraXTest(), isUpdate);
           view.setData(R.string.XgramCameraXTestInfo);
+        } else if (itemId == R.id.btn_xgramSendMenuTests) {
+          view.getToggler().setRadioEnabled(com.fahadali.xgram.XgramSettings.instance().sendMenuTests(), isUpdate);
+          view.setData(R.string.XgramSendMenuTestsSub);
+        } else if (itemId == R.id.btn_xgramActivityDebugThrow) {
+          view.getToggler().setRadioEnabled(com.fahadali.xgram.activity.XgramActivity.debugCollectorThrows(), isUpdate);
+          view.setData(R.string.XgramActivityDebugThrowInfo);
         } else if (itemId == R.id.btn_secret_replacePhoneNumber) {
           view.getToggler().setRadioEnabled(Settings.instance().needHidePhoneNumber(), isUpdate);
         } else if (itemId == R.id.btn_secret_disableQrProcess) {
@@ -834,6 +840,17 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
             items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
             // XGram: the welcome after an update (the highlights with Try it), whatever was seen; it records nothing
             items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramWelcomePreview, R.drawable.baseline_auto_awesome_24, R.string.XgramWelcomePreview, false));
+            items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+          }
+          if (BuildConfig.DEBUG) {
+            // XGram: debug builds' test switches, off by default (they were in XGram's settings): the send menu's test
+            // items, a flood wait without asking Telegram for one (Activity's sync, Mark all as read) and Activity's
+            // collector errors
+            items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_xgramSendMenuTests, R.drawable.baseline_bug_report_24, R.string.XgramSendMenuTests, false));
+            items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+            items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramActivityDebugFlood, R.drawable.baseline_bug_report_24, R.string.XgramActivityDebugFlood, false));
+            items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+            items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_xgramActivityDebugThrow, R.drawable.baseline_bug_report_24, R.string.XgramActivityDebugThrow, false));
             items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
           }
           // items.add(new SettingItem(SettingItem.TYPE_SEPARATOR_FULL));
@@ -1179,6 +1196,16 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
     } else if (viewId == R.id.btn_xgramCameraXTest) {
       com.fahadali.xgram.XgramSettings.instance().setCameraXTest(!com.fahadali.xgram.XgramSettings.instance().cameraXTest()); // XGram Camera X (test)
       adapter.updateValuedSettingById(R.id.btn_xgramCameraXTest);
+    } else if (viewId == R.id.btn_xgramSendMenuTests) {
+      com.fahadali.xgram.XgramSettings.instance().setSendMenuTests(!com.fahadali.xgram.XgramSettings.instance().sendMenuTests()); // XGram: send menu test items
+      adapter.updateValuedSettingById(R.id.btn_xgramSendMenuTests);
+    } else if (viewId == R.id.btn_xgramActivityDebugFlood) {
+      com.fahadali.xgram.activity.XgramActivity.debugInjectFlood(); // XGram Activity: a pretend flood wait
+      UI.showToast(Lang.getString(R.string.XgramActivityDebugFlood), android.widget.Toast.LENGTH_SHORT);
+    } else if (viewId == R.id.btn_xgramActivityDebugThrow) {
+      // XGram Activity: collector errors, for this run only
+      com.fahadali.xgram.activity.XgramActivity.setDebugCollectorThrows(!com.fahadali.xgram.activity.XgramActivity.debugCollectorThrows());
+      adapter.updateValuedSettingById(R.id.btn_xgramActivityDebugThrow);
     } else if (viewId == R.id.btn_xgramUpdatePreview) {
       com.fahadali.xgram.update.XgramUpdateScreen.preview(this); // XGram: the update screen, pretend install
     } else if (viewId == R.id.btn_xgramWelcomePreview) {

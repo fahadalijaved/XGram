@@ -22,8 +22,9 @@ import com.fahadali.xgram.ghost.XgramGhost
 import org.thunderdog.challegram.R
 
 /**
- * Privacy, with Ghost mode first (the main screen's ghost button, the side menu switch and the Quick Settings tile
- * open this page): the master switch and its parts, then protected content and the device.
+ * Privacy and ghost mode, with Ghost mode first (the main screen's ghost button, the side menu switch and the Quick
+ * Settings tile open this page): the master switch and its parts, then protected content and this device (Hide phone
+ * number's only switch).
  */
 @Composable
 fun PrivacyPage() {
@@ -31,7 +32,7 @@ fun PrivacyPage() {
   SettingsPage(title = str(R.string.XgramPrivacy)) {
     val settings = XgramSettings.instance()
 
-    header(R.string.XgramGhostMode, R.drawable.baseline_ghost_24)
+    // No header: the switch is called Ghost mode already.
     group {
       mainSwitch(
         R.id.btn_xgramGhostMode, s(R.string.XgramGhostModeToggle), s(R.string.XgramGhostModeSub), R.drawable.baseline_ghost_24,

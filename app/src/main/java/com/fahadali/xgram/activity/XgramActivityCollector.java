@@ -44,7 +44,7 @@ final class XgramActivityCollector implements MessageListener, ChatListener, Not
   }
 
   /**
-   * Debug builds (Chat list > Activity): every update callback throws first thing, inside its try, so that its catch
+   * Debug builds (Testing Utilities): every update callback throws first thing, inside its try, so that its catch
    * and the listeners TDLib calls after it are tested for real.
    */
   static volatile boolean debugThrow;

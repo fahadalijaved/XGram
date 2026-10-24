@@ -299,7 +299,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     xgramUpdateComposeVisibility();
     xgramConnSetup(); // XGram M3E: connection pill and snackbar
     xgramContentView = contentView;
-    xgramUpdateNavBar(); // XGram: the bottom navigation bar of narrow windows (Appearance > Layout)
+    xgramUpdateNavBar(); // XGram: the bottom navigation bar of narrow windows (Chat list > Navigation)
     // XGram M3E: the floating navigation toolbar's morph follows a finger dragging the pages (XgramNavToolbar)
     pager.addOnPageChangeListener(new androidx.viewpager.widget.ViewPager.SimpleOnPageChangeListener() {
       @Override

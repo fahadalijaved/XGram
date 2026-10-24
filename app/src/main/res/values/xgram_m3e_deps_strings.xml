@@ -3,8 +3,8 @@
   <!-- XGram: settings that depend on other settings (XgramSettingDeps): the reason under a greyed row -->
   <string name="XgramThemesExpressive">Material You colors with Expressive design</string>
   <string name="XgramMaterialYouExpressive">Always on with Expressive design</string>
-  <string name="XgramAutoNightMode">Auto night mode</string>
-  <string name="XgramThemeExpressiveInfo">Expressive design uses your wallpaper colors whatever theme is picked, and night mode switches between light and dark. Your themes and Material You apply again when Expressive design is off.</string>
+  <string name="XgramAutoNightMode">Night mode</string>
+  <string name="XgramThemeExpressiveInfo">Your Telegram X themes and Material You come back when Expressive design is off.</string>
   <string name="XgramNeedsTwoPane">Needs two-pane layout</string>
   <string name="XgramPaneResizableEven">Off while Split evenly is on</string>
   <string name="XgramPaneInfoEven">Split evenly gives the chat list and the chat half the screen each. Turn it off to set their widths with the handle on the line between them.</string>

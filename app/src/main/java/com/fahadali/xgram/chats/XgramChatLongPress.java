@@ -50,8 +50,9 @@ import me.vkryl.core.ColorUtils;
 import me.vkryl.core.collection.IntList;
 
 /**
- * Settings → XGram → Chats → "Long press on a chat": Telegram X's preview, a small pill of quick actions
- * next to the row, or the same preview in a smaller centred card.
+ * Settings → XGram → Chat list → "Long press on a chat": Telegram X's preview, a small pill of quick actions
+ * next to the row, or the same preview in a smaller centred card. All three start from Telegram X's force touch, so
+ * they need its Interface › Chat Previews (XgramSettingDeps.chatLongPressReason).
  */
 public final class XgramChatLongPress {
   public static final int MODE_PREVIEW = 0, MODE_QUICK = 1, MODE_COMPACT = 2;

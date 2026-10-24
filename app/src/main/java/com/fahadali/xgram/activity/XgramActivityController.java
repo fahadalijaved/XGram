@@ -1554,7 +1554,7 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     } else if (id == R.id.btn_xgramActivityHidden) {
       openScreen(new XgramActivityHiddenController(context, tdlib));
     } else if (id == R.id.btn_xgramActivitySettings) {
-      openScreen(com.fahadali.xgram.compose.XgramSettingsPages.open(context, tdlib, XgramSettingsController.SECTION_CHAT_LIST, R.id.btn_xgramActivityShow));
+      openScreen(com.fahadali.xgram.compose.XgramSettingsPages.open(context, tdlib, XgramSettingsController.SECTION_ACTIVITY, R.id.btn_xgramActivityShow));
     }
   }
 

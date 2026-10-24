@@ -35,19 +35,32 @@ class SearchIndex internal constructor(
   val shortcuts: List<SearchEntry>,
   internal val recentKeys: Set<String>
 ) {
-  fun find(key: String): SearchEntry? = byKey[key]
+  fun find(key: String): SearchEntry? = byKey[key] ?: moved(key)
 
   /** The results opened last that are still in the index, newest first. */
   fun recents(): List<SearchEntry> {
     val keys = XgramSettings.instance().searchRecents()
     val list = ArrayList<SearchEntry>(keys.size)
     for (key in keys) {
-      val e = byKey[key]
-      if (e != null) {
+      val e = find(key)
+      if (e != null && !list.contains(e)) {
         list.add(e)
       }
     }
     return list
+  }
+
+  /**
+   * An XGram row remembered on the page it had before (keys are "section/subPage/id:key": Activity, Later and Check In
+   * left Chat list and Messages, the side menu left the main page...): the same row on its page now.
+   */
+  private fun moved(key: String): SearchEntry? {
+    val slash = key.indexOf('/')
+    if (slash <= 0 || !key.substring(0, slash).all { it.isDigit() }) {
+      return null
+    }
+    val row = key.substring(slash) // "/subPage/id:key"
+    return entries.firstOrNull { it.isXgram && it.key.endsWith(row) && it.key.indexOf('/') == it.key.length - row.length }
   }
 }
 
@@ -112,7 +125,12 @@ object SettingsSearchEngine {
         builder.byKey[key]?.let { shortcuts.add(it) }
       }
     }
-    val recent = HashSet(XgramSettings.instance().searchRecents())
+    val index = SearchIndex(origin, builder.entries, builder.byKey, shortcuts, emptySet())
+    // The recents' bonus goes to the rows they are now (a row that moved to another page keeps it)
+    val recent = HashSet<String>()
+    for (key in XgramSettings.instance().searchRecents()) {
+      index.find(key)?.let { recent.add(it.key) }
+    }
     return SearchIndex(origin, builder.entries, builder.byKey, shortcuts, recent)
   }
 
@@ -523,10 +541,10 @@ object SettingsSearchEngine {
         val key = XgramComposeBridge.hitKey(hit)
         add(xgramEntry(key, hit, hit.title, xgramPath(hit), isPage = false, kw = XgramSearchIndex.keywords(hit.id), order = order++))
       }
-      if (env.expressive) {
-        for (item in XgramSearchIndex.navBar()) {
-          add(xgramEntry(item.key, item.hit, item.hit.title, xgramPath(item.hit), isPage = false, kw = item.kw, order = order++))
-        }
+      // The rows only Compose draws: Expressive design's pages, and Message style's rows in both looks
+      val more = if (env.expressive) XgramSearchIndex.navBar() + XgramSearchIndex.customColors() else emptyList()
+      for (item in more + XgramSearchIndex.messageStyle()) {
+        add(xgramEntry(item.key, item.hit, item.hit.title, xgramPath(item.hit), isPage = false, kw = item.kw, order = order++))
       }
     }
 

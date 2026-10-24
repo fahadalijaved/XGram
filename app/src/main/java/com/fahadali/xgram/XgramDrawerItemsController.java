@@ -28,7 +28,7 @@ import org.thunderdog.challegram.v.CustomRecyclerView;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Settings → XGram → Side menu: which items the drawer shows (exteraGram custom drawer), and in what order. */
+/** Settings → XGram → Chat list → Side menu: which items the drawer shows (exteraGram custom drawer), and in what order. */
 public final class XgramDrawerItemsController extends RecyclerViewController<Void> implements View.OnClickListener {
   // Telegram X's order. Settings can't be hidden, only moved; Night mode, Expressive design and Ghost mode sit below the line.
   // XGram: public for the Compose Side menu page (xgram-m3e)
@@ -122,10 +122,7 @@ public final class XgramDrawerItemsController extends RecyclerViewController<Voi
           reorder.bind(item, view);
         }
         Object data = item.getData();
-        if (item.getId() == R.id.btn_xgramHidePhone) {
-          view.setData(R.string.XgramHidePhoneSub);
-          view.getToggler().setRadioEnabled(XgramSettings.instance().hidePhone(), isUpdate);
-        } else if (data instanceof String && view.getToggler() != null) {
+        if (data instanceof String && view.getToggler() != null) {
           view.getToggler().setRadioEnabled(!XgramSettings.instance().drawerItemHidden((String) data), isUpdate);
         }
       }
@@ -140,11 +137,7 @@ public final class XgramDrawerItemsController extends RecyclerViewController<Voi
   /** Rows of this page. The settings search indexes these too. */
   static List<ListItem> buildItems () {
     List<ListItem> items = new ArrayList<>();
-    // The same option as in Settings → XGram → Privacy: the header shows the @username instead of the number.
-    items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
-    items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
-    items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_xgramHidePhone, 0, R.string.XgramHidePhone));
-    items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+    // Hide phone number, the header's line, is in Settings → XGram → Privacy and ghost mode only.
     items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramSideMenuItems));
     addSection(items, KEYS, NAMES);
     addSection(items, TOGGLE_KEYS, TOGGLE_NAMES);
@@ -169,14 +162,6 @@ public final class XgramDrawerItemsController extends RecyclerViewController<Voi
       }
     }
     return count;
-  }
-
-  @Override
-  public void onFocus () {
-    super.onFocus();
-    if (adapter != null) {
-      adapter.updateValuedSettingById(R.id.btn_xgramHidePhone); // also a switch in Privacy
-    }
   }
 
   private static void addSection (List<ListItem> items, String[] keys, int[] names) {
@@ -209,12 +194,7 @@ public final class XgramDrawerItemsController extends RecyclerViewController<Voi
   @Override
   public void onClick (View v) {
     Object tag = v.getTag();
-    if (v.getId() == R.id.btn_xgramHidePhone) {
-      XgramSettings.instance().setHidePhone(adapter.toggleView(v));
-      if (context.getDrawer() != null) {
-        context.getDrawer().xgramRefreshHeader(); // the side menu shows the @username instead
-      }
-    } else if (v.getId() == R.id.btn_xgramResetOrder) {
+    if (v.getId() == R.id.btn_xgramResetOrder) {
       XgramReorder.reset(XgramReorder.DRAWER);
       adapter.setItems(buildItems(), false);
       updateDrawer();

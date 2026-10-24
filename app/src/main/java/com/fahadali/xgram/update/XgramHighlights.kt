@@ -34,9 +34,9 @@ enum class XgramFeature(@DrawableRes val icon: Int, @StringRes val title: Int, @
   LATER(R.drawable.baseline_watch_later_24, R.string.XgramLater, R.string.XgramWelcomeLaterInfo);
 
   /**
-   * Try it, from [from]: Activity (its tab when the navigation bar has one; its switch in Chat list while it is off),
-   * Undo send's delay in Messages (off until one is picked), Check In's part of Messages (it starts from a chat's ⋮
-   * menu), the Later page.
+   * Try it, from [from]: Activity (its tab when the navigation bar has one; its switch in Activity and reminders while
+   * it is off), Undo send's delay in Chats and messages (off until one is picked), Check In's part of Activity and
+   * reminders (it starts from a chat's ⋮ menu), the Later page.
    */
   fun open(from: ViewController<*>) {
     val tdlib = from.tdlib()
@@ -48,10 +48,10 @@ enum class XgramFeature(@DrawableRes val icon: Int, @StringRes val title: Int, @
       ACTIVITY -> if (XgramActivity.isOn()) {
         XgramActivity.open(from)
       } else {
-        from.navigateTo(XgramSettingsPages.open(context, tdlib, XgramSettingsController.SECTION_CHAT_LIST, R.id.btn_xgramActivityShow))
+        from.navigateTo(XgramSettingsPages.open(context, tdlib, XgramSettingsController.SECTION_ACTIVITY, R.id.btn_xgramActivityShow))
       }
       UNDO_SEND -> from.navigateTo(XgramSettingsPages.open(context, tdlib, XgramSettingsController.SECTION_MESSAGES, R.id.btn_xgramUndoSend))
-      CHECK_IN -> from.navigateTo(XgramSettingsPages.open(context, tdlib, XgramSettingsController.SECTION_MESSAGES, R.id.btn_xgramCheckInTimer))
+      CHECK_IN -> from.navigateTo(XgramSettingsPages.open(context, tdlib, XgramSettingsController.SECTION_ACTIVITY, R.id.btn_xgramCheckInTimer))
       LATER -> from.navigateTo(XgramLaterController(context, tdlib))
     }
   }

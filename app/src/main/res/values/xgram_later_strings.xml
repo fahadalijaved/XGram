@@ -129,7 +129,7 @@
   <string name="XgramLaterRowWakeAll">Wake all now</string>
   <string name="XgramLaterRowHide">Hide this row</string>
   <string name="XgramLaterRowHidden">Snoozed row hidden</string>
-  <string name="XgramLaterRowHiddenHint">Turn it back on in Settings › XGram › Chat list</string>
+  <string name="XgramLaterRowHiddenHint">Turn it back on in Settings › XGram › Activity and reminders</string>
 
   <!-- Later page -->
   <string name="XgramLaterSecDue">Due</string>

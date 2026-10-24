@@ -74,7 +74,7 @@ import tgx.td.ChatPosition;
 
 /**
  * The floating navigation bar at the bottom of the chat list on narrow windows (a phone, a Fold's cover screen), as
- * in the new official Telegram, for Appearance > Layout > Navigation bar. Wide windows keep the navigation rail
+ * in the new official Telegram, for Chat list > Navigation > Navigation bar. Wide windows keep the navigation rail
  * ({@link XgramNavRail}); with both on, the rail shows when the window is wide and the bar when it is narrow
  * ({@link XgramTwoPane#isNavBarWindow}).
  * <ul>

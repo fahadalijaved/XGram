@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- XGram M3E: the floating navigation toolbar of narrow windows (XgramNavToolbar) and its page (Appearance > Layout) -->
+<!-- XGram M3E: the floating navigation toolbar of narrow windows (XgramNavToolbar) and its page (Chat list > Navigation) -->
 <resources>
   <!-- The profile: a tab label, the photo button's description and its long press -->
   <string name="XgramNavProfileLabel">Profile</string>
@@ -8,9 +8,9 @@
   <!-- The accounts' sheet: the side menu's drag to reorder and its Log out, for when the side menu is hidden -->
   <string name="XgramNavAccountsManage">Manage accounts</string>
 
-  <!-- Appearance > Layout > Navigation bar -->
+  <!-- Chat list > Navigation > Navigation bar -->
   <string name="XgramNavBarSub">At the bottom on phones and the cover screen. Wide windows keep the navigation rail.</string>
-  <string name="XgramNavBarStyle">Colours</string>
+  <string name="XgramNavBarStyle">Bar colors</string>
   <string name="XgramNavBarStyleStandard">Standard</string>
   <string name="XgramNavBarStyleVibrant">Vibrant</string>
   <string name="XgramNavBarTabs">Tabs</string>
@@ -24,12 +24,16 @@
   <string name="XgramNavBarProfileOff">Off</string>
   <string name="XgramNavBarProfileInfo">Your photo opens your profile. Long press it to switch accounts.</string>
   <string name="XgramNavBarMadeRoom">%1$s was taken out to make room</string>
-  <!-- Where the chat list's compose button goes with the bar -->
+  <!-- Where the chat list's compose button goes: Chat list > Navigation > New chat button (XgramSettingDeps.newChatButton) -->
   <string name="XgramNavBarFab">New chat button</string>
   <string name="XgramNavBarFabSide">At the side</string>
   <string name="XgramNavBarFabSideSub">At the edge of the screen. It stays when the bar hides.</string>
   <string name="XgramNavBarFabWithBar">With the navigation bar</string>
   <string name="XgramNavBarFabWithBarSub">Lined up with the bar, and hides with it</string>
+  <!-- At the side without the navigation bar (the classic look, or the bar off) -->
+  <string name="XgramNewChatSideSub">At the edge of the screen</string>
+  <string name="XgramNavBarFabHidden">Hidden</string>
+  <string name="XgramNavBarFabHiddenSub">Start new chats from Contacts</string>
   <!-- The side menu while the bar is shown; its items go to the chat list's ⋮ menu -->
   <string name="XgramNavBarHideDrawer">Hide the side menu</string>
   <string name="XgramNavBarHideDrawerSub">No menu button or edge swipe while the navigation bar is shown</string>
@@ -37,7 +41,7 @@
   <!-- The same, with Your profile off: no photo, the accounts are in the ⋮ menu -->
   <string name="XgramNavBarHideDrawerInfoNoPhoto">What the side menu had is in the ⋮ menu at the top of the chat list, unless it is a tab. Switch account is there too.</string>
   <string name="XgramNavBarReset">Reset to the default layout</string>
-  <!-- Appearance's row: the setting off, or the tabs and "+ your photo" -->
+  <!-- Chat list's row: the setting off, or the tabs and "+ your photo" -->
   <string name="XgramNavBarOff">Off</string>
   <string name="XgramNavBarWithPhoto">%1$s + your photo</string>
 

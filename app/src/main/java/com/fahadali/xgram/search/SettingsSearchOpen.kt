@@ -134,6 +134,11 @@ object SettingsSearchOpen {
   // XGram
 
   private fun openXgram(from: ViewController<*>, hit: XgramSearchHit) {
+    val open = hit.open
+    if (open != null) {
+      from.navigateTo(open(from)) // a page that isn't an XGram settings page (Message style), the same in both looks
+      return
+    }
     if (!XgramExpressive.isEnabled()) {
       XgramComposeBridge.openClassic(from, hit)
       return
@@ -161,7 +166,7 @@ object SettingsSearchOpen {
     R.id.btn_xgramSectionChatList -> XgramPage.CHAT_LIST
     R.id.btn_xgramSectionChats -> XgramPage.MESSAGES
     R.id.btn_xgramSectionTranslation -> XgramPage.TRANSLATION
-    R.id.btn_xgramSideMenu -> XgramPage.SIDE_MENU
+    R.id.btn_xgramSectionActivity -> XgramPage.ACTIVITY
     R.id.btn_xgramSectionPrivacy -> XgramPage.PRIVACY
     R.id.btn_xgramSectionFilters -> XgramPage.FILTERS
     R.id.btn_xgramSectionHistory -> XgramPage.HISTORY

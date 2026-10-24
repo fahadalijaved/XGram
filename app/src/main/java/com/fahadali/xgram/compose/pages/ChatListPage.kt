@@ -25,36 +25,41 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.fahadali.xgram.XgramComposeBridge
 import com.fahadali.xgram.XgramReorder
 import com.fahadali.xgram.XgramSettingDeps
 import com.fahadali.xgram.XgramSettings
 import com.fahadali.xgram.appearance.XgramChatListViewCard
+import com.fahadali.xgram.appearance.XgramExpressive
 import com.fahadali.xgram.chats.XgramChatListMode
 import com.fahadali.xgram.chats.XgramChatLongPress
 import com.fahadali.xgram.chats.XgramCommunities
 import com.fahadali.xgram.compose.ChoiceSpec
-import com.fahadali.xgram.compose.ConfirmSpec
 import com.fahadali.xgram.compose.LocalXgramHost
 import com.fahadali.xgram.compose.XgramPage
 import com.fahadali.xgram.compose.ui.LocalXgramHighlight
 import com.fahadali.xgram.compose.ui.SettingsPage
 import com.fahadali.xgram.compose.ui.s
 import com.fahadali.xgram.compose.ui.str
+import com.fahadali.xgram.layout.XgramNavRail
 import com.fahadali.xgram.layout.XgramNavToolbar
-import com.fahadali.xgram.later.XgramLater
-import com.fahadali.xgram.later.XgramLaterRecord
 import org.thunderdog.challegram.R
 import org.thunderdog.challegram.unsorted.Settings
 
-/** Chat List: the chat list view, folders, merged communities, what a long press on a chat does, the screen around the list. */
+/**
+ * Chat list: the chat list view, folders, getting around (the bars, the side menu, the header's buttons, the new chat
+ * button), merged communities, what a long press on a chat does and the order of its actions.
+ */
 @Composable
 fun ChatListPage() {
   val host = LocalXgramHost.current
   SettingsPage(title = str(R.string.XgramChatList)) {
     val settings = XgramSettings.instance()
     val accountId = host.tdlib.accountId()
+    val expressive = XgramExpressive.isEnabled()
 
-    // One line, two lines or three lines: the tiles pick it at once, the chat list springs to it
+    // One line, two lines or three lines: the tiles pick it at once, the chat list springs to it. The header names the
+    // card, which has no title of its own (the classic page's row has, so it has no header).
     header(R.string.XgramChatListView)
     group {
       custom(CHAT_LIST_VIEW_KEY, R.id.btn_xgramChatListView) { shapes ->
@@ -100,20 +105,96 @@ fun ChatListPage() {
       }
     }
 
+    // Getting around: the bars, the side menu, the buttons above the list and the new chat button
+    header(R.string.XgramHeaderNavigation)
+    group {
+      // The floating navigation bar at the bottom of the chat list on narrow windows; with the rail on too, the rail
+      // shows on wide windows and the bar on narrow ones. Expressive design: the M3E floating toolbar, whose page sets
+      // it up (its tabs, the photo, the colors); the same id, so settings search still finds it
+      if (expressive) {
+        link(R.id.btn_xgramBottomNav, s(R.string.XgramBottomNavOption), subtitle = XgramNavToolbar.summary()) {
+          host.openPage(XgramPage.NAV_BAR)
+        }
+        // Expressive design's navigation rail on wide windows (only there); off: the chat list's own header (tabs, ☰)
+        // is back at once
+        val railReason = XgramNavRail.settingReason()
+        switch(
+          R.id.btn_xgramNavRail, s(R.string.XgramNavRailOption),
+          s(if (railReason != 0) railReason else R.string.XgramNavRailOptionSub),
+          checked = settings.navRail(), enabled = railReason == 0
+        ) {
+          settings.setNavRail(it)
+          host.activity.xgramTwoPane()?.update()
+        }
+      } else {
+        switch(
+          R.id.btn_xgramBottomNav, s(R.string.XgramBottomNavOption), s(R.string.XgramBottomNavOptionSub),
+          checked = settings.bottomNav()
+        ) {
+          settings.setBottomNav(it)
+          host.activity.xgramTwoPane()?.update()
+        }
+      }
+      val hiddenItems = XgramComposeBridge.drawerHiddenCount()
+      value(
+        R.id.btn_xgramSideMenu, s(R.string.XgramSideMenu),
+        if (hiddenItems > 0) s(R.string.XgramHiddenCount, hiddenItems) else s(R.string.XgramSideMenuSummary)
+      ) {
+        host.openPage(XgramPage.SIDE_MENU)
+      }
+      // The chat list's top row: the lock, ghost mode, Activity's bell and Search (the lock's and the bell's only switches)
+      val hiddenButtons = com.fahadali.xgram.chats.XgramHeaderButtonsController.hiddenCount()
+      value(
+        R.id.btn_xgramHeaderButtons, s(R.string.XgramHeaderButtons),
+        if (hiddenButtons > 0) s(R.string.XgramHiddenCount, hiddenButtons) else s(R.string.XgramAllShown)
+      ) {
+        host.openPage(XgramPage.HEADER_BUTTONS)
+      }
+      // New chat button: at the side, with the navigation bar (only while the bar is on) or hidden
+      val newChat = XgramSettingDeps.newChatButton()
+      value(R.id.btn_xgramHideFab, s(R.string.XgramNavBarFab), s(XgramSettingDeps.newChatButtonName(newChat))) {
+        val choices = XgramSettingDeps.newChatButtonChoices().toList()
+        host.choose(
+          ChoiceSpec(
+            title = s(R.string.XgramNavBarFab),
+            options = choices.map { s(XgramSettingDeps.newChatButtonName(it)) to it },
+            selected = newChat,
+            subtitles = choices.map { s(XgramSettingDeps.newChatButtonInfo(it)) }
+          ) { mode ->
+            XgramSettingDeps.setNewChatButton(mode)
+            host.activity.xgramTwoPane()?.update() // where the button goes; Hide reaches the chat list by itself
+          }
+        )
+      }
+      // Only the status bar text reads it, and Expressive design shows the connection in the app instead: not shown then.
+      if (XgramSettingDeps.connectionStatusPositionEnabled()) {
+        switch(
+          R.id.btn_xgramConnectionStatusStart, s(R.string.XgramConnectionStatusStart), s(R.string.XgramConnectionStatusStartSub),
+          checked = settings.connectionStatusAtStart()
+        ) {
+          settings.setConnectionStatusAtStart(it)
+        }
+      }
+    }
+
     header(R.string.XgramChats)
     group {
       switch(R.id.btn_xgramMergeCommunities, s(R.string.XgramMergeCommunities), s(R.string.XgramMergeCommunitiesSub), checked = settings.mergeCommunities()) {
         settings.setMergeCommunities(it)
         XgramCommunities.notifyAllAccounts() // the setting is shared by every account
       }
+      // All three start from Telegram X's Chat Previews (Interface): with it off, the reason instead
+      val longPressReason = XgramSettingDeps.chatLongPressReason()
       buttons(
         R.id.btn_xgramChatLongPress, s(R.string.XgramChatLongPress),
         listOf(
           s(R.string.XgramChatLongPressPreview) to XgramChatLongPress.MODE_PREVIEW,
-          s(R.string.XgramComposeLongPressQuick) to XgramChatLongPress.MODE_QUICK,
-          s(R.string.XgramComposeLongPressCompact) to XgramChatLongPress.MODE_COMPACT
+          s(R.string.XgramChatLongPressQuick) to XgramChatLongPress.MODE_QUICK,
+          s(R.string.XgramChatLongPressCompact) to XgramChatLongPress.MODE_COMPACT
         ),
-        selected = settings.chatLongPress()
+        selected = settings.chatLongPress(),
+        enabled = longPressReason == 0,
+        subtitle = if (longPressReason != 0) s(longPressReason) else null
       ) {
         settings.setChatLongPress(it)
       }
@@ -124,160 +205,15 @@ fun ChatListPage() {
         host.openPage(XgramPage.CHAT_ACTIONS)
       }
     }
-
-    // Activity: every mention, reply and reaction in one place (com.fahadali.xgram.activity)
-    header(R.string.XgramActivity)
-    group {
-      switch(R.id.btn_xgramActivityShow, s(R.string.XgramActivityShow), s(R.string.XgramActivityShowInfo), checked = settings.activityOn()) {
-        settings.setActivityOn(it)
-      }
-    }
-    group {
-      val activityReason = XgramSettingDeps.activityOptionsReason()
-      val activityEnabled = activityReason == 0
-      fun sub(info: Int): String = s(if (activityEnabled) info else activityReason)
-      switch(R.id.btn_xgramActivityReactions, s(R.string.XgramActivityIncludeReactions), sub(R.string.XgramActivityIncludeReactionsInfo),
-        checked = settings.activityReactions(), enabled = activityEnabled) {
-        settings.setActivityReactions(it)
-      }
-      switch(R.id.btn_xgramActivityMuted, s(R.string.XgramActivityIncludeMuted), sub(R.string.XgramActivityIncludeMutedInfo),
-        checked = settings.activityMuted(), enabled = activityEnabled) {
-        settings.setActivityMuted(it)
-      }
-      switch(R.id.btn_xgramActivityDiscussion, s(R.string.XgramActivityIncludeDiscussion), sub(R.string.XgramActivityIncludeDiscussionInfo),
-        checked = settings.activityDiscussion(), enabled = activityEnabled) {
-        settings.setActivityDiscussion(it)
-      }
-      switch(R.id.btn_xgramActivityLookBack, s(R.string.XgramActivityLookBack), sub(R.string.XgramActivityLookBackInfo),
-        checked = settings.activityLookBack(), enabled = activityEnabled) {
-        settings.setActivityLookBack(it)
-      }
-      switch(R.id.btn_xgramActivityBadge, s(R.string.XgramActivityBadge), sub(R.string.XgramActivityBadgeInfo),
-        checked = settings.activityBadge(), enabled = activityEnabled) {
-        settings.setActivityBadge(it)
-      }
-      switch(R.id.btn_xgramActivityHeader, s(R.string.XgramActivityHeader), sub(R.string.XgramActivityHeaderInfo),
-        checked = settings.activityHeader(), enabled = activityEnabled) {
-        settings.setActivityHeader(it)
-      }
-      // The floating toolbar's Activity tab is chosen with the other tabs, on the Navigation bar page
-      val activityTab = (settings.navTabs() and (1 shl XgramNavToolbar.DEST_ACTIVITY)) != 0
-      value(R.id.btn_xgramActivityNavBar, s(R.string.XgramActivityNavBar),
-        s(if (activityTab) R.string.XgramActivityNavBarTab else R.string.XgramActivityBarOff), enabled = activityEnabled) {
-        host.openPage(XgramPage.NAV_BAR)
-      }
-    }
-    description(R.string.XgramActivityNavBarInfo)
-    group {
-      val hidden = com.fahadali.xgram.activity.XgramActivityStore.instance().summary(accountId).hiddenCount()
-      value(
-        R.id.btn_xgramActivityHidden, s(R.string.XgramActivityHiddenChats),
-        when (hidden) {
-          0 -> s(R.string.XgramNone)
-          1 -> s(R.string.XgramActivityHiddenCountOne)
-          else -> s(R.string.XgramActivityHiddenCountMany, hidden)
-        }
-      ) {
-        host.open(com.fahadali.xgram.activity.XgramActivityHiddenController(host.activity, host.tdlib))
-      }
-      action(R.id.btn_xgramActivityClearAll, s(R.string.XgramActivityClearAll), s(R.string.XgramActivityClearAllInfo), destructive = true) {
-        host.confirm(ConfirmSpec(
-          title = s(R.string.XgramActivityClearAllConfirm),
-          text = s(R.string.XgramActivityClearAllInfo),
-          confirm = s(R.string.XgramActivityClearAllButton),
-          destructive = true
-        ) {
-          com.fahadali.xgram.activity.XgramActivityStore.instance().clearAll(accountId)
-        })
-      }
-    }
-    description(R.string.XgramActivityLocalNote)
-    if (org.thunderdog.challegram.BuildConfig.DEBUG) {
-      // Debug builds: a flood wait without asking Telegram for one (the sync, Mark all as read), and collector errors
-      group {
-        action(R.id.btn_xgramActivityDebugFlood, s(R.string.XgramActivityDebugFlood)) {
-          com.fahadali.xgram.activity.XgramActivity.debugInjectFlood()
-        }
-        // Not a setting: a switch of this run only, so the page is told to build again
-        switch(
-          R.id.btn_xgramActivityDebugThrow, s(R.string.XgramActivityDebugThrow), s(R.string.XgramActivityDebugThrowInfo),
-          checked = com.fahadali.xgram.activity.XgramActivity.debugCollectorThrows()
-        ) {
-          com.fahadali.xgram.activity.XgramActivity.setDebugCollectorThrows(it)
-          host.changed()
-        }
-      }
-    }
-
-    // Later: snoozed chats and reminders (the same rows as the classic page)
-    header(R.string.XgramLaterHeader)
-    group {
-      switch(R.id.btn_xgramLaterRow, s(R.string.XgramLaterRowSetting), s(R.string.XgramLaterRowSettingSub), checked = XgramLater.showRow()) {
-        XgramLater.setShowRow(it)
-      }
-      switch(R.id.btn_xgramLaterRaise, s(R.string.XgramLaterRaise), s(R.string.XgramLaterRaiseSub), checked = XgramLater.raiseWoken()) {
-        XgramLater.setRaiseWoken(it)
-      }
-      value(R.id.btn_xgramLaterWakeEarly, s(R.string.XgramLaterWakeEarly), XgramLater.wakeEarlyName(XgramLater.wakeEarlyMode())) {
-        host.choose(
-          ChoiceSpec(
-            title = s(R.string.XgramLaterWakeEarly),
-            options = listOf(
-              s(R.string.XgramLaterWakeToMe) to XgramLaterRecord.WAKE_TO_ME,
-              s(R.string.XgramLaterWakeAny) to XgramLaterRecord.WAKE_ANY,
-              s(R.string.XgramLaterWakeTimeOnly) to XgramLaterRecord.WAKE_TIME_ONLY
-            ),
-            selected = XgramLater.wakeEarlyMode(),
-            // XGram Later: the sub-line belongs to "On messages to me" only
-            subtitles = listOf(s(R.string.XgramLaterWakeToMeSub), null, null)
-          ) { mode ->
-            XgramLater.setWakeEarlyMode(mode)
-            host.changed()
-          }
-        )
-      }
-      value(
-        R.id.btn_xgramLaterExact, s(R.string.XgramLaterExact),
-        XgramLater.exactRowValue(host.activity)
-      ) {
-        XgramLater.openExactRow(host.controller)
-      }
-      link(R.id.btn_xgramLaterChannel, s(R.string.XgramLaterChannelLink), s(R.string.XgramLaterChannelLinkSub)) {
-        XgramLater.openReminderChannelSettings(host.activity)
-      }
-    }
-
-    header(R.string.XgramHeaderScreen)
-    group {
-      // The chat list's top row: the lock, ghost mode, Activity's bell and Search
-      val hiddenButtons = com.fahadali.xgram.chats.XgramHeaderButtonsController.hiddenCount()
-      value(
-        R.id.btn_xgramHeaderButtons, s(R.string.XgramHeaderButtons),
-        if (hiddenButtons > 0) s(R.string.XgramHiddenCount, hiddenButtons) else s(R.string.XgramAllShown)
-      ) {
-        host.openPage(XgramPage.HEADER_BUTTONS)
-      }
-      switch(R.id.btn_xgramHideFab, s(R.string.XgramHideFab), s(R.string.XgramHideFabSub), checked = settings.hideFab()) {
-        settings.setHideFab(it)
-      }
-      // Only the status bar text reads it, and Expressive design shows the connection in the app instead.
-      val statusReason = XgramSettingDeps.connectionStatusPositionReason()
-      switch(
-        R.id.btn_xgramConnectionStatusStart, s(R.string.XgramConnectionStatusStart),
-        s(if (statusReason != 0) statusReason else R.string.XgramConnectionStatusStartSub),
-        checked = settings.connectionStatusAtStart(), enabled = statusReason == 0
-      ) {
-        settings.setConnectionStatusAtStart(it)
-      }
-    }
   }
 }
 
 private const val CHAT_LIST_VIEW_KEY = "chatListView"
 
 /**
- * The chat list view card (the same native view as on the Themes page) in the group's shape, on the group's card color,
- * pulsing to secondaryContainer when settings search points at it (search knows the row by its id alone).
+ * The chat list view card (a native view, XgramChatListViewCard; Telegram X's Themes page has a row that opens this page)
+ * in the group's shape, on the group's card color, pulsing to secondaryContainer when settings search points at it
+ * (search knows the row by its id alone).
  */
 @Composable
 private fun ChatListViewCardRow(shapes: ListItemShapes) {
@@ -297,7 +233,7 @@ private fun ChatListViewCardRow(shapes: ListItemShapes) {
         }
       },
       update = { card ->
-        // Read: the card follows a change made elsewhere (Themes, the popup) and every theme or Pure black change
+        // Read: the card follows a change made elsewhere (the classic popup) and every theme or Pure black change
         host.version
         host.themeVersion
         host.isDark

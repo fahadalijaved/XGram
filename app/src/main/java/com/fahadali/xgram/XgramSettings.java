@@ -414,7 +414,7 @@ public final class XgramSettings {
     pmc().putInt(KEY_HISTORY_RETENTION, days);
   }
 
-  // Forwarding (Messages > Defaults, see com.fahadali.xgram.chats.XgramForwardOptions): whether the forward sheet
+  // Sender in forwards (Chats and messages > Forwarding and deleting, see com.fahadali.xgram.chats.XgramForwardOptions): whether the forward sheet
   // starts with Show sender or Hide sender
 
   public static final String KEY_FORWARD_SENDER = "xgram_forward_sender";
@@ -1040,10 +1040,13 @@ public final class XgramSettings {
     pmc().putInt(toRight ? "xgram_swipe_right" : "xgram_swipe_left", action);
   }
 
-  // Enter to send (Messages page, see com.fahadali.xgram.layout.XgramKeyboard)
+  // Enter to send (Chats and messages > Sending, see com.fahadali.xgram.layout.XgramKeyboard)
 
   public static final String KEY_ENTER_TO_SEND = "xgram_enter_to_send";
-  /** Auto: Enter sends on a hardware keyboard; the on-screen keyboard follows Telegram X's Send with Enter. */
+  /**
+   * Auto: Enter sends on a hardware keyboard; the on-screen keyboard's adds a new line. Telegram X's Send with Enter is
+   * carried over once (XgramKeyboard.enterToSend), then no longer read.
+   */
   public static final int ENTER_TO_SEND_AUTO = 0;
   public static final int ENTER_TO_SEND_ON = 1;
   public static final int ENTER_TO_SEND_OFF = 2;
@@ -1067,7 +1070,7 @@ public final class XgramSettings {
     putInt(KEY_ENTER_TO_SEND, value);
   }
 
-  // Undo send (Messages > Message box, see com.fahadali.xgram.chats.XgramUndoSend)
+  // Undo send (Chats and messages > Sending, see com.fahadali.xgram.chats.XgramUndoSend)
 
   public static final String KEY_UNDO_SEND = "xgram_undo_send";
   /**
@@ -1703,7 +1706,7 @@ public final class XgramSettings {
     put(KEY_VIDEO_AUTO_HIDE, value);
   }
 
-  // Foldables (Appearance > Layout, see com.fahadali.xgram.layout.XgramWindow). Read on first use: asked while
+  // Foldables (Appearance > Large screens and foldables, see com.fahadali.xgram.layout.XgramWindow). Read on first use: asked while
   // measuring the two panes.
 
   public static final String KEY_FOLD_HINGE_SPLIT = "xgram_fold_hinge_split";
@@ -1835,7 +1838,7 @@ public final class XgramSettings {
     putInt(KEY_COLOR_STYLE, colorStyle);
   }
 
-  // Two panes (Appearance > Layout, see com.fahadali.xgram.layout.XgramTwoPane): how wide the chat list pane is.
+  // Two panes (Appearance > Large screens and foldables, see com.fahadali.xgram.layout.XgramTwoPane): how wide the chat list pane is.
   // Read while measuring the panes, so cached.
 
   public static final String KEY_PANE_SPLIT_EVENLY = "xgram_split_evenly";
@@ -1873,7 +1876,7 @@ public final class XgramSettings {
     put(KEY_PANE_RESIZABLE, value);
   }
 
-  // Navigation rail (Appearance > Layout, see com.fahadali.xgram.layout.XgramNavRail): Expressive design's rail on
+  // Navigation rail (Chat list > Navigation, see com.fahadali.xgram.layout.XgramNavRail): Expressive design's rail on
   // wide windows. Read while the layout is checked, so cached.
 
   public static final String KEY_NAV_RAIL = "xgram_nav_rail";
@@ -1905,7 +1908,7 @@ public final class XgramSettings {
     pmc().putInt(KEY_MISSED_CALLS_SEEN + accountId, date);
   }
 
-  // Navigation bar (Appearance > Layout, see com.fahadali.xgram.layout.XgramNavBar): the floating bar at the bottom of
+  // Navigation bar (Chat list > Navigation, see com.fahadali.xgram.layout.XgramNavBar): the floating bar at the bottom of
   // the chat list on narrow windows (wide ones keep the rail). Read while the layout is checked, so cached.
 
   public static final String KEY_BOTTOM_NAV = "xgram_bottom_nav";
@@ -2065,7 +2068,7 @@ public final class XgramSettings {
     put(KEY_NAV_HIDE_DRAWER, false);
   }
 
-  // Activity (Chat list > Activity, com.fahadali.xgram.activity): every mention, reply and reaction in one place.
+  // Activity (Activity and reminders, com.fahadali.xgram.activity): every mention, reply and reaction in one place.
   // Read by the TDLib thread for every new message, so cached. The items themselves are in the activity's own store.
 
   public static final String KEY_ACTIVITY_ON = "xgram_activity_on", KEY_ACTIVITY_REACTIONS = "xgram_activity_reactions",

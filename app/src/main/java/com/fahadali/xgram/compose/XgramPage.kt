@@ -15,6 +15,7 @@ import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import com.fahadali.xgram.XgramSettingsController
+import com.fahadali.xgram.compose.pages.ActivityPage
 import com.fahadali.xgram.compose.pages.AppearancePage
 import com.fahadali.xgram.compose.pages.BackupPage
 import com.fahadali.xgram.compose.pages.ChatActionsPage
@@ -23,6 +24,7 @@ import com.fahadali.xgram.compose.pages.FiltersPage
 import com.fahadali.xgram.compose.pages.HiddenPeoplePage
 import com.fahadali.xgram.compose.pages.HistoryPage
 import com.fahadali.xgram.compose.pages.InputButtonsPage
+import com.fahadali.xgram.compose.pages.LargeScreensPage
 import com.fahadali.xgram.compose.pages.MainPage
 import com.fahadali.xgram.compose.pages.MessageMenuPage
 import com.fahadali.xgram.compose.pages.MessagesPage
@@ -46,7 +48,7 @@ import org.thunderdog.challegram.navigation.ViewController
 enum class XgramPage {
   MAIN, APPEARANCE, CHAT_LIST, MESSAGES, TRANSLATION, SIDE_MENU, PRIVACY, FILTERS, HISTORY, NETWORK, UPDATES, BACKUP,
   MESSAGE_MENU, CHAT_ACTIONS, INPUT_BUTTONS, TRANSLATE_TARGET, WORD_FILTERS, HIDDEN_PEOPLE, WHATS_NEW,
-  NAV_BAR, SEARCH, XDRIVE, HEADER_BUTTONS;
+  NAV_BAR, SEARCH, XDRIVE, HEADER_BUTTONS, ACTIVITY, LARGE_SCREENS;
 
   companion object {
     /** The page of an XgramSettingsController.SECTION_* (Ghost mode is the top of Privacy). */
@@ -62,6 +64,8 @@ enum class XgramPage {
       XgramSettingsController.SECTION_CHAT_LIST -> CHAT_LIST
       XgramSettingsController.SECTION_TRANSLATION -> TRANSLATION
       XgramSettingsController.SECTION_FILTERS -> FILTERS
+      XgramSettingsController.SECTION_ACTIVITY -> ACTIVITY
+      XgramSettingsController.SECTION_LARGE_SCREENS -> LARGE_SCREENS
       else -> MAIN
     }
   }
@@ -94,6 +98,8 @@ internal fun XgramPageContent(page: XgramPage) {
     XgramPage.SEARCH -> UniversalSearchPage()
     XgramPage.XDRIVE -> com.fahadali.xgram.compose.pages.XDrivePage()
     XgramPage.HEADER_BUTTONS -> com.fahadali.xgram.compose.pages.HeaderButtonsPage()
+    XgramPage.ACTIVITY -> ActivityPage()
+    XgramPage.LARGE_SCREENS -> LargeScreensPage()
   }
 }
 

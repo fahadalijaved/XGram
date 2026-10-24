@@ -114,7 +114,10 @@ class GroupScope internal constructor() {
     MainSwitchRow(id, key, title, subtitle, icon, checked, shapes, onChange)
   }
 
-  /** A row whose second line is its current value; opens a choice or a page. */
+  /**
+   * A row whose second line is its current value; opens a choice or a page. [onLongClick]: a second action (About ›
+   * Version copies it), named [longClickLabel] for TalkBack.
+   */
   fun value(
     id: Int,
     title: String,
@@ -122,9 +125,11 @@ class GroupScope internal constructor() {
     @DrawableRes icon: Int = 0,
     enabled: Boolean = true,
     key: String? = null,
+    longClickLabel: String? = null,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit
   ) = add(id, key, PageBlock.TYPE_VALUE) { shapes ->
-    ClickRow(id, key, title, value, icon, IconStyle.PLAIN, enabled, false, null, null, shapes, onClick)
+    ClickRow(id, key, title, value, icon, IconStyle.PLAIN, enabled, false, null, null, shapes, onClick, onLongClick, longClickLabel)
   }
 
   /** A row that opens a page, with a fixed line under its title. No chevron (Android 16). */
@@ -321,7 +326,7 @@ private fun MainSwitchRow(
 private fun ClickRow(
   id: Int, key: String?, title: String, subtitle: String?, @DrawableRes icon: Int, iconStyle: IconStyle, enabled: Boolean,
   destructive: Boolean, trailing: (@Composable () -> Unit)?, below: (@Composable () -> Unit)?, shapes: ListItemShapes,
-  onClick: () -> Unit
+  onClick: () -> Unit, onLongClick: (() -> Unit)? = null, onLongClickLabel: String? = null
 ) {
   val host = LocalXgramHost.current
   val cs = MaterialTheme.colorScheme
@@ -351,6 +356,8 @@ private fun ClickRow(
     leadingContent = rowLeading(icon, iconStyle, if (destructive) cs.error else Color.Unspecified),
     trailingContent = trailing,
     supportingContent = supporting,
+    onLongClick = onLongClick,
+    onLongClickLabel = onLongClickLabel,
     colors = settingsRowColors(id, key),
     content = {
       if (destructive) Text(title, color = cs.error) else Text(title)

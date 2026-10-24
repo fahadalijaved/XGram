@@ -875,7 +875,7 @@ public final class XgramLaterController extends RecyclerViewController<XgramLate
           return true;
         });
     } else if (id == R.id.btn_xgramLaterMSettings) {
-      navigateTo(com.fahadali.xgram.compose.XgramSettingsPages.open(context(), tdlib, com.fahadali.xgram.XgramSettingsController.SECTION_CHAT_LIST, R.id.btn_xgramLaterRow));
+      navigateTo(com.fahadali.xgram.compose.XgramSettingsPages.open(context(), tdlib, com.fahadali.xgram.XgramSettingsController.SECTION_ACTIVITY, R.id.btn_xgramLaterRow));
     }
   }
 }

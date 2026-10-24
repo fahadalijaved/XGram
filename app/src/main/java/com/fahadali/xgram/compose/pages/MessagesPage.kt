@@ -22,7 +22,6 @@ import com.fahadali.xgram.chats.XgramInlineVideo
 import com.fahadali.xgram.chats.XgramInputButtonsController
 import com.fahadali.xgram.chats.XgramSwipeActions
 import com.fahadali.xgram.chats.XgramUndoSend
-import com.fahadali.xgram.checkin.XgramCheckInSheet
 import com.fahadali.xgram.compose.ChoiceSpec
 import com.fahadali.xgram.compose.LocalXgramHost
 import com.fahadali.xgram.compose.XgramComposeHost
@@ -34,7 +33,10 @@ import com.fahadali.xgram.compose.ui.str
 import com.fahadali.xgram.layout.XgramKeyboard
 import org.thunderdog.challegram.R
 
-/** Messages: the message menu, swipes and taps, defaults, links, videos, the message box and Telegram's AI tools. */
+/**
+ * Chats and messages: the message menu, gestures, sending (the message box, Enter, Undo send), forwarding and deleting,
+ * videos, links, reactions in channels, details (seconds, IDs) and Telegram's AI tools.
+ */
 @Composable
 fun MessagesPage() {
   val host = LocalXgramHost.current
@@ -57,18 +59,6 @@ fun MessagesPage() {
       }
     }
 
-    header(R.string.XgramR7ChReactHeader)
-    group {
-      switch(
-        R.id.btn_xgramR7ChannelReactions, s(R.string.XgramR7ChReactTitle), s(R.string.XgramR7ChReactSub),
-        checked = settings.channelReactions()
-      ) {
-        // Open chats follow at once: MessagesController listens for the key.
-        settings.setChannelReactions(it)
-      }
-    }
-    description(R.string.XgramR7ChReactInfo)
-
     header(R.string.XgramHeaderGestures)
     group {
       swipe(host, settings, R.id.btn_xgramSwipeLeft, R.string.XgramSwipeLeft, toRight = false)
@@ -76,90 +66,21 @@ fun MessagesPage() {
     }
     description(R.string.XgramSwipeInfo)
     group {
-      switch(R.id.btn_xgramTapTimeDetails, s(R.string.XgramTapTimeDetails), s(R.string.XgramTapTimeDetailsSub), checked = settings.tapTimeForDetails()) {
-        settings.setTapTimeForDetails(it)
-      }
-      switch(R.id.btn_xgramPullToNext, s(R.string.XgramPullToNext), s(R.string.XgramPullToNextSub), checked = settings.pullToNext()) {
-        settings.setPullToNext(it)
-      }
       // Select text without the menu: a long press on text that moves selects (XgramTextSelection)
       switch(R.id.btn_xgramTextSelectDrag, s(R.string.XgramSelTextDrag), s(R.string.XgramSelTextDragSub), checked = settings.textSelectDrag()) {
         settings.setTextSelectDrag(it)
       }
-    }
-
-    header(R.string.XgramHeaderDefaults)
-    group {
-      switch(
-        R.id.btn_xgramDeleteForEveryone, s(R.string.XgramDeleteForEveryone), s(R.string.XgramCheckedByDefault),
-        checked = settings.deleteForEveryoneByDefault()
-      ) {
-        settings.setDeleteForEveryoneByDefault(it)
-      }
-      // Forwarding: whether the forward sheet starts with Show sender or Hide sender, or as the last forward did
-      val forwardSender = settings.forwardSender()
-      value(R.id.btn_xgramForwardSender, s(R.string.XgramFwdSetting), XgramForwardOptions.defaultName(forwardSender)) {
-        host.choose(
-          ChoiceSpec(
-            title = s(R.string.XgramFwdSetting),
-            info = s(R.string.XgramFwdSettingInfo),
-            options = XgramForwardOptions.DEFAULTS.map { XgramForwardOptions.defaultName(it) to it },
-            selected = forwardSender
-          ) { picked ->
-            settings.setForwardSender(picked)
-          }
-        )
+      switch(R.id.btn_xgramPullToNext, s(R.string.XgramPullToNext), s(R.string.XgramPullToNextSub), checked = settings.pullToNext()) {
+        settings.setPullToNext(it)
       }
     }
 
-    header(R.string.XgramHeaderLinks)
+    header(R.string.XgramHeaderSending)
     group {
-      switch(R.id.btn_xgramCleanLinks, s(R.string.XgramCleanLinks), s(R.string.XgramCleanLinksSub), checked = settings.cleanLinks()) {
-        settings.setCleanLinks(it)
-      }
-      switch(R.id.btn_xgramFixLinkPreviews, s(R.string.XgramFixLinkPreviews), s(R.string.XgramFixLinkPreviewsSub), checked = settings.fixLinkPreviews()) {
-        settings.setFixLinkPreviews(it)
-      }
-    }
-    description(R.string.XgramFixLinkPreviewsInfo)
-
-    header(R.string.XgramHeaderVideos)
-    group {
-      switch(R.id.btn_xgramInlineVideo, s(R.string.XgramInlineVideo), s(R.string.XgramInlineVideoSub), checked = settings.inlineVideo()) {
-        settings.setInlineVideo(it)
-        // Open chats are rebuilt too: whether a video message gets the player is decided when the message is made.
-        XgramInlineVideo.postSettingChanged()
-      }
-      buttons(
-        R.id.btn_xgramInlineVideoStart, s(R.string.XgramInlineVideoStart),
-        listOf(
-          s(R.string.XgramComposeInlineVideoAuto) to XgramSettings.INLINE_VIDEO_START_AUTO,
-          s(R.string.XgramInlineVideoStartTap) to XgramSettings.INLINE_VIDEO_START_TAP
-        ),
-        selected = settings.inlineVideoStart(),
-        enabled = XgramSettingDeps.inlineVideoStartEnabled() // only read for videos played in the message
-      ) {
-        settings.setInlineVideoStart(it)
-      }
-    }
-    // What the rows do, or that Telegram X's Autoplay GIFs keeps videos from starting by themselves.
-    description(XgramSettingDeps.inlineVideoInfo())
-    group {
-      switch(
-        R.id.btn_xgramVideoAutoHide, s(R.string.XgramVideoAutoHide), s(R.string.XgramVideoAutoHideSub),
-        checked = settings.videoAutoHide()
-      ) {
-        settings.setVideoAutoHide(it)
-      }
-    }
-    description(R.string.XgramVideoAutoHideInfo)
-
-    header(R.string.XgramMessageBox)
-    group {
-      val hidden = XgramInputButtonsController.hiddenCount()
+      val hiddenButtons = XgramInputButtonsController.hiddenCount()
       value(
         R.id.btn_xgramInputButtons, s(R.string.XgramInputButtons),
-        if (hidden > 0) s(R.string.XgramHiddenCount, hidden) else s(R.string.XgramAllShown)
+        if (hiddenButtons > 0) s(R.string.XgramHiddenCount, hiddenButtons) else s(R.string.XgramAllShown)
       ) {
         host.openPage(XgramPage.INPUT_BUTTONS)
       }
@@ -175,14 +96,16 @@ fun MessagesPage() {
     }
     description(R.string.XgramTapToRecordInfo)
     group {
-      // Enter to send: Auto keeps Telegram X's switch and sends when a hardware keyboard is attached (XgramKeyboard).
-      value(R.id.btn_xgramEnterToSend, s(R.string.XgramEnterToSend), XgramKeyboard.enterToSendName(settings.enterToSend())) {
+      // Enter to send, the only Enter control: Telegram X's Send with Enter is hidden, its old value carried over once
+      // (XgramKeyboard.enterToSend). Auto sends when a hardware keyboard is attached.
+      val enterToSend = XgramKeyboard.enterToSend()
+      value(R.id.btn_xgramEnterToSend, s(R.string.XgramEnterToSend), XgramKeyboard.enterToSendName(enterToSend)) {
         host.choose(
           ChoiceSpec(
             title = s(R.string.XgramEnterToSend),
             options = listOf(XgramSettings.ENTER_TO_SEND_AUTO, XgramSettings.ENTER_TO_SEND_ON, XgramSettings.ENTER_TO_SEND_OFF)
               .map { XgramKeyboard.enterToSendName(it) to it },
-            selected = settings.enterToSend()
+            selected = enterToSend
           ) { picked ->
             settings.setEnterToSend(picked)
           }
@@ -232,54 +155,98 @@ fun MessagesPage() {
     }
     description(R.string.XgramUndoSendInfo)
 
-    header(R.string.XgramCheckInHeader)
+    header(R.string.XgramHeaderForwardDelete)
     group {
-      val timer = settings.checkInTimer()
-      value(R.id.btn_xgramCheckInTimer, s(R.string.XgramCheckInTimer), XgramCheckInSheet.durationName(timer)) {
+      // Sender in forwards: whether the forward sheet starts with Show sender or Hide sender, or as the last forward did
+      val forwardSender = settings.forwardSender()
+      value(R.id.btn_xgramForwardSender, s(R.string.XgramFwdSetting), XgramForwardOptions.defaultName(forwardSender)) {
         host.choose(
           ChoiceSpec(
-            title = s(R.string.XgramCheckInTimer),
-            options = XgramSettings.CHECK_IN_TIMERS.map { XgramCheckInSheet.durationName(it) to it },
-            selected = timer
-          ) { minutes ->
-            settings.setCheckInTimer(minutes)
+            title = s(R.string.XgramFwdSetting),
+            info = s(R.string.XgramFwdSettingInfo),
+            options = XgramForwardOptions.DEFAULTS.map { XgramForwardOptions.defaultName(it) to it },
+            selected = forwardSender
+          ) { picked ->
+            settings.setForwardSender(picked)
           }
         )
       }
-      buttons(
-        R.id.btn_xgramCheckInGrace, s(R.string.XgramCheckInGrace),
-        // Short labels: four full plurals don't fit the connected row on the folded screen.
-        XgramSettings.CHECK_IN_GRACES.map { s(R.string.XgramCheckInMinShort, it) to it },
-        selected = settings.checkInGrace(),
-        subtitle = s(R.string.XgramCheckInGraceSub)
-      ) {
-        settings.setCheckInGrace(it)
-      }
-      // How close counts as arrived, for "End when I arrive at a place…".
-      buttons(
-        R.id.btn_xgramCheckInRadius, s(R.string.XgramCheckInRadius),
-        XgramSettings.CHECK_IN_RADII.map { XgramCheckInSheet.radiusName(it) to it },
-        selected = settings.checkInRadius()
-      ) {
-        settings.setCheckInRadius(it)
-      }
-      val location = settings.checkInLocation()
-      switch(R.id.btn_xgramCheckInLocation, s(R.string.XgramCheckInIncludeLocation), s(R.string.XgramCheckInLocationSub), checked = location) {
-        settings.setCheckInLocation(it)
-      }
-      switch(R.id.btn_xgramCheckInBattery, s(R.string.XgramCheckInIncludeBattery), checked = settings.checkInBattery()) {
-        settings.setCheckInBattery(it)
-      }
-      // Only applies while the alert carries a location.
       switch(
-        R.id.btn_xgramCheckInFollowUp, s(R.string.XgramCheckInFollowUp),
-        s(if (location) R.string.XgramCheckInFollowUpSub else R.string.XgramCheckInFollowUpNeeds),
-        checked = settings.checkInFollowUp(), enabled = location
+        R.id.btn_xgramDeleteForEveryone, s(R.string.XgramDeleteForEveryone), s(R.string.XgramCheckedByDefault),
+        checked = settings.deleteForEveryoneByDefault()
       ) {
-        settings.setCheckInFollowUp(it)
+        settings.setDeleteForEveryoneByDefault(it)
       }
     }
-    description(R.string.XgramCheckInInfo)
+
+    // The page's media part: the photo editor and the camera have no settings of their own
+    header(R.string.XgramHeaderVideos)
+    group {
+      switch(R.id.btn_xgramInlineVideo, s(R.string.XgramInlineVideo), s(R.string.XgramInlineVideoSub), checked = settings.inlineVideo()) {
+        settings.setInlineVideo(it)
+        // Open chats are rebuilt too: whether a video message gets the player is decided when the message is made.
+        XgramInlineVideo.postSettingChanged()
+      }
+      buttons(
+        R.id.btn_xgramInlineVideoStart, s(R.string.XgramInlineVideoStart),
+        listOf(
+          s(R.string.XgramInlineVideoStartAuto) to XgramSettings.INLINE_VIDEO_START_AUTO,
+          s(R.string.XgramInlineVideoStartTap) to XgramSettings.INLINE_VIDEO_START_TAP
+        ),
+        selected = settings.inlineVideoStart(),
+        enabled = XgramSettingDeps.inlineVideoStartEnabled() // only read for videos played in the message
+      ) {
+        settings.setInlineVideoStart(it)
+      }
+    }
+    // What the rows do, or that Telegram X's Autoplay GIFs keeps videos from starting by themselves.
+    description(XgramSettingDeps.inlineVideoInfo())
+    group {
+      switch(
+        R.id.btn_xgramVideoAutoHide, s(R.string.XgramVideoAutoHide), s(R.string.XgramVideoAutoHideSub),
+        checked = settings.videoAutoHide()
+      ) {
+        settings.setVideoAutoHide(it)
+      }
+    }
+    description(R.string.XgramVideoAutoHideInfo)
+
+    header(R.string.XgramHeaderLinks)
+    group {
+      switch(R.id.btn_xgramCleanLinks, s(R.string.XgramCleanLinks), s(R.string.XgramCleanLinksSub), checked = settings.cleanLinks()) {
+        settings.setCleanLinks(it)
+      }
+      switch(R.id.btn_xgramFixLinkPreviews, s(R.string.XgramFixLinkPreviews), s(R.string.XgramFixLinkPreviewsSub), checked = settings.fixLinkPreviews()) {
+        settings.setFixLinkPreviews(it)
+      }
+    }
+    description(R.string.XgramFixLinkPreviewsInfo)
+
+    header(R.string.XgramR7ChReactHeader)
+    group {
+      switch(
+        R.id.btn_xgramR7ChannelReactions, s(R.string.XgramR7ChReactTitle), s(R.string.XgramR7ChReactSub),
+        checked = settings.channelReactions()
+      ) {
+        // Open chats follow at once: MessagesController listens for the key.
+        settings.setChannelReactions(it)
+      }
+    }
+    description(R.string.XgramR7ChReactInfo)
+
+    // Showing more about a message or a profile
+    header(R.string.XgramHeaderDetails)
+    group {
+      switch(R.id.btn_xgramShowSeconds, s(R.string.XgramShowSeconds), s(R.string.XgramShowSecondsSub), checked = settings.showSeconds()) {
+        settings.setShowSeconds(it)
+      }
+      switch(R.id.btn_xgramTapTimeDetails, s(R.string.XgramTapTimeDetails), s(R.string.XgramTapTimeDetailsSub), checked = settings.tapTimeForDetails()) {
+        settings.setTapTimeForDetails(it)
+      }
+      switch(R.id.btn_xgramShowPeerIds, s(R.string.XgramShowPeerIds), s(R.string.XgramShowPeerIdsSub), checked = settings.showPeerIds()) {
+        settings.setShowPeerIds(it)
+      }
+    }
 
     header(R.string.XgramHeaderTelegramAi)
     group {

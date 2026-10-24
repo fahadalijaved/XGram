@@ -99,9 +99,9 @@ public class SettingsLanguageTranslateController extends RecyclerViewController<
     items.add(new ListItem(ListItem.TYPE_RADIO_OPTION, R.id.btn_chatTranslateStyleNone, 0, R.string.ChatTranslateStyle3, R.id.btn_chatTranslateStyle, chatTranslateMode == Settings.TRANSLATE_MODE_NONE));
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
     items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.TranslateSettingsDesc));
-    // XGram: Translation service, the same setting as in XGram's Translation settings
+    // XGram: XGram translation, the page where the service (and auto-translate) lives; its value is the service
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
-    items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramTgxTrProvider, 0, R.string.XgramTrProvider));
+    items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramTgxTrProvider, 0, R.string.XgramTgxTranslation));
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
     headerItemCount = items.size();
 
@@ -175,11 +175,8 @@ public class SettingsLanguageTranslateController extends RecyclerViewController<
       adapter.updateAllValuedSettingsById(R.id.btn_chatDoNotTranslateSelected);
     } else if (viewId == R.id.btn_quickTranslate) {
       Settings.instance().setUseQuickTranslation(adapter.toggleView(v));
-    } else if (viewId == R.id.btn_xgramTgxTrProvider) { // XGram: the service picker from XGram's Translation settings
-      com.fahadali.xgram.translate.XgramTranslateProviderPicker.show(this, provider -> {
-        com.fahadali.xgram.XgramSettings.instance().setTranslateProvider(provider);
-        adapter.updateValuedSettingById(R.id.btn_xgramTgxTrProvider);
-      });
+    } else if (viewId == R.id.btn_xgramTgxTrProvider) { // XGram: XGram's Translation page, pointing at the service
+      navigateTo(com.fahadali.xgram.compose.XgramSettingsPages.open(context, tdlib, com.fahadali.xgram.XgramSettingsController.SECTION_TRANSLATION, R.id.btn_xgramTrProvider));
     }
   }
 
@@ -228,6 +225,14 @@ public class SettingsLanguageTranslateController extends RecyclerViewController<
       final int index = items.size();
       addLanguagesItems(items);
       adapter.notifyItemRangeInserted(index, items.size() - index);
+    }
+  }
+
+  @Override
+  public void onFocus () {
+    super.onFocus();
+    if (adapter != null) {
+      adapter.updateValuedSettingById(R.id.btn_xgramTgxTrProvider); // XGram: the service may have changed on XGram's page
     }
   }
 

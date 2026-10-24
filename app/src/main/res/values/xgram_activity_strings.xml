@@ -3,10 +3,10 @@
   <!-- XGram Activity (com.fahadali.xgram.activity): every mention, reply and reaction in one place. -->
   <!-- Plain strings only: Telegram X makes plurals from strings.xml alone (GenerateLangFunctions), so counts use One / Many pairs. -->
 
-  <!-- Settings: Chat list > Activity -->
+  <!-- Settings: Activity and reminders > Activity -->
   <string name="XgramActivity">Activity</string>
-  <string name="XgramActivityShow">Activity</string>
-  <string name="XgramActivityShowInfo">Mentions, replies and reactions to your messages, from all your chats, in one place</string>
+  <string name="XgramActivityShow">Show Activity</string>
+  <string name="XgramActivityShowInfo">Mentions, replies and reactions in one place</string>
   <string name="XgramActivityIncludeReactions">Reactions</string>
   <string name="XgramActivityIncludeReactionsInfo">Reactions to your messages, also in private chats</string>
   <string name="XgramActivityIncludeMuted">Muted chats</string>
@@ -25,9 +25,11 @@
   <string name="XgramActivityBarCalls">Instead of Calls</string>
   <string name="XgramActivityNavBar">In the navigation bar</string>
   <string name="XgramActivityNavBarTab">A tab</string>
-  <string name="XgramActivityNavBarInfo">Turn its tab on with the others on the Navigation bar page. The navigation rail has Activity while the side menu does.</string>
+  <string name="XgramActivityNavBarInfo">Turn its tab on with the others on the Navigation bar page; the navigation rail has Activity while the side menu does. The bell above the chat list is in Chat list › Header buttons.</string>
   <string name="XgramActivityLocalNote">Activity is kept on this device only and isn\'t part of backups.</string>
   <string name="XgramActivityNeedsOn">Turn on Activity first</string>
+  <!-- Activity and reminders › Where it shows, without the navigation bar (classic look) -->
+  <string name="XgramActivityWhereInfo">The bell above the chat list is in Chat list › Header buttons.</string>
   <string name="XgramSearchKwActivity">activity|inbox|mentions|mention|replies|reply|reactions|reaction|notifications|@</string>
 
   <!-- Screen and filters -->
@@ -88,7 +90,7 @@
   <string name="XgramActivityMarkAllReplies">Mark all replies as read</string>
   <string name="XgramActivityMarkAllReactions">Mark all reactions as read</string>
   <string name="XgramActivityClearRead">Clear read items</string>
-  <string name="XgramActivityHiddenChats">Hidden chats</string>
+  <string name="XgramActivityHiddenChats">Excluded chats</string>
   <string name="XgramActivityOpen">Open in chat</string>
   <string name="XgramActivityMarkRead">Mark as read</string>
   <string name="XgramActivityMarkUnread">Mark as unread</string>
@@ -122,7 +124,7 @@
   <!-- Hidden chats and Clear Activity (settings) -->
   <string name="XgramActivityHiddenCountOne">1 chat</string>
   <string name="XgramActivityHiddenCountMany">%1$d chats</string>
-  <string name="XgramActivityHiddenEmpty">No hidden chats</string>
+  <string name="XgramActivityHiddenEmpty">No excluded chats</string>
   <string name="XgramActivityUnhide">Show activity again</string>
   <string name="XgramActivityClearAll">Clear Activity</string>
   <string name="XgramActivityClearAllInfo">Removes the list saved on this device. Messages stay in their chats.</string>
