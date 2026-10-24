@@ -90,7 +90,7 @@ public final class XgramTextSelection {
   private static final int DRAG_NONE = 0, DRAG_START = HANDLE_START, DRAG_END = HANDLE_END, DRAG_PRESS = 3;
 
   /** The toolbar's actions. */
-  static final int ACTION_COPY = 1, ACTION_QUOTE = 1 << 1, ACTION_TRANSLATE = 1 << 2, ACTION_SHARE = 1 << 3, ACTION_SELECT_ALL = 1 << 4;
+  static final int ACTION_COPY = 1, ACTION_QUOTE = 1 << 1, ACTION_TRANSLATE = 1 << 2, ACTION_SHARE = 1 << 3, ACTION_SELECT_ALL = 1 << 4, ACTION_FORWARD = 1 << 5;
 
   /** Expressive: the selection in primary at this alpha (readable under the glyphs on both bubbles). */
   private static final float EXPRESSIVE_ALPHA = .35f;
@@ -602,7 +602,7 @@ public final class XgramTextSelection {
   }
 
   private int toolbarActions () {
-    int actions = ACTION_COPY | ACTION_SHARE;
+    int actions = ACTION_COPY | ACTION_FORWARD | ACTION_SHARE;
     if (canQuote) {
       actions |= ACTION_QUOTE;
     }
@@ -1092,6 +1092,8 @@ public final class XgramTextSelection {
       quote();
     } else if (id == R.id.btn_xgramSelTranslate) {
       translate();
+    } else if (id == R.id.btn_xgramSelForward) {
+      forward();
     } else if (id == R.id.btn_xgramSelShare) {
       share();
     } else if (id == R.id.btn_xgramSelAll) {
@@ -1183,6 +1185,19 @@ public final class XgramTextSelection {
     }));
     popup.setTextColorSet(TextColorSets.Regular.NORMAL);
     popup.show();
+  }
+
+  /** Forward: XGram's own chat picker with exactly the selection (its formatting kept), not Android's share sheet. */
+  private void forward () {
+    final TdApi.FormattedText selected = selectedText();
+    if (selected == null) {
+      return;
+    }
+    final MessagesController c = controller;
+    finish();
+    final org.thunderdog.challegram.ui.ShareController share = new org.thunderdog.challegram.ui.ShareController(c.context(), c.tdlib());
+    share.setArguments(new org.thunderdog.challegram.ui.ShareController.Args(selected));
+    share.show();
   }
 
   private void share () {

@@ -7934,6 +7934,13 @@ public class MediaViewController extends ViewController<MediaViewController.Args
         textFlags = Text.FLAG_ALIGN_CENTER;
       } else if (Settings.instance().needTutorial(Settings.TUTORIAL_BRUSH_COLOR_TONE)) {
         text = Lang.getString(R.string.HoldToTone);
+        // XGram: shown once, not on every touch until the slider is held (it covered the tools); it fades on its own
+        Settings.instance().markTutorialAsShown(Settings.TUTORIAL_BRUSH_COLOR_TONE);
+        UI.post(() -> {
+          if (brushToneHint != null && !colorPickerView.isInLongTap()) {
+            brushToneHint.hide(true);
+          }
+        }, 4000);
       } else {
         text = null;
       }

@@ -340,9 +340,28 @@ final class XgramTextSelectionLayer extends FrameLayout implements ViewTreeObser
     toolbar.removeAllViews();
     addButton(XgramTextSelection.ACTION_COPY, R.id.btn_xgramSelCopy, R.string.Copy, R.drawable.baseline_content_copy_24, iconsOnly);
     addButton(XgramTextSelection.ACTION_QUOTE, R.id.btn_xgramSelQuote, R.string.XgramQuote, R.drawable.baseline_format_quote_close_24, iconsOnly);
+    addButton(XgramTextSelection.ACTION_FORWARD, R.id.btn_xgramSelForward, R.string.XgramSelForward, R.drawable.baseline_forward_24, iconsOnly);
     addButton(XgramTextSelection.ACTION_TRANSLATE, R.id.btn_xgramSelTranslate, R.string.Translate, R.drawable.baseline_translate_24, iconsOnly);
-    addButton(XgramTextSelection.ACTION_SHARE, R.id.btn_xgramSelShare, R.string.Share, R.drawable.baseline_share_24, iconsOnly);
-    addButton(XgramTextSelection.ACTION_SELECT_ALL, R.id.btn_xgramSelAll, R.string.XgramSelAll, XgramTextSelection.ICON, iconsOnly);
+    // Select all and Share to other apps under ⋮: the row stays four labels wide, nothing cut off
+    if ((toolbarActions & (XgramTextSelection.ACTION_SELECT_ALL | XgramTextSelection.ACTION_SHARE)) != 0) {
+      addButton(~0, R.id.btn_xgramSelMore, R.string.XgramSelMore, R.drawable.baseline_more_vert_24, true);
+    }
+  }
+
+  /** ⋮: Select all (while not everything is selected) and Share to other apps. */
+  private void showMore (View anchor) {
+    final android.widget.PopupMenu menu = new android.widget.PopupMenu(getContext(), anchor);
+    if ((toolbarActions & XgramTextSelection.ACTION_SELECT_ALL) != 0) {
+      menu.getMenu().add(0, R.id.btn_xgramSelAll, 0, Lang.getString(R.string.XgramSelAll));
+    }
+    if ((toolbarActions & XgramTextSelection.ACTION_SHARE) != 0) {
+      menu.getMenu().add(0, R.id.btn_xgramSelShare, 1, Lang.getString(R.string.XgramSelShareApps));
+    }
+    menu.setOnMenuItemClickListener(item -> {
+      selection.onAction(item.getItemId());
+      return true;
+    });
+    menu.show();
   }
 
   private void addButton (int action, @IdRes int id, @StringRes int name, @DrawableRes int icon, boolean iconOnly) {
@@ -392,7 +411,13 @@ final class XgramTextSelectionLayer extends FrameLayout implements ViewTreeObser
       params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(m3 ? 40f : 48f));
     }
     button.setId(id);
-    button.setOnClickListener(v -> selection.onAction(v.getId()));
+    button.setOnClickListener(v -> {
+      if (v.getId() == R.id.btn_xgramSelMore) {
+        showMore(v);
+      } else {
+        selection.onAction(v.getId());
+      }
+    });
     toolbar.addView(button, params);
   }
 }

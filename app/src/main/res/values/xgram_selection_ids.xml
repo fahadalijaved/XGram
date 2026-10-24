@@ -11,4 +11,6 @@
   <item type="id" name="btn_xgramSelTranslate" />
   <item type="id" name="btn_xgramSelShare" />
   <item type="id" name="btn_xgramSelAll" />
+  <item type="id" name="btn_xgramSelForward" />
+  <item type="id" name="btn_xgramSelMore" />
 </resources>
