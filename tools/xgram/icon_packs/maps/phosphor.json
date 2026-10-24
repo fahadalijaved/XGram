@@ -348,5 +348,6 @@
  "grid_view": "squares-four",
  "cloud_off": "cloud-slash",
  "telegram": "telegram-logo",
- "currency_bitcoin": "currency-btc"
+ "currency_bitcoin": "currency-btc",
+ "select_all": "cursor-text"
 }

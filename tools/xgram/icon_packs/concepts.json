@@ -2872,5 +2872,13 @@
   "where": [
    "java/org/thunderdog/challegram/data/TD.java"
   ]
+ },
+ "select_all": {
+  "tgx": [
+   "baseline_select_all_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/chats/XgramTextSelection.java"
+  ]
  }
 }

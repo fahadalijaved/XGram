@@ -348,5 +348,6 @@
  "grid_view": "widget",
  "cloud_off": {"icon": "cloud", "slash": true},
  "telegram": "plain-2",
- "currency_bitcoin": "dollar"
+ "currency_bitcoin": "dollar",
+ "select_all": "text-selection"
 }

@@ -93,6 +93,12 @@ ICONS = {
                           P('M18.7 14.5s-2.2 2.5-2.2 4a2.2 2.2 0 0 0 4.4 0c0-1.5-2.2-4-2.2-4Z')],
     'opacity': [P(DROP), F('M5.5 14.5a6.5 6.5 0 0 0 13 0Z')],
     'outinline': [RR(10, 4, 11, 8.5, 2.5), P('M7.5 8H5.5A2.5 2.5 0 0 0 3 10.5v7A2.5 2.5 0 0 0 5.5 20h10a2.5 2.5 0 0 0 2.5-2.5V15')],
+    # Select text / Select all: Material's select_all, a dashed rounded frame (corners and a dash on each side) round
+    # the selected block
+    'select_all': [P('M3.5 7V6A2.5 2.5 0 0 1 6 3.5h1'), P('M17 3.5h1A2.5 2.5 0 0 1 20.5 6v1'),
+                   P('M20.5 17v1a2.5 2.5 0 0 1-2.5 2.5h-1'), P('M7 20.5H6A2.5 2.5 0 0 1 3.5 18v-1'),
+                   L(11, 3.5, 13, 3.5), L(20.5, 11, 20.5, 13), L(11, 20.5, 13, 20.5), L(3.5, 11, 3.5, 13),
+                   RR(8, 8, 8, 8, 1.5)],
 }
 
 MAP = {
@@ -121,4 +127,5 @@ MAP = {
     'baseline_opacity_18': 'opacity',
     'dot_baseline_clear_formatting_24': 'clear_formatting',
     'baseline_content_cut_24': 'content_cut',
+    'baseline_select_all_24': 'select_all',
 }
