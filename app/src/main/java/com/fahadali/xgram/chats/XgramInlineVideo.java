@@ -66,7 +66,6 @@ import org.thunderdog.challegram.component.chat.MessageViewGroup;
 import org.thunderdog.challegram.component.chat.MessagesAdapter;
 import org.thunderdog.challegram.component.chat.MessagesManager;
 import org.thunderdog.challegram.config.Config;
-import org.thunderdog.challegram.core.WatchDog;
 import org.thunderdog.challegram.data.MediaWrapper;
 import org.thunderdog.challegram.data.TD;
 import org.thunderdog.challegram.data.TGMessage;
@@ -540,7 +539,10 @@ public final class XgramInlineVideo {
     return loaded || Config.VIDEO_CLOUD_PLAYBACK_AVAILABLE ? null : "no-cloud";
   }
 
-  /** Telegram X's own rules for media that starts by itself: downloaded already, or allowed on this network. */
+  /**
+   * Telegram X's own rules for media that starts by itself: downloaded already, or automatic media download allows it
+   * on this network (on Wi-Fi too: users who turn it off expect no video to load by itself).
+   */
   private static boolean canAutoplay (MediaWrapper wrapper) {
     TGMessage source = wrapper.xgramSource();
     TdApi.Video video = wrapper.getVideo();
@@ -551,14 +553,7 @@ public final class XgramInlineVideo {
       return true;
     }
     Tdlib tdlib = source.tdlib();
-    TdlibFilesManager files = tdlib.files();
-    if (files.isDataSaverActive()) {
-      return false;
-    }
-    if (tdlib.context().watchDog().getConnectionType() == WatchDog.CONNECTION_TYPE_WIFI) {
-      return true;
-    }
-    return files.canAutomaticallyDownload(video.video, TdlibFilesManager.DOWNLOAD_FLAG_VIDEO, tdlib.chatType(source.getChatId()));
+    return tdlib.files().canAutomaticallyStreamVideo(video.video, tdlib.chatType(source.getChatId()));
   }
 
   private static MessagesController autoplayController;

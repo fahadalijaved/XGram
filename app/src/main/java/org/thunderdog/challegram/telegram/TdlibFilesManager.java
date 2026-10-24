@@ -1470,33 +1470,48 @@ public class TdlibFilesManager implements GlobalConnectionListener {
     if (file.size > getDownloadLimit(limit) || (excludedTypes & fileType) != 0) {
       return false;
     }
-    int automaticDownloadTypes;
-    if (chatType == null) {
-      automaticDownloadTypes = (DOWNLOAD_DEFAULTS >> DOWNLOAD_PRIVATE_SHIFT) & 0xff;
-    } else {
-      switch (chatType.getConstructor()) {
-        case TdApi.ChatTypeSupergroup.CONSTRUCTOR: {
-          automaticDownloadTypes = TD.isSupergroup(chatType) ? downloadInGroupChats : downloadInChannelChats;
-          break;
-        }
-        case TdApi.ChatTypeSecret.CONSTRUCTOR:
-        case TdApi.ChatTypePrivate.CONSTRUCTOR: {
-          automaticDownloadTypes = downloadInPrivateChats;
-          break;
-        }
-        case TdApi.ChatTypeBasicGroup.CONSTRUCTOR: {
-          automaticDownloadTypes = downloadInGroupChats;
-          break;
-        }
-        default: {
-          return false;
-        }
-      }
-    }
-    if ((automaticDownloadTypes & fileType) == 0) {
+    if ((automaticDownloadTypes(chatType) & fileType) == 0) {
       return false;
     }
     return !manuallyCancelledFiles.contains(file.id);
+  }
+
+  /** The media types that download by themselves in this kind of chat. */
+  private int automaticDownloadTypes (@Nullable TdApi.ChatType chatType) {
+    if (chatType == null) {
+      // XGram: media with no chat (Instant View, shared media) follows the user's private chats selection, not Telegram
+      // X's defaults: with automatic media download turned off, nothing downloads by itself there either
+      return downloadInPrivateChats;
+    }
+    switch (chatType.getConstructor()) {
+      case TdApi.ChatTypeSupergroup.CONSTRUCTOR:
+        return TD.isSupergroup(chatType) ? downloadInGroupChats : downloadInChannelChats;
+      case TdApi.ChatTypeSecret.CONSTRUCTOR:
+      case TdApi.ChatTypePrivate.CONSTRUCTOR:
+        return downloadInPrivateChats;
+      case TdApi.ChatTypeBasicGroup.CONSTRUCTOR:
+        return downloadInGroupChats;
+    }
+    return 0;
+  }
+
+  /**
+   * XGram: Play videos in chat. Whether a video that isn't downloaded may start streaming by itself. On mobile data and
+   * roaming that's {@link #canAutomaticallyDownload} for videos. On Wi-Fi the chat type's selection doesn't need Videos
+   * (Telegram X's defaults leave them out), but its automatic media download must be on, Data Saver off, and Wi-Fi's
+   * size limit and exclusions must let the video through.
+   */
+  public boolean canAutomaticallyStreamVideo (@NonNull TdApi.File file, @Nullable TdApi.ChatType chatType) {
+    if (tdlib.context().watchDog().getConnectionType() != WatchDog.CONNECTION_TYPE_WIFI) {
+      return canAutomaticallyDownload(file, DOWNLOAD_FLAG_VIDEO, chatType);
+    }
+    if (isDataSaverActive() || file.remote.isUploadingActive || validateDownloadFileSize(file) != VALIDATE_FILE_SIZE_OK) {
+      return false;
+    }
+    if (file.size > getDownloadLimit(downloadLimitOverWiFi) || (downloadWiFiExclude & DOWNLOAD_FLAG_VIDEO) != 0) {
+      return false;
+    }
+    return automaticDownloadTypes(chatType) != 0 && !manuallyCancelledFiles.contains(file.id);
   }
 
   private static String getDownloadLimitString (int limit, String valueIfEmpty) {
