@@ -696,6 +696,12 @@ public class TGMessageText extends TGMessage {
 
   @Nullable
   @Override
+  public TextWrapper xgramQuotedTextWrapper (long messageId) {
+    return translatedText == null && messageId == msg.id ? effectiveWrapper : null; // XGram: quote highlight
+  }
+
+  @Nullable
+  @Override
   public TdApi.FormattedText getTextToTranslateImpl () {
     return text;
   }

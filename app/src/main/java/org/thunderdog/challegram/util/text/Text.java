@@ -2440,6 +2440,167 @@ public class Text implements Runnable, Emoji.CountLimiter, CounterTextPart, List
     c.restore();
   }
 
+  // XGram: a range of the text drawn behind its glyphs (the words a reply quoted, after a jump to them): one rounded
+  // rect per run of the range on a line, made from the parts' own geometry, so it follows wrapping, RTL runs,
+  // entities and custom emoji without a new layout
+
+  private int xgramRangeStart = -1, xgramRangeEnd = -1;
+  private @ColorInt int xgramRangeColor;
+  private @Nullable Path xgramRangePath;
+  private @Nullable ArrayList<TextPart> xgramRangePathParts;
+  private int xgramRangePathStartX, xgramRangePathEndX, xgramRangePathEndXBottomPadding;
+
+  /** XGram: draws {@code color} behind the text from {@code start} to {@code end} (UTF-16 offsets in {@link #getText()}); -1 for none. */
+  public void setXgramRange (int start, int end, @ColorInt int color) {
+    if (this.xgramRangeStart != start || this.xgramRangeEnd != end) {
+      this.xgramRangeStart = start;
+      this.xgramRangeEnd = end;
+      this.xgramRangePath = null;
+    }
+    this.xgramRangeColor = color;
+  }
+
+  /**
+   * XGram: where the range was drawn last, in the coordinates it was drawn at (empty when none of it is laid out, as
+   * in a collapsed part); false when it wasn't drawn since it was set or laid out anew.
+   */
+  public boolean getXgramRangeBounds (RectF out) {
+    if (xgramRangePath == null || xgramRangePathParts != parts)
+      return false;
+    if (xgramRangePath.isEmpty()) {
+      out.setEmpty();
+    } else {
+      xgramRangePath.computeBounds(out, true);
+      out.offset(0, lastStartY);
+    }
+    return true;
+  }
+
+  private void drawXgramRange (Canvas c, int startX, int endX, int endXBottomPadding, int startY, boolean center, float alpha) {
+    if (xgramRangeStart < 0 || xgramRangeEnd <= xgramRangeStart || parts == null)
+      return;
+    final int color = ColorUtils.alphaColor(alpha, xgramRangeColor);
+    if (Color.alpha(color) == 0)
+      return;
+    if (xgramRangePath == null || xgramRangePathParts != parts || xgramRangePathStartX != startX || xgramRangePathEndX != endX || xgramRangePathEndXBottomPadding != endXBottomPadding) {
+      xgramRangePath = buildXgramRangePath(startX, endX, endXBottomPadding, center);
+      xgramRangePathParts = parts;
+      xgramRangePathStartX = startX;
+      xgramRangePathEndX = endX;
+      xgramRangePathEndXBottomPadding = endXBottomPadding;
+    }
+    if (!xgramRangePath.isEmpty()) {
+      c.save();
+      c.translate(0, startY);
+      c.drawPath(xgramRangePath, Paints.fillingPaint(color));
+      c.restore();
+    }
+  }
+
+  private Path buildXgramRangePath (int startX, int endX, int endXBottomPadding, boolean center) {
+    final Path path = new Path();
+    final int rangeStart = xgramRangeStart, rangeEnd = Math.min(xgramRangeEnd, originalText.length());
+    // {lineIndex, left, top, right, bottom, isBlank, inkLeft, inkRight} of every part in the range
+    final ArrayList<float[]> boxes = new ArrayList<>();
+    for (TextPart part : parts) {
+      if (part.getLine() != originalText)
+        continue; // an ellipsis or the suffix
+      final int partStart = part.getStart(), partEnd = part.getEnd();
+      final boolean inRange = partStart == partEnd ? (partStart >= rangeStart && partStart < rangeEnd) : (partStart < rangeEnd && partEnd > rangeStart);
+      if (!inRange)
+        continue;
+      final TextPaint paint = getTextPaint(part.getEntity());
+      final Paint.FontMetricsInt fm = getFontMetrics(paint.getTextSize());
+      final int x;
+      if (center) {
+        int lineWidth = getLineWidth(part.getLineIndex());
+        int cx = startX + maxWidth / 2;
+        x = part.makeX(cx - lineWidth / 2, cx + lineWidth / 2, 0);
+      } else {
+        x = part.makeX(startX, endX, endXBottomPadding);
+      }
+      final float width = part.getWidth();
+      // The range in this part, and its ink: without its spaces (a line's part keeps the space after its last word)
+      final boolean measurable = !part.isStaticElement() && partEnd > partStart;
+      final int s = Math.max(partStart, rangeStart), e = Math.min(partEnd, rangeEnd);
+      int is = s, ie = e;
+      if (measurable) {
+        while (ie > is && originalText.charAt(ie - 1) == ' ')
+          ie--;
+        while (is < ie && originalText.charAt(is) == ' ')
+          is++;
+      }
+      float left = x, right = x + width, inkLeft = left, inkRight = right;
+      if (measurable && (is > partStart || ie < partEnd)) {
+        // The range or its ink starts or ends inside this part: measure up to its ends along the run, RTL from the right
+        final boolean rtl = BiDiUtils.isValid(part.getBidiEntity()) && BiDiUtils.isRtl(part.getBidiEntity());
+        final float total = measureXgramAdvance(paint, partStart, partEnd, partEnd, rtl);
+        if (total > 0f) {
+          final float scale = width / total;
+          final float from = measureXgramAdvance(paint, partStart, partEnd, s, rtl) * scale;
+          final float to = measureXgramAdvance(paint, partStart, partEnd, e, rtl) * scale;
+          final float inkFrom = is == s ? from : measureXgramAdvance(paint, partStart, partEnd, is, rtl) * scale;
+          final float inkTo = ie == e ? to : measureXgramAdvance(paint, partStart, partEnd, ie, rtl) * scale;
+          if (rtl) {
+            left = x + width - to;
+            right = x + width - from;
+            inkLeft = x + width - inkTo;
+            inkRight = x + width - inkFrom;
+          } else {
+            left = x + from;
+            right = x + to;
+            inkLeft = x + inkFrom;
+            inkRight = x + inkTo;
+          }
+        }
+      }
+      final float top = part.getY() + paint.baselineShift + getPartVerticalOffset(part);
+      final float bottom = top + (part.getHeight() == -1 ? fm.descent - fm.ascent : part.getHeight());
+      final boolean blank = part.isWhitespace() || (measurable && is == ie);
+      boxes.add(new float[] {part.getLineIndex(), left, top, right, bottom, blank ? 1f : 0f, inkLeft, inkRight});
+    }
+    // One rounded rect per run of touching parts on a line: spaces join the words of a run but never pad its ends
+    java.util.Collections.sort(boxes, (a, b) -> a[0] != b[0] ? Float.compare(a[0], b[0]) : Float.compare(a[1], b[1]));
+    final float gap = Screen.dp(1f);
+    final float padding = Screen.dp(2f);
+    final float radius = Screen.dp(6f);
+    final RectF rect = Paints.getRectF();
+    int i = 0;
+    while (i < boxes.size()) {
+      final float lineIndex = boxes.get(i)[0];
+      float runRight = boxes.get(i)[3];
+      float inkLeft = Float.MAX_VALUE, inkRight = -Float.MAX_VALUE, inkTop = Float.MAX_VALUE, inkBottom = -Float.MAX_VALUE;
+      int j = i;
+      do {
+        final float[] box = boxes.get(j);
+        if (box[5] == 0f) {
+          inkLeft = Math.min(inkLeft, box[6]);
+          inkTop = Math.min(inkTop, box[2]);
+          inkRight = Math.max(inkRight, box[7]);
+          inkBottom = Math.max(inkBottom, box[4]);
+        }
+        runRight = Math.max(runRight, box[3]);
+        j++;
+      } while (j < boxes.size() && boxes.get(j)[0] == lineIndex && boxes.get(j)[1] <= runRight + gap);
+      if (inkLeft < inkRight && inkTop < inkBottom) {
+        rect.set(inkLeft - padding, inkTop, inkRight + padding, inkBottom);
+        final float r = Math.min(radius, rect.height() / 2f);
+        path.addRoundRect(rect, r, r, Path.Direction.CW);
+      }
+      i = j;
+    }
+    return path;
+  }
+
+  private float measureXgramAdvance (TextPaint paint, int start, int end, int offset, boolean rtl) {
+    if (offset <= start)
+      return 0f;
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+      return paint.getRunAdvance(originalText, start, end, 0, originalText.length(), rtl, offset);
+    }
+    return paint.measureText(originalText, start, offset);
+  }
+
   private int lastStartX, lastEndX, lastEndXBottomPadding, lastStartY;
 
   public void beginDrawBatch (@Nullable ComplexReceiver receiver, int externalBatchId) {
@@ -2600,6 +2761,7 @@ public class Text implements Runnable, Emoji.CountLimiter, CounterTextPart, List
         }
       }
     }
+    drawXgramRange(c, startX, endX, endXBottomPadding, startY, center, alpha); // XGram: the words a reply quoted
     drawPressHighlight(c, startX, endX, endXBottomPadding, startY, center, pressHighlight, alpha, defaultTheme);
 
     if ((textFlags & FLAG_HAS_SPOILERS) != 0) {

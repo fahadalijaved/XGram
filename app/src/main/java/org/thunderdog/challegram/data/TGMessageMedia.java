@@ -995,6 +995,13 @@ public class TGMessageMedia extends TGMessage {
 
   @Nullable
   @Override
+  public TextWrapper xgramQuotedTextWrapper (long messageId) {
+    // XGram: quote highlight: an album shows one caption, that of captionMessageId
+    return translatedText == null && messageId == captionMessageId ? wrapper : null;
+  }
+
+  @Nullable
+  @Override
   public TdApi.FormattedText getTextToTranslateImpl () {
     return caption;
   }

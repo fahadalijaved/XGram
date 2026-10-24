@@ -66,6 +66,8 @@ public final class XgramBackup {
     XgramSettings.KEY_HIDE_LOCK_BUTTON, XgramSettings.KEY_MESSAGE_POPUP,
     // Header buttons (Chat list): the ghost mode indicator and Search ("xgram_header_hide_" + the button)
     XgramSettings.KEY_HEADER_BUTTON_HIDDEN,
+    // Forwarding (Messages): the last choice, for Remember my last choice
+    XgramSettings.KEY_FORWARD_LAST_HIDDEN,
     // Add to group or channel (a bot's profile): as an admin, with every right
     XgramSettings.KEY_ADD_BOT_ADMIN, XgramSettings.KEY_ADD_BOT_ALL_RIGHTS,
     // Expressive design and New look for Telegram X pages (Appearance): on by default, so turning one off is kept too
@@ -158,7 +160,8 @@ public final class XgramBackup {
     com.fahadali.xgram.later.XgramLater.KEY_WAKE_EARLY, // Later
     XgramSettings.KEY_APP_FONT, // Font (Appearance): applies at the next start
     XgramSettings.KEY_CHECKIN_TIMER, XgramSettings.KEY_CHECKIN_GRACE, XgramSettings.KEY_CHECKIN_RADIUS, // Check In
-    XgramSettings.KEY_COLOR_SOURCE, XgramSettings.KEY_COLOR_SEED, XgramSettings.KEY_COLOR_STYLE}; // Colours (Appearance)
+    XgramSettings.KEY_COLOR_SOURCE, XgramSettings.KEY_COLOR_SEED, XgramSettings.KEY_COLOR_STYLE, // Colours (Appearance)
+    XgramSettings.KEY_FORWARD_SENDER}; // Forwarding (Messages)
   /** Data rather than settings: exported and imported, but kept by {@link #reset}. */
   private static final String[] LONG_PREFIXES = {"xgram_bm_"};
 
@@ -269,7 +272,8 @@ public final class XgramBackup {
             key.equals(com.fahadali.xgram.later.XgramLater.KEY_WAKE_EARLY) || // Later
             key.equals(XgramSettings.KEY_APP_FONT) || // Font
             key.equals(XgramSettings.KEY_CHECKIN_TIMER) || key.equals(XgramSettings.KEY_CHECKIN_GRACE) || key.equals(XgramSettings.KEY_CHECKIN_RADIUS) || // Check In
-            key.equals(XgramSettings.KEY_COLOR_SOURCE) || key.equals(XgramSettings.KEY_COLOR_SEED) || key.equals(XgramSettings.KEY_COLOR_STYLE)) { // Colours
+            key.equals(XgramSettings.KEY_COLOR_SOURCE) || key.equals(XgramSettings.KEY_COLOR_SEED) || key.equals(XgramSettings.KEY_COLOR_STYLE) || // Colours
+            key.equals(XgramSettings.KEY_FORWARD_SENDER)) { // Forwarding
             pmc().putInt(key, ints.getInt(key));
             count++;
           }

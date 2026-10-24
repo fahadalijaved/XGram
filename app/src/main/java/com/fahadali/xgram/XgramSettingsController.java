@@ -515,8 +515,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.getToggler().setRadioEnabled(settings.preferIpv6(), isUpdate);
         } else if (id == R.id.btn_xgramDownloadBoost) {
           view.getToggler().setRadioEnabled(settings.downloadBoost(), isUpdate);
-        } else if (id == R.id.btn_xgramForwardWithoutAuthor) {
-          view.getToggler().setRadioEnabled(settings.forwardWithoutAuthor(), isUpdate);
+        } else if (id == R.id.btn_xgramForwardSender) {
+          view.setData(com.fahadali.xgram.chats.XgramForwardOptions.defaultName(settings.forwardSender()));
         } else if (id == R.id.btn_xgramMergeCommunities) {
           view.getToggler().setRadioEnabled(settings.mergeCommunities(), isUpdate);
         } else if (id == R.id.btn_xgramHideBlocked) {
@@ -941,7 +941,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     items.add(header(R.string.XgramHeaderDefaults));
     addRows(items,
       toggle(R.id.btn_xgramDeleteForEveryone, R.string.XgramDeleteForEveryone, R.string.XgramCheckedByDefault),
-      toggle(R.id.btn_xgramForwardWithoutAuthor, R.string.XgramForwardWithoutAuthor, R.string.XgramCheckedByDefault)
+      link(R.id.btn_xgramForwardSender, R.string.XgramFwdSetting) // Show sender, Hide sender or the last choice
     );
 
     items.add(header(R.string.XgramHeaderLinks));
@@ -1951,8 +1951,20 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     } else if (id == R.id.btn_xgramHideBlocked) {
       settings.setHideBlocked(adapter.toggleView(v));
       return;
-    } else if (id == R.id.btn_xgramForwardWithoutAuthor) {
-      settings.setForwardWithoutAuthor(adapter.toggleView(v));
+    } else if (id == R.id.btn_xgramForwardSender) {
+      // Forwarding: how the forward sheet starts (com.fahadali.xgram.chats.XgramForwardOptions)
+      final int[] modes = com.fahadali.xgram.chats.XgramForwardOptions.DEFAULTS;
+      String[] titles = new String[modes.length];
+      int[] ids = new int[modes.length];
+      for (int i = 0; i < modes.length; i++) {
+        titles[i] = com.fahadali.xgram.chats.XgramForwardOptions.defaultName(modes[i]);
+        ids[i] = i + 1;
+      }
+      showOptions(Lang.getString(R.string.XgramFwdSettingInfo), ids, titles, null, null, (itemView, optionId) -> {
+        settings.setForwardSender(modes[optionId - 1]);
+        adapter.updateValuedSettingById(R.id.btn_xgramForwardSender);
+        return true;
+      });
       return;
     } else if (id == R.id.btn_xgramSideMenu) {
       navigateTo(new XgramDrawerItemsController(context, tdlib));

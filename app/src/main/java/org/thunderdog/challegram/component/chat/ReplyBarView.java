@@ -141,6 +141,7 @@ public class ReplyBarView extends FrameLayoutFix implements View.OnClickListener
       @Override
       public void onMessageClick (PinnedMessagesBar view, TdApi.Message message, @Nullable TdApi.InputTextQuote quote) {
         if (callback != null) {
+          com.fahadali.xgram.chats.XgramQuoteHighlight.prepareJump(tdlib, message.chatId, message.id, quote); // XGram: the quoted words light up there
           callback.onMessageHighlightRequested(ReplyBarView.this, message, quote);
         }
       }

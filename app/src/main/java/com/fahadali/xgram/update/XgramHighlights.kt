@@ -20,7 +20,6 @@ import com.fahadali.xgram.later.XgramLaterController
 import org.thunderdog.challegram.BuildConfig
 import org.thunderdog.challegram.R
 import org.thunderdog.challegram.navigation.ViewController
-import org.thunderdog.challegram.tool.UI
 import org.thunderdog.challegram.unsorted.Settings
 
 /**
@@ -81,7 +80,7 @@ enum class XgramFeature(@DrawableRes val icon: Int, @StringRes val title: Int, @
  * update card's notes are not repeated after every build. Local state, not in backups.
  */
 internal object XgramWelcome {
-  /** The version whose welcome was shown (or skipped: a fresh install, a version with no new [BUILT_IN] set). */
+  /** The version whose welcome was shown (or skipped: a version with no new [BUILT_IN] set). */
   private const val KEY_CODE = "xgram_welcome_code"
 
   /** The [BUILT_IN] set the user has seen. */
@@ -97,21 +96,10 @@ internal object XgramWelcome {
     get() = Settings.instance().pmc()
 
   /**
-   * Whether this version's welcome is still to come. The first time on a fresh install it records the version and the
-   * highlights instead: there is nothing new to someone who just installed XGram.
+   * Whether this version's welcome is still to come: for everyone, an update from any earlier build (Stable or CI, which
+   * kept no record) and a fresh install alike (there it introduces XGram's big features, once logged in).
    */
-  fun isDue(): Boolean {
-    val seen = pmc.getInt(KEY_CODE, 0)
-    if (seen >= BuildConfig.ORIGINAL_VERSION_CODE) {
-      return false
-    }
-    if (seen == 0 && isFreshInstall()) {
-      pmc.putInt(KEY_CODE, BuildConfig.ORIGINAL_VERSION_CODE)
-      pmc.putInt(KEY_HIGHLIGHTS, HIGHLIGHTS_VERSION)
-      return false
-    }
-    return true
-  }
+  fun isDue(): Boolean = pmc.getInt(KEY_CODE, 0) < BuildConfig.ORIGINAL_VERSION_CODE
 
   /** Whether this version's welcome shows [BUILT_IN] (with Try it); when false there is no welcome to show. */
   fun builtInDue(): Boolean = pmc.getInt(KEY_HIGHLIGHTS, 0) < HIGHLIGHTS_VERSION
@@ -124,12 +112,4 @@ internal object XgramWelcome {
     }
   }
 
-  /** Installed and never updated since: no version before this one ran here (builds before the welcome kept none). */
-  private fun isFreshInstall(): Boolean = try {
-    val context = UI.getContext()
-    val info = context.packageManager.getPackageInfo(context.packageName, 0)
-    info.firstInstallTime == info.lastUpdateTime
-  } catch (t: Throwable) {
-    false
-  }
 }

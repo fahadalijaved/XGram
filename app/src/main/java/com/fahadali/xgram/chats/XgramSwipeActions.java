@@ -50,16 +50,18 @@ public final class XgramSwipeActions {
   private XgramSwipeActions () { }
 
   public static final int REPLY = 0, QUOTE = 1, TRANSLATE = 2, COPY = 3, FORWARD = 4, SAVE = 5, BOOKMARK = 6, REACT = 7, NOTHING = 8;
+  /** Forward without sender (XgramForwardOptions): the forward sheet with Hide sender set. Stored, so a new number. */
+  public static final int FORWARD_NO_SENDER = 9;
 
   // XGram: ACTIONS and NAMES are public for the Compose Messages page (xgram-m3e)
-  public static final int[] ACTIONS = {REPLY, QUOTE, TRANSLATE, COPY, FORWARD, SAVE, BOOKMARK, REACT, NOTHING};
+  public static final int[] ACTIONS = {REPLY, QUOTE, TRANSLATE, COPY, FORWARD, FORWARD_NO_SENDER, SAVE, BOOKMARK, REACT, NOTHING};
   private static final int[] OPTION_IDS = {
     R.id.btn_xgramSwipeReply, R.id.btn_xgramSwipeQuote, R.id.btn_xgramSwipeTranslate, R.id.btn_xgramSwipeCopy, R.id.btn_xgramSwipeForward,
-    R.id.btn_xgramSwipeSave, R.id.btn_xgramSwipeBookmark, R.id.btn_xgramSwipeReact, R.id.btn_xgramSwipeNothing
+    R.id.btn_xgramSwipeForwardNoSender, R.id.btn_xgramSwipeSave, R.id.btn_xgramSwipeBookmark, R.id.btn_xgramSwipeReact, R.id.btn_xgramSwipeNothing
   };
   public static final int[] NAMES = {
     R.string.XgramSwipeReply, R.string.XgramQuote, R.string.Translate, R.string.XgramSwipeCopy, R.string.XgramSwipeForward,
-    R.string.XgramSaveToSaved, R.string.XgramBookmark, R.string.XgramSwipeReact, R.string.XgramSwipeNothing
+    R.string.XgramFwdWithoutSender, R.string.XgramSaveToSaved, R.string.XgramBookmark, R.string.XgramSwipeReact, R.string.XgramSwipeNothing
   };
 
   /** Telegram X's: a swipe left replies, a swipe right forwards. */
@@ -203,6 +205,9 @@ public final class XgramSwipeActions {
         return msg.canBeSaved() && XgramQuote.textMessage(msg) != null ? newAction(R.string.XgramSwipeCopy, R.drawable.baseline_content_copy_24, () -> copyText(msg)) : null;
       case FORWARD:
         return !msg.isSecretChat() && msg.canBeForwarded() ? newAction(R.string.SwipeShare, R.drawable.baseline_forward_24, () -> m.shareMessages(msg.getAllMessages(), false)) : null;
+      case FORWARD_NO_SENDER:
+        // A message that can't be copied always shows its sender: Telegram X's forward stays
+        return !msg.isSecretChat() && msg.canBeForwarded() && msg.xgramCanBeCopied() ? newAction(R.string.XgramFwdSwipe, XgramForwardOptions.ICON, () -> m.xgramShareMessages(msg.getAllMessages(), false, true)) : null;
       case SAVE:
         return isSent && msg.canBeForwarded() && msg.getChatId() != tdlib.selfChatId() ? newAction(R.string.XgramSwipeSave, com.fahadali.xgram.xdrive.XDrive.icon(R.drawable.baseline_bookmark_24), () -> XgramMessageActions.handle(m, msg, R.id.btn_xgramSaveToSaved)) : null;
       case BOOKMARK:

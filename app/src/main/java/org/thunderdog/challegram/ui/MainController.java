@@ -1705,12 +1705,14 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       xgramConnSnackState = want;
       if (want == com.fahadali.xgram.appearance.XgramConnection.OFFLINE) {
         xgramConnSnackBar.setText(Lang.getString(R.string.XgramNetworkOffline));
+        xgramConnSnackBar.setIcon(R.drawable.xgram_cloud_off_24); // XGram M3E: the connection pill's icon
         xgramConnSnackBar.setAction(Lang.getString(R.string.XgramNetworkSettings), () -> {
           xgramConnSnackDismissed = true;
           com.fahadali.xgram.appearance.XgramConnectionPill.openInternetPanel(context);
         }, true);
       } else {
         xgramConnSnackBar.setText(Lang.getString(R.string.XgramNetworkCantConnect));
+        xgramConnSnackBar.setIcon(R.drawable.baseline_sync_problem_24); // XGram M3E
         xgramConnSnackBar.setAction(Lang.getString(R.string.Proxy), () -> {
           xgramConnSnackDismissed = true;
           navigateTo(new SettingsProxyController(context, tdlib));
@@ -1801,6 +1803,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
         // XGram M3E: XGram's own words, sentence case ("XGram 1.2.3 is ready to install"), never "Telegram X"
         updateSnackBar.setText(com.fahadali.xgram.appearance.XgramR6B2Chat.updateReadyText(context().appUpdater().displayVersion()));
+        updateSnackBar.setIcon(R.drawable.baseline_system_update_24);
       } else {
         updateSnackBar.setText(Lang.getString(R.string.AppUpdateReady));
       }

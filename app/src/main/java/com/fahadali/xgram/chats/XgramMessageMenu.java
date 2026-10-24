@@ -82,6 +82,7 @@ public final class XgramMessageMenu {
     new Option("reply", R.string.Reply, R.drawable.baseline_reply_24, false, R.id.btn_messageReply),
     new Option("quote", R.string.XgramQuote, R.drawable.baseline_format_quote_close_24, true, R.id.btn_xgramQuote),
     new Option("share", R.string.Share, R.drawable.baseline_forward_24, false, R.id.btn_messageShare),
+    new Option("forward_no_sender", R.string.XgramFwdWithoutSender, XgramForwardOptions.ICON, true, R.id.btn_xgramForwardNoSender),
     new Option("pin", R.string.Pin, R.drawable.deproko_baseline_pin_24, false, R.id.btn_messagePin, R.id.btn_messageUnpin),
     new Option("stats", R.string.ViewStats, R.drawable.baseline_bar_chart_24, false, R.id.btn_viewStatistics),
     new Option("edit", R.string.edit, R.drawable.baseline_edit_24, false, R.id.btn_messageEdit),
@@ -510,7 +511,7 @@ public final class XgramMessageMenu {
   /** The tile group of an option: actions on the message, copy / info / tools, moderation, and Delete on its own. */
   public static int menuGroup (@IdRes int id) {
     if (id == R.id.btn_messageReplies || id == R.id.btn_messageReply || id == R.id.btn_xgramQuote ||
-      id == R.id.btn_messageShare || id == R.id.btn_messagePin || id == R.id.btn_messageUnpin ||
+      id == R.id.btn_messageShare || id == R.id.btn_xgramForwardNoSender || id == R.id.btn_messagePin || id == R.id.btn_messageUnpin ||
       id == R.id.btn_messageEdit || id == R.id.btn_xgramReplyPrivately) {
       return GROUP_PRIMARY;
     }

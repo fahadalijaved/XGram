@@ -72,11 +72,12 @@
   <string name="XgramUpdStatusDownloading">Downloading %1$s…</string>
   <string name="XgramUpdStatusReady">Ready to install: %1$s</string>
   <string name="XgramUpdUpToDateTitle">You’re up to date</string>
-  <string name="XgramUpdUpToDateStable">XGram %1$s is the newest Stable release. Here’s what’s in it.</string>
-  <string name="XgramUpdUpToDateCi">XGram %1$s is the newest CI build. Here’s what’s in it.</string>
-  <string name="XgramUpdUpToDateOff">Update checks are off. XGram %1$s is installed; here’s what’s in it.</string>
+  <string name="XgramUpdUpToDateStable">No newer Stable release than XGram %1$s.</string>
+  <string name="XgramUpdUpToDateCi">No newer CI build than XGram %1$s.</string>
+  <string name="XgramUpdUpToDateOff">Update checks are off. XGram %1$s is installed.</string>
+  <string name="XgramUpdWhatsInIt">Here’s what’s in it.</string>
   <string name="XgramUpdCheckFailedTitle">Couldn’t check for updates</string>
-  <string name="XgramUpdNoConnection">No connection. Check your internet and try again. Meanwhile, here’s what’s in XGram %1$s.</string>
+  <string name="XgramUpdNoConnection">No connection. Check your internet and try again.</string>
   <string name="XgramUpdCheckFailedReason">Something went wrong (%1$s). Try again in a moment.</string>
   <string name="XgramUpdDone">Done</string>
   <string name="XgramUpdCheckAgain">Check again</string>

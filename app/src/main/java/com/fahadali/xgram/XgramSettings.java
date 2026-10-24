@@ -397,13 +397,40 @@ public final class XgramSettings {
     pmc().putInt(KEY_HISTORY_RETENTION, days);
   }
 
-  /** Forwarding starts with "Send as copy" ticked (NagramX). */
-  public boolean forwardWithoutAuthor () {
-    return pmc().getBoolean("xgram_forward_without_author", false);
+  // Forwarding (Messages > Defaults, see com.fahadali.xgram.chats.XgramForwardOptions): whether the forward sheet
+  // starts with Show sender or Hide sender
+
+  public static final String KEY_FORWARD_SENDER = "xgram_forward_sender";
+  /** Remember my last choice: the last forward hid the sender. Not under {@link #KEY_FORWARD_SENDER}, an int that backups find by prefix. */
+  public static final String KEY_FORWARD_LAST_HIDDEN = "xgram_forward_last_hidden";
+  /** Before Forwarding: "Forward without author" (NagramX), a switch. On reads as Hide sender until Forwarding is set. */
+  public static final String KEY_FORWARD_WITHOUT_AUTHOR = "xgram_forward_without_author";
+  public static final int FORWARD_SHOW_SENDER = 0, FORWARD_HIDE_SENDER = 1, FORWARD_REMEMBER = 2;
+
+  /** {@link #FORWARD_SHOW_SENDER} (the default), {@link #FORWARD_HIDE_SENDER} or {@link #FORWARD_REMEMBER}. */
+  public int forwardSender () {
+    int value = pmc().getInt(KEY_FORWARD_SENDER, -1);
+    if (value == FORWARD_SHOW_SENDER || value == FORWARD_HIDE_SENDER || value == FORWARD_REMEMBER) {
+      return value;
+    }
+    return pmc().getBoolean(KEY_FORWARD_WITHOUT_AUTHOR, false) ? FORWARD_HIDE_SENDER : FORWARD_SHOW_SENDER;
   }
 
-  public void setForwardWithoutAuthor (boolean value) {
-    pmc().putBoolean("xgram_forward_without_author", value);
+  public void setForwardSender (int value) {
+    if (value != FORWARD_HIDE_SENDER && value != FORWARD_REMEMBER) {
+      value = FORWARD_SHOW_SENDER;
+    }
+    putInt(KEY_FORWARD_SENDER, value);
+    pmc().remove(KEY_FORWARD_WITHOUT_AUTHOR); // the switch it replaces
+  }
+
+  /** The last forward hid the sender (only stored while Remember my last choice is on). */
+  public boolean forwardLastHidden () {
+    return pmc().getBoolean(KEY_FORWARD_LAST_HIDDEN, false);
+  }
+
+  public void setForwardLastHidden (boolean value) {
+    put(KEY_FORWARD_LAST_HIDDEN, value);
   }
 
   /** Pre-tick "Delete for everyone" in the delete dialog, also for messages of others (NagramX). */

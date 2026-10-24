@@ -142,6 +142,28 @@ public class TextWrapper implements ListAnimator.Measurable, Destroyable, Text.T
     return this;
   }
 
+  // XGram: a range drawn behind the text's glyphs (the words a reply quoted), passed to the layout drawn
+
+  private int xgramRangeStart = -1, xgramRangeEnd = -1;
+  private int xgramRangeColor;
+
+  /** XGram: draws {@code color} behind the text from {@code start} to {@code end} (UTF-16 offsets in {@link #getText()}); -1 for none. */
+  public void setXgramRange (int start, int end, int color) {
+    this.xgramRangeStart = start;
+    this.xgramRangeEnd = end;
+    this.xgramRangeColor = color;
+  }
+
+  /** XGram: where the range was drawn last (see {@link Text#getXgramRangeBounds}); false when it wasn't drawn yet. */
+  public boolean getXgramRangeBounds (android.graphics.RectF out) {
+    final Text text = getCurrent();
+    if (text == null) {
+      return false;
+    }
+    text.setXgramRange(xgramRangeStart, xgramRangeEnd, xgramRangeColor); // a path left from another range isn't read
+    return text.getXgramRangeBounds(out);
+  }
+
   @Override
   public void onInvalidateTextMedia (Text text, @Nullable TextMedia specificMedia) {
     if (textMediaListener != null && text == getCurrent()) {
@@ -414,6 +436,7 @@ public class TextWrapper implements ListAnimator.Measurable, Destroyable, Text.T
   public final void draw (Canvas c, int startX, int startY, TextColorSet colorTheme, float alpha, ComplexReceiver textMediaReceiver) {
     final Text text = getCurrent();
     if (text != null) {
+      text.setXgramRange(xgramRangeStart, xgramRangeEnd, xgramRangeColor); // XGram
       text.draw(c, startX, startX, 0, startY, colorTheme, alpha, textMediaReceiver);
     }
   }
@@ -434,6 +457,7 @@ public class TextWrapper implements ListAnimator.Measurable, Destroyable, Text.T
   public final void draw (Canvas c, int startX, int endX, int endXPadding, int startY, TextColorSet colorTheme, float alpha, @Nullable ComplexReceiver textMediaReceiver) {
     final Text text = getCurrent();
     if (text != null) {
+      text.setXgramRange(xgramRangeStart, xgramRangeEnd, xgramRangeColor); // XGram
       text.draw(c, startX, endX, endXPadding, startY, colorTheme, alpha, textMediaReceiver);
     }
   }

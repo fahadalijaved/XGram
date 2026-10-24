@@ -896,6 +896,7 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
         ids.append(R.id.btn_messageShare);
         strings.append(R.string.Share);
         icons.append(R.drawable.baseline_forward_24);
+        com.fahadali.xgram.chats.XgramForwardOptions.fillMenu(msg, ids, icons, strings); // XGram: Forward without sender
       }
     }
 

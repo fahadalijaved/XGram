@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: forward without the sender, see com.fahadali.xgram.chats.XgramForwardOptions -->
+  <!-- The message menu's Forward without sender -->
+  <item type="id" name="btn_xgramForwardNoSender" />
+  <!-- Settings → XGram → Messages: Forwarding -->
+  <item type="id" name="btn_xgramForwardSender" />
+  <!-- Swipe on a message: Forward without sender -->
+  <item type="id" name="btn_xgramSwipeForwardNoSender" />
+</resources>

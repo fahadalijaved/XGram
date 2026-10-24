@@ -6630,6 +6630,13 @@ public class MessagesController extends ViewController<MessagesController.Argume
           shareMessages(selectedMessage.getAllMessages(), false);
         }
         return true;
+      } else if (id == R.id.btn_xgramForwardNoSender) {
+        // XGram: Forward without sender, the forward sheet with Hide sender set
+        cancelSheduledKeyboardOpeningAndHideAllKeyboards();
+        if (selectedMessage.canBeForwarded()) {
+          xgramShareMessages(selectedMessage.getAllMessages(), false, true);
+        }
+        return true;
       } else if (id == R.id.btn_chatTranslate) {
         cancelSheduledKeyboardOpeningAndHideAllKeyboards();
         com.fahadali.xgram.chats.XgramTranslate.start(this, selectedMessage);
@@ -8921,12 +8928,17 @@ public class MessagesController extends ViewController<MessagesController.Argume
   // Share utils
 
   public void shareMessages (TdApi.Message[] messages, boolean isExplicitSelection) {
+    xgramShareMessages(messages, isExplicitSelection, false);
+  }
+
+  /** XGram: {@code hideSender} opens the forward sheet with Hide sender set (Forward without sender). */
+  public void xgramShareMessages (TdApi.Message[] messages, boolean isExplicitSelection, boolean hideSender) {
     if (messages == null || messages.length == 0) {
       return;
     }
     hideAllKeyboards();
     final ShareController c = new ShareController(context, tdlib);
-    c.setArguments(new ShareController.Args(messages).setDisallowReply(isExplicitSelection).setAfter(() -> finishSelectMode(-1)));
+    c.setArguments(new ShareController.Args(messages).setDisallowReply(isExplicitSelection).setAfter(() -> finishSelectMode(-1)).xgramSetHideSender(hideSender));
     c.show();
     hideCursorsForInputView();
   }

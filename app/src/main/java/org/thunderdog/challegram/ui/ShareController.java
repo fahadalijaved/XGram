@@ -348,6 +348,14 @@ public class ShareController extends TelegramViewController<ShareController.Args
       return this;
     }
 
+    private boolean xgramHideSender;
+
+    /** XGram: Forward without sender (the message menu, a swipe): the sheet starts with Hide sender set. */
+    public Args xgramSetHideSender (boolean hideSender) {
+      this.xgramHideSender = hideSender;
+      return this;
+    }
+
     public Args setMessageThreadId (long messageThreadId) {
       this.messageThreadId = messageThreadId;
       return this;
@@ -395,6 +403,10 @@ public class ShareController extends TelegramViewController<ShareController.Args
     if (args.xgramSendAsCopy) {
       needHideAuthor = true; // XGram: Send as copy and Remove captions start ticked
       needRemoveCaptions = true;
+      xgramForwardPreset = true;
+    } else if (args.xgramHideSender) {
+      needHideAuthor = true; // XGram: Forward without sender, Hide sender starts set
+      xgramForwardPreset = true;
     }
     this.displayingChatList = args.chatList != null ? args.chatList : ChatPosition.CHAT_LIST_MAIN;
   }
@@ -1056,6 +1068,9 @@ public class ShareController extends TelegramViewController<ShareController.Args
     if (xgramSheetTop != null && headerView != null) {
       xgramUpdateSheetTop(headerView.getTranslationY()); // XGram
     }
+    if (xgramForwardPanel != null) {
+      xgramForwardPanel.refreshColors(); // XGram
+    }
   }
 
   private @Nullable com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable xgramSheetTop; // XGram: Expressive header background
@@ -1432,6 +1447,32 @@ public class ShareController extends TelegramViewController<ShareController.Args
     inputView.setMaxLines(4);
     inputView.setSelectionChangeListener(this);
     inputView.setSpanChangeListener(this::onInputSpansChanged);
+    if (mode == MODE_MESSAGES && getArgumentsStrict().messages.length > 0) {
+      // XGram: Show sender | Hide sender, Hide captions and a preview of the first message, above the comment field
+      xgramForwardPanel = new com.fahadali.xgram.chats.XgramForwardOptions.Panel(context, tdlib, this, getArgumentsStrict().messages, xgramSheetColorId(), new com.fahadali.xgram.chats.XgramForwardOptions.Callback() {
+        @Override
+        public void onForwardSenderChanged (boolean hideSender) {
+          needHideAuthor = hideSender;
+          if (!hideSender) {
+            needRemoveCaptions = false; // only copies lose their captions
+          }
+          xgramForwardTouched = true;
+          xgramSyncForwardPanel(true);
+        }
+
+        @Override
+        public void onForwardCaptionsChanged (boolean hideCaptions) {
+          needRemoveCaptions = hideCaptions;
+          if (hideCaptions) {
+            needHideAuthor = true; // only copies lose their captions
+          }
+          xgramForwardTouched = true;
+          xgramSyncForwardPanel(true);
+        }
+      });
+      xgramSyncForwardPanel(false);
+      bottomWrap.addView(xgramForwardPanel, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    }
     bottomWrap.addView(inputView);
 
     if (OPEN_KEYBOARD_WITH_AUTOSCROLL) {
@@ -1580,19 +1621,21 @@ public class ShareController extends TelegramViewController<ShareController.Args
       tdlib.getMessageProperties(list, properties -> {
         runOnUiThreadOptional(() -> {
           messageProperties = properties;
-          // XGram: forward without author by default (NagramX), when every message can be copied.
+          // XGram: Forwarding (Messages) starts the sheet with Hide sender, or as the last forward did, when a message
+          // can be copied: the others keep their sender (XgramForwardOptions.forwardMessages)
+          final boolean xgramCanHide = com.fahadali.xgram.chats.XgramForwardOptions.canHideSender(messages, properties);
+          final boolean xgramFirstLoad = !xgramForwardDefaultsApplied;
           if (!xgramForwardDefaultsApplied) {
             xgramForwardDefaultsApplied = true;
-            if (com.fahadali.xgram.XgramSettings.instance().forwardWithoutAuthor()) {
-              boolean allCanBeCopied = properties != null && properties.length > 0;
-              for (TdApi.MessageProperties messageProperties : properties != null ? properties : new TdApi.MessageProperties[0]) {
-                allCanBeCopied &= messageProperties != null && messageProperties.canBeCopied;
-              }
-              if (allCanBeCopied) {
-                needHideAuthor = true;
-              }
+            if (!xgramForwardPreset && xgramCanHide && com.fahadali.xgram.chats.XgramForwardOptions.hideSenderByDefault()) {
+              needHideAuthor = true;
             }
           }
+          if (!xgramCanHide) {
+            needHideAuthor = false; // nothing can be copied: every message keeps its sender
+            needRemoveCaptions = false;
+          }
+          xgramSyncForwardPanel(!xgramFirstLoad);
           if (after != null) {
             after.runWithData(properties);
           }
@@ -2619,7 +2662,21 @@ public class ShareController extends TelegramViewController<ShareController.Args
   }
 
   private int getContentOffset () {
-    return getTargetHeight() / 2 - HeaderView.getSize(true) - (isExpanded ? calculateMovementDistance() : 0) + (canShareLink ? 0 : Screen.dp(56f) / 2 + extraBottomInset);
+    // XGram: the grid rises by xgramExpandShift(), the same distance the expand animation moves it
+    return Math.max(0, xgramCollapsedContentOffset() - (isExpanded ? xgramExpandShift() : 0));
+  }
+
+  private int xgramCollapsedContentOffset () {
+    return getTargetHeight() / 2 - HeaderView.getSize(true) + (canShareLink ? 0 : Screen.dp(56f) / 2 + extraBottomInset);
+  }
+
+  /**
+   * XGram: how far the chat grid rises as chats are picked: the bottom bars' height, but never above the top (with the
+   * forward options they can take more than half of a short window). The expand animation, the layout after it and
+   * the scroll that keeps a scrolled grid in place all use it, so the grid doesn't jump when the animation ends.
+   */
+  private int xgramExpandShift () {
+    return Math.min(calculateMovementDistance(), Math.max(0, xgramCollapsedContentOffset()));
   }
 
   private int calculateTotalHeight () {
@@ -3011,6 +3068,9 @@ public class ShareController extends TelegramViewController<ShareController.Args
   private void checkButtonsPosition () {
     if (bottomWrap != null) {
       int add = Math.max(0, inputView.getMeasuredHeight() - Screen.dp(48f));
+      if (xgramForwardPanel != null && xgramForwardPanel.getVisibility() != View.GONE) {
+        add += xgramForwardPanel.getMeasuredHeight(); // XGram: the forward options sit above the comment field
+      }
       float y = bottomWrap.getTranslationY() + add;
       okButton.setTranslationY(y);
       emojiButton.setTranslationY(y);
@@ -3065,7 +3125,7 @@ public class ShareController extends TelegramViewController<ShareController.Args
       recyclerView.invalidateItemDecorations();
       if (ignoreRecyclerMovement && savedPosition == 0) {
         if (isApplied) {
-          recyclerView.scrollBy(0, calculateMovementDistance() * -1);
+          recyclerView.scrollBy(0, xgramExpandShift() * -1); // XGram: was calculateMovementDistance()
         } else {
           ((LinearLayoutManager) recyclerView.getLayoutManager()).scrollToPositionWithOffset(savedPosition, savedOffset - getContentOffset());
         }
@@ -3156,7 +3216,7 @@ public class ShareController extends TelegramViewController<ShareController.Args
   }
 
   private float calculateRecyclerOffset () {
-    return appliedRecyclerMargin || ignoreRecyclerMovement ? 0f : (float) calculateMovementDistance() * expandFactor * -1f;
+    return appliedRecyclerMargin || ignoreRecyclerMovement ? 0f : (float) xgramExpandShift() * expandFactor * -1f; // XGram: was calculateMovementDistance()
   }
 
   private int savedPosition, savedOffset;
@@ -3294,6 +3354,9 @@ public class ShareController extends TelegramViewController<ShareController.Args
   private void setKeyboardVisible (boolean isVisible) {
     if (this.isKeyboardReallyVisible != isVisible) {
       this.isKeyboardReallyVisible = isVisible;
+      if (xgramForwardPanel != null) {
+        xgramForwardPanel.setTyping(isVisible); // XGram: while typing the forward options leave out their preview, and more below a tall window
+      }
       if (isVisible) {
         ensureTopPosition();
       } else {
@@ -3606,17 +3669,10 @@ public class ShareController extends TelegramViewController<ShareController.Args
 
     if (mode == MODE_MESSAGES) {
       Args args = getArgumentsStrict();
-      for (int i = 0; i < args.messages.length; i++) {
-        TdApi.Message message = args.messages[i];
-        TdApi.MessageProperties properties = messageProperties[i];
-        if (!properties.canBeCopied) {
-          canBeCopied = false;
-          break;
-        }
-        if (!Td.isText(message.content) && TD.canCopyText(message)) {
-          canRemoveCaptions = true;
-        }
-      }
+      // XGram: Send as copy as soon as one message can be copied, the others keep their sender
+      // (XgramForwardOptions.forwardMessages); Remove captions in copies when a copied message has a caption
+      canBeCopied = com.fahadali.xgram.chats.XgramForwardOptions.canHideSender(args.messages, messageProperties);
+      canRemoveCaptions = com.fahadali.xgram.chats.XgramForwardOptions.hasCopyableCaption(args.messages, messageProperties);
       if (canBeCopied) {
         items.add(new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.btn_hideAuthor, 0, R.string.SendAsCopy, R.id.btn_hideAuthor, needHideAuthor));
         if (canRemoveCaptions) {
@@ -3650,6 +3706,12 @@ public class ShareController extends TelegramViewController<ShareController.Args
       needHideAuthor = result.get(R.id.btn_hideAuthor) == R.id.btn_hideAuthor;
       needRemoveCaptions = result.get(R.id.btn_removeCaptions) == R.id.btn_removeCaptions;
       forceSendWithoutSound = result.get(R.id.btn_sendNoSound) == R.id.btn_sendNoSound;
+      if (mode == MODE_MESSAGES) {
+        // XGram: only copies lose their captions; the forward options above the comment field follow
+        needRemoveCaptions = needRemoveCaptions && needHideAuthor;
+        xgramForwardTouched = true;
+        xgramSyncForwardPanel(true);
+      }
     });
   }
 
@@ -3658,6 +3720,19 @@ public class ShareController extends TelegramViewController<ShareController.Args
   private boolean isSent;
   private boolean needHideAuthor, needRemoveCaptions, forceSendWithoutSound;
   private boolean xgramForwardDefaultsApplied;
+
+  // XGram: Forward without the sender (com.fahadali.xgram.chats.XgramForwardOptions): the options above the comment
+  // field are needHideAuthor and needRemoveCaptions, so the ⋮ menu's Send as copy and Remove captions stay in sync
+
+  private @Nullable com.fahadali.xgram.chats.XgramForwardOptions.Panel xgramForwardPanel;
+  /** Opened with Hide sender set (Forward without sender, XGram Drive): only a change made in the sheet is remembered. */
+  private boolean xgramForwardPreset, xgramForwardTouched;
+
+  private void xgramSyncForwardPanel (boolean animated) {
+    if (xgramForwardPanel != null) {
+      xgramForwardPanel.setState(messageProperties, needHideAuthor, needRemoveCaptions, animated);
+    }
+  }
 
   private void sendMessages (boolean forceGoToChat, boolean isSingleTap, @Nullable TdApi.MessageSendOptions finalSendOptions) {
     sendMessages(forceGoToChat, isSingleTap, finalSendOptions, true);
@@ -3751,7 +3826,8 @@ public class ShareController extends TelegramViewController<ShareController.Args
           break;
         }
         case MODE_MESSAGES: {
-          if (!messageReplyIncluded && !TD.forwardMessages(chatId, xgramTopicId, args.messages, needHideAuthor, needRemoveCaptions, sendOptions, functions))
+          // XGram: with Hide sender, messages that can't be copied are forwarded with their sender instead of left out
+          if (!messageReplyIncluded && !com.fahadali.xgram.chats.XgramForwardOptions.forwardMessages(tdlib, chatId, xgramTopicId, args.messages, messageProperties, needHideAuthor, needRemoveCaptions, sendOptions, functions))
             return;
           break;
         }
@@ -3813,6 +3889,9 @@ public class ShareController extends TelegramViewController<ShareController.Args
 
     for (TdApi.Function<?> function : functions) {
       com.fahadali.xgram.chats.XgramUndoSend.flushBefore(tdlib, function); // XGram: Undo send, what waits in these chats goes first
+    }
+    if (mode == MODE_MESSAGES && (!xgramForwardPreset || xgramForwardTouched) && com.fahadali.xgram.chats.XgramForwardOptions.canHideSender(args.messages, messageProperties)) {
+      com.fahadali.xgram.chats.XgramForwardOptions.remember(needHideAuthor); // XGram: Forwarding's Remember my last choice
     }
     if (functions.size() == 1) {
       tdlib.client().send(functions.get(0), tdlib.messageHandler());
@@ -4036,6 +4115,9 @@ public class ShareController extends TelegramViewController<ShareController.Args
     Views.destroyRecyclerView(recyclerView);
     TGLegacyManager.instance().removeEmojiListener(adapter);
     cancelDownloadingFiles();
+    if (xgramForwardPanel != null) {
+      xgramForwardPanel.performDestroy(); // XGram
+    }
     context().removeFullScreenView(this, false);
   }
 

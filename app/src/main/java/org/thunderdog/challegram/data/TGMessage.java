@@ -2085,6 +2085,10 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
     checkEdges();
 
+    if (xgramQuoteHighlight != null) {
+      xgramQuoteHighlight.beforeDraw(view); // XGram: the words a reply quoted, after a jump here
+    }
+
     final float isHiddenFactor = isHiddenByFilter.getFloatValue();
     if (isHiddenFactor == 1f) {
       drawHiddenMessage(view, c, isHiddenFactor);
@@ -3128,6 +3132,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
             if (replyData != null && replyData.getError() != null) {
               buildContentHint(view, getReplyLocationProvider(), false).show(tdlib, replyData.toErrorText());
             } else {
+              com.fahadali.xgram.chats.XgramQuoteHighlight.prepareJump(tdlib, replyToMessage.chatId, replyToMessage.messageId, replyToMessage.quote); // XGram: the quoted words light up there
               if (replyToMessage.chatId != msg.chatId) {
                 if (replyToMessage.chatId == 0 || replyToMessage.messageId == 0) {
                   buildContentHint(view, getReplyLocationProvider(), false).show(tdlib, Lang.getString(R.string.MessageReplyPrivate));
@@ -7174,6 +7179,26 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     if (revoke) {
       revokeHighlight();
     }
+    com.fahadali.xgram.chats.XgramQuoteHighlight.onJump(this); // XGram: a jump from a quote also shows the quoted words
+  }
+
+  // XGram: quote highlight (see XgramQuoteHighlight): kept on the message, so a recycled view never keeps it
+
+  private @Nullable com.fahadali.xgram.chats.XgramQuoteHighlight xgramQuoteHighlight;
+
+  public final com.fahadali.xgram.chats.XgramQuoteHighlight xgramQuoteHighlight () {
+    if (xgramQuoteHighlight == null) {
+      xgramQuoteHighlight = new com.fahadali.xgram.chats.XgramQuoteHighlight(this);
+    }
+    return xgramQuoteHighlight;
+  }
+
+  /**
+   * XGram: the text or caption shown for {@code messageId} (this message, or an album item), where a quote of it is
+   * highlighted; null when there is none, or when a translation is shown instead (the quote wouldn't match).
+   */
+  public @Nullable TextWrapper xgramQuotedTextWrapper (long messageId) {
+    return null;
   }
 
   private void setHighlight (float highlight) {

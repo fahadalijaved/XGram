@@ -826,6 +826,14 @@ public class TGMessageFile extends TGMessage {
     return filesWithCaption > 0 ? Td.trim(resultText) : null;
   }
 
+  @Nullable
+  @Override
+  public TextWrapper xgramQuotedTextWrapper (long messageId) {
+    // XGram: quote highlight: each file of a group shows its own caption
+    final CaptionedFile file = findCaptionedFile(messageId);
+    return file != null && file.translatedCaption == null && file.hasCaption() ? file.captionWrapper : null;
+  }
+
   @Override
   protected void setTranslationResult (@Nullable TdApi.FormattedText text) {
     ArrayList<TdApi.FormattedText> translatedParts = null;

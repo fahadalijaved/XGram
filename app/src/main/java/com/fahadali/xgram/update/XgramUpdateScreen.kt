@@ -329,7 +329,7 @@ object XgramUpdateScreen {
   }
 
   /**
-   * What's new in XGram <version>, once after an update (never after a fresh install), when the chat list shows
+   * What's new in XGram <version>, once after an update or a fresh install (once logged in), when the chat list shows
    * (MainController.onFocus: logged in, the main screen up, the passcode unlocked). [XgramWelcome] decides when: the
    * first welcome after the built-in highlights changed shows them at once (Activity, Undo send, Check In, Later),
    * with the installed build's notes under them once its post is found; later versions show none until the built-in
@@ -2231,13 +2231,17 @@ private fun UpToDateTitle(model: UpdateModel, error: String?, previewTag: Boolea
         TitleOpenPost(openPost)
       }
     }
-    val intro = when {
-      error != null && isConnectionError(error) -> s(R.string.XgramUpdNoConnection, model.version)
+    // By the channel checked, not the installed build's kind: a CI build on the Stable channel has no newer Stable
+    // release; "what's in it" only once its notes are there (a debug build has no post)
+    val channel = XgramUpdates.channel()
+    val status = when {
+      error != null && isConnectionError(error) -> s(R.string.XgramUpdNoConnection)
       error != null -> s(R.string.XgramUpdCheckFailedReason, error)
-      XgramUpdates.channel() == XgramUpdates.CHANNEL_OFF -> s(R.string.XgramUpdUpToDateOff, model.version)
-      model.isStable -> s(R.string.XgramUpdUpToDateStable, model.version)
-      else -> s(R.string.XgramUpdUpToDateCi, model.version)
+      channel == XgramUpdates.CHANNEL_OFF -> s(R.string.XgramUpdUpToDateOff, model.version)
+      channel == XgramUpdates.CHANNEL_CI -> s(R.string.XgramUpdUpToDateCi, model.version)
+      else -> s(R.string.XgramUpdUpToDateStable, model.version)
     }
+    val intro = if (model.notes.isEmpty) status else status + " " + s(R.string.XgramUpdWhatsInIt)
     Text(
       intro,
       style = MaterialTheme.typography.bodyLarge,

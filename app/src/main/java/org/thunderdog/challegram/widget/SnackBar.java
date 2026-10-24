@@ -15,19 +15,18 @@
 package org.thunderdog.challegram.widget;
 
 import android.content.Context;
-import android.content.res.ColorStateList;
-import android.graphics.drawable.GradientDrawable;
-import android.graphics.drawable.RippleDrawable;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.View;
 import android.view.ViewGroup;
-import android.view.ViewOutlineProvider;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 
+import androidx.annotation.DrawableRes;
 import androidx.annotation.Nullable;
 
 import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramSnackbar;
 
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.core.Lang;
@@ -43,7 +42,6 @@ import me.vkryl.android.AnimatorUtils;
 import me.vkryl.android.animator.BoolAnimator;
 import me.vkryl.android.animator.FactorAnimator;
 import me.vkryl.android.widget.FrameLayoutFix;
-import me.vkryl.core.MathUtils;
 
 public class SnackBar extends RelativeLayout implements ThemeInvalidateListener, Lang.Listener {
   public interface Callback {
@@ -102,116 +100,63 @@ public class SnackBar extends RelativeLayout implements ThemeInvalidateListener,
       }
     }, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l);
 
-    setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM));
+    // XGram M3E: the floating bar is centred once the window is wider than it may get (an unfolded Fold, a tablet)
+    setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, xgram ? Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL : Gravity.BOTTOM));
     setOnTouchListener((v, e) -> true);
     if (xgram) {
       xgramStyle();
     }
   }
 
-  // XGram M3E: floating Material 3 snackbar (inverse surface, 4dp corners, 12dp margins, sentence case action)
+  // XGram M3E: the Material 3 Expressive floating snackbar of XgramSnackbar: its container (a tonal card, a pill on one
+  // line, 24dp corners when the text wraps, elevation level 3, 16dp from the sides, at most 560dp wide), its content row
+  // (an optional leading icon, two lines of bodyMedium, a tonal pill action) and its motion (it rises and grows in on
+  // the spatial spring, fades, shrinks and drops out on the effects spring, fades only with Reduce motion)
 
   private final boolean xgram = XgramExpressive.isEnabled();
   private int xgramBottomInset;
-  private RippleDrawable xgramActionRipple;
-
-  private void xgramApplyColors () {
-    textView.setTextColor(XgramExpressive.color(XgramExpressive.INVERSE_ON_SURFACE));
-    int inversePrimary = XgramExpressive.color(XgramExpressive.INVERSE_PRIMARY);
-    actionView.setTextColor(inversePrimary);
-    if (xgramActionRipple != null) {
-      xgramActionRipple.setColor(ColorStateList.valueOf(XgramExpressive.withAlpha(inversePrimary, XgramExpressive.STATE_PRESSED)));
-    }
-  }
+  private XgramSnackbar.Row xgramRow;
+  private XgramExpressive.MorphDrawable xgramContainer;
+  private XgramSnackbar.Motion xgramMotion;
+  private boolean xgramLaidOut;
 
   @Override
   public void onThemeInvalidate (boolean isTempUpdate) {
     if (xgram) {
-      // The M3 inverse roles follow the theme here: Telegram X's snackbar colors are never bound in this mode
-      xgramApplyColors();
+      // The M3 roles follow the theme here: Telegram X's snackbar colors are never bound in this mode
+      xgramRow.applyColors();
+      xgramRow.invalidate();
     }
     invalidate();
   }
 
   private void xgramStyle () {
-    XgramExpressive.applyText(textView, XgramExpressive.TS_BODY_M, false);
-    textView.setMaxLines(2);
-    textView.setEllipsize(android.text.TextUtils.TruncateAt.END);
-    // the text spans from the bar's start to the action (it used to wrap its content and hug the action).
-    // Absolute rules only (xgramApplyDirection), like the action's: a start rule would override them under an RTL system locale.
-    RelativeLayout.LayoutParams textParams = (RelativeLayout.LayoutParams) textView.getLayoutParams();
-    textParams.width = ViewGroup.LayoutParams.MATCH_PARENT;
-    textParams.addRule(RelativeLayout.CENTER_VERTICAL);
-    textParams.topMargin = textParams.bottomMargin = 0;
-    textView.setLayoutParams(textParams);
-    actionView.setId(R.id.text_title);
-    XgramExpressive.applyText(actionView, XgramExpressive.TS_LABEL_L, false);
-    actionView.setPadding(Screen.dp(12f), Screen.dp(10f), Screen.dp(12f), Screen.dp(10f));
-    RelativeLayout.LayoutParams actionParams = (RelativeLayout.LayoutParams) actionView.getLayoutParams();
-    actionParams.addRule(RelativeLayout.CENTER_VERTICAL);
-    xgramApplyDirection(true);
-    GradientDrawable actionMask = new GradientDrawable();
-    actionMask.setColor(0xffffffff);
-    actionMask.setCornerRadius(Screen.dp(100f));
-    xgramActionRipple = new RippleDrawable(ColorStateList.valueOf(0), null, actionMask);
-    actionView.setBackground(xgramActionRipple);
-    xgramApplyColors(); // text, action and ripple colors
-
-    XgramExpressive.MorphDrawable background = new XgramExpressive.MorphDrawable(0, XgramExpressive.CORNER_XS, Float.NaN);
-    background.setColorRole(XgramExpressive.INVERSE_SURFACE);
-    setBackground(background);
-    setOutlineProvider(ViewOutlineProvider.BACKGROUND);
-    setElevation(Screen.dp(XgramExpressive.ELEVATION_3));
-    setMinimumHeight(Screen.dp(48f));
+    // Telegram X's text and action stay for its own look; the row (icon, text, tonal action) takes their place
+    textView.setVisibility(View.GONE);
+    actionView.setVisibility(View.GONE);
+    xgramRow = new XgramSnackbar.Row(getContext());
+    addView(xgramRow, new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    xgramContainer = XgramSnackbar.styleContainer(this, XgramSnackbar.CORNER_ONE_LINE_DP);
+    xgramMotion = new XgramSnackbar.Motion(this, visibility -> {
+      if (callback != null) {
+        callback.onSnackBarTransition(this, visibility); // the chat list lifts its FAB by it
+      }
+    });
+    // Hidden until shown: becoming visible makes TalkBack read the live region (and nothing is drawn while it is out)
+    setVisibility(View.INVISIBLE);
+    setAccessibilityLiveRegion(ACCESSIBILITY_LIVE_REGION_POLITE);
     xgramUpdateMargins();
   }
 
-  /**
-   * M3 puts the action at the end of the bar: the right in a left-to-right language, the left in Arabic or Hebrew, with
-   * the text on the other side, aligned to its start. Absolute rules and paddings (the layout direction stays LTR, see
-   * xgramStyle); applied again when the language direction changes while the bar exists.
-   */
-  private boolean xgramRtl;
-
-  private void xgramApplyDirection (boolean force) {
-    final boolean rtl = Lang.rtl();
-    if (!force && rtl == xgramRtl) {
-      return;
-    }
-    xgramRtl = rtl;
-    RelativeLayout.LayoutParams textParams = (RelativeLayout.LayoutParams) textView.getLayoutParams();
-    RelativeLayout.LayoutParams actionParams = (RelativeLayout.LayoutParams) actionView.getLayoutParams();
-    // 14dp + 20sp line + 14dp: 48dp for one line, 68dp for two; 16dp from the bar's edge, 8dp to the action
-    if (rtl) {
-      textParams.addRule(RelativeLayout.ALIGN_PARENT_LEFT, 0);
-      textParams.addRule(RelativeLayout.LEFT_OF, 0);
-      textParams.addRule(RelativeLayout.ALIGN_PARENT_RIGHT);
-      textParams.addRule(RelativeLayout.RIGHT_OF, R.id.text_title);
-      textView.setPadding(Screen.dp(8f), Screen.dp(14f), Screen.dp(16f), Screen.dp(14f));
-      actionParams.addRule(RelativeLayout.ALIGN_PARENT_RIGHT, 0);
-      actionParams.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
-      actionParams.leftMargin = Screen.dp(8f);
-      actionParams.rightMargin = 0;
-    } else {
-      textParams.addRule(RelativeLayout.ALIGN_PARENT_RIGHT, 0);
-      textParams.addRule(RelativeLayout.RIGHT_OF, 0);
-      textParams.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
-      textParams.addRule(RelativeLayout.LEFT_OF, R.id.text_title);
-      textView.setPadding(Screen.dp(16f), Screen.dp(14f), Screen.dp(8f), Screen.dp(14f));
-      actionParams.addRule(RelativeLayout.ALIGN_PARENT_LEFT, 0);
-      actionParams.addRule(RelativeLayout.ALIGN_PARENT_RIGHT);
-      actionParams.leftMargin = Screen.dp(2f);
-      actionParams.rightMargin = Screen.dp(8f);
-    }
-    textView.setGravity(Lang.gravity() | Gravity.CENTER_VERTICAL);
-    textView.setLayoutParams(textParams);
-    actionView.setLayoutParams(actionParams);
+  /** XGram M3E: a new message for a bar that shows fades its content through; one that is out just takes it. */
+  private boolean xgramAnimateContent () {
+    return getVisibility() == View.VISIBLE && xgramMotion.visibility() > .5f;
   }
 
   @Override
   public void onLanguagePackEvent (int event, int arg1) {
     if (xgram && (event == Lang.EVENT_DIRECTION_CHANGED || event == Lang.EVENT_PACK_CHANGED)) {
-      xgramApplyDirection(false);
+      xgramRow.applyDirection(); // the icon and the action swap sides
     }
   }
 
@@ -220,13 +165,15 @@ public class SnackBar extends RelativeLayout implements ThemeInvalidateListener,
     super.onAttachedToWindow();
     if (xgram) {
       Lang.addLanguageListener(this);
-      xgramApplyDirection(false);
+      xgramRow.applyDirection();
     }
   }
 
   @Override
   protected void onDetachedFromWindow () {
     if (xgram) {
+      // XGram M3E: its motion runs on (the chat list leaves the window while a chat is open), so it never comes back
+      // stuck half in or half out
       Lang.removeLanguageListener(this);
     }
     super.onDetachedFromWindow();
@@ -235,10 +182,10 @@ public class SnackBar extends RelativeLayout implements ThemeInvalidateListener,
   private void xgramUpdateMargins () {
     if (getLayoutParams() instanceof MarginLayoutParams) {
       MarginLayoutParams params = (MarginLayoutParams) getLayoutParams();
-      int margin = Screen.dp(com.fahadali.xgram.appearance.XgramSnackbar.BOTTOM_GAP_DP);
-      int bottom = margin + xgramBottomInset;
-      if (params.leftMargin != margin || params.rightMargin != margin || params.bottomMargin != bottom) {
-        params.leftMargin = params.rightMargin = margin;
+      int side = Screen.dp(XgramSnackbar.SIDE_GAP_DP);
+      int bottom = Screen.dp(XgramSnackbar.BOTTOM_GAP_DP) + xgramBottomInset;
+      if (params.leftMargin != side || params.rightMargin != side || params.bottomMargin != bottom) {
+        params.leftMargin = params.rightMargin = side;
         params.bottomMargin = bottom;
         setLayoutParams(params);
       }
@@ -266,16 +213,25 @@ public class SnackBar extends RelativeLayout implements ThemeInvalidateListener,
   }
 
   public SnackBar setText (String text) {
+    if (xgram) { // XGram M3E
+      xgramRow.setText(text, xgramAnimateContent());
+      return this;
+    }
     textView.setText(text);
     return this;
   }
 
   public SnackBar setAction (String action, Runnable callback, boolean dismissAutomatically) {
     if (xgram) {
-      actionView.setText(action);
-    } else {
-      Views.setMediumText(actionView, Lang.uppercase(action));
+      xgramRow.setAction(action, () -> {
+        callback.run();
+        if (dismissAutomatically) {
+          dismissSnackBar(true);
+        }
+      }, xgramAnimateContent());
+      return this;
     }
+    Views.setMediumText(actionView, Lang.uppercase(action));
     actionView.setOnClickListener(v -> {
       callback.run();
       if (dismissAutomatically) {
@@ -285,12 +241,35 @@ public class SnackBar extends RelativeLayout implements ThemeInvalidateListener,
     return this;
   }
 
+  /** XGram M3E: the leading icon (a 24dp drawable, through the icon pack), 0 for none. Telegram X's look has none. */
+  public SnackBar setIcon (@DrawableRes int iconRes) {
+    if (xgram) {
+      xgramRow.setIcon(iconRes, xgramAnimateContent());
+    }
+    return this;
+  }
+
   public SnackBar showSnackBar (boolean animated) {
+    if (xgram) { // XGram M3E
+      setVisibility(View.VISIBLE);
+      xgramMotion.show(animated);
+      return this;
+    }
     isShowing.setValue(true, animated);
     return this;
   }
 
   public SnackBar dismissSnackBar (boolean animated) {
+    if (xgram) {
+      // As Telegram X's: onDestroySnackBar once it is out, nothing for a bar that is not in
+      xgramMotion.hide(animated, () -> {
+        setVisibility(View.INVISIBLE);
+        if (callback != null) {
+          callback.onDestroySnackBar(this);
+        }
+      });
+      return this;
+    }
     isShowing.setValue(false, animated);
     return this;
   }
@@ -316,11 +295,14 @@ public class SnackBar extends RelativeLayout implements ThemeInvalidateListener,
   }
 
   private void updateTranslation () {
-    float y = getMeasuredHeight() * (1f - isShowing.getFloatValue());
     if (xgram) {
-      y = (getMeasuredHeight() + Screen.dp(com.fahadali.xgram.appearance.XgramSnackbar.BOTTOM_GAP_DP) + xgramBottomInset) * (1f - isShowing.getFloatValue());
-      setAlpha(MathUtils.clamp(isShowing.getFloatValue()));
+      // XgramSnackbar.Motion moves it; a new height while it is in moves what makes room for it (the FAB) again
+      if (xgramMotion.visibility() > 0f) {
+        xgramMotion.apply();
+      }
+      return;
     }
+    float y = getMeasuredHeight() * (1f - isShowing.getFloatValue());
     if (getTranslationY() != y || y == 0) {
       if (callback != null) {
         callback.onSnackBarTransition(this, isShowing.getFloatValue());
@@ -330,12 +312,36 @@ public class SnackBar extends RelativeLayout implements ThemeInvalidateListener,
   }
 
   public float getVisibilityFactor () {
-    return isShowing.getFloatValue();
+    return xgram ? xgramMotion.visibility() : isShowing.getFloatValue(); // XGram M3E
   }
 
   @Override
   protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
+    if (xgram) { // XGram M3E: at most 560dp wide, centred
+      final int maxWidth = Screen.dp(XgramSnackbar.MAX_WIDTH_DP);
+      if (MeasureSpec.getSize(widthMeasureSpec) > maxWidth) {
+        widthMeasureSpec = MeasureSpec.makeMeasureSpec(maxWidth, MeasureSpec.EXACTLY);
+      }
+    }
     super.onMeasure(widthMeasureSpec, heightMeasureSpec);
     updateTranslation();
+  }
+
+  @Override
+  protected void onLayout (boolean changed, int l, int t, int r, int b) {
+    super.onLayout(changed, l, t, r, b);
+    if (xgram) {
+      // The corners follow the text's lines: they spring when a new message wraps (or stops wrapping) while it shows
+      XgramSnackbar.updateShape(xgramContainer, this, xgramRow.getLineCount(), xgramLaidOut && xgramMotion.visibility() > 0f);
+      xgramLaidOut = true;
+    }
+  }
+
+  @Override
+  protected void onSizeChanged (int w, int h, int oldw, int oldh) {
+    super.onSizeChanged(w, h, oldw, oldh);
+    if (xgram) { // XGram M3E: it grows from the middle of its bottom edge
+      xgramMotion.updatePivot();
+    }
   }
 }

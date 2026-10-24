@@ -17,6 +17,7 @@ import com.fahadali.xgram.XgramComposeBridge
 import com.fahadali.xgram.XgramReorder
 import com.fahadali.xgram.XgramSettingDeps
 import com.fahadali.xgram.XgramSettings
+import com.fahadali.xgram.chats.XgramForwardOptions
 import com.fahadali.xgram.chats.XgramInlineVideo
 import com.fahadali.xgram.chats.XgramInputButtonsController
 import com.fahadali.xgram.chats.XgramSwipeActions
@@ -91,11 +92,19 @@ fun MessagesPage() {
       ) {
         settings.setDeleteForEveryoneByDefault(it)
       }
-      switch(
-        R.id.btn_xgramForwardWithoutAuthor, s(R.string.XgramForwardWithoutAuthor), s(R.string.XgramCheckedByDefault),
-        checked = settings.forwardWithoutAuthor()
-      ) {
-        settings.setForwardWithoutAuthor(it)
+      // Forwarding: whether the forward sheet starts with Show sender or Hide sender, or as the last forward did
+      val forwardSender = settings.forwardSender()
+      value(R.id.btn_xgramForwardSender, s(R.string.XgramFwdSetting), XgramForwardOptions.defaultName(forwardSender)) {
+        host.choose(
+          ChoiceSpec(
+            title = s(R.string.XgramFwdSetting),
+            info = s(R.string.XgramFwdSettingInfo),
+            options = XgramForwardOptions.DEFAULTS.map { XgramForwardOptions.defaultName(it) to it },
+            selected = forwardSender
+          ) { picked ->
+            settings.setForwardSender(picked)
+          }
+        )
       }
     }
 

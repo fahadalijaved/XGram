@@ -57,6 +57,7 @@ internal object XgramSearchIndex {
     R.id.btn_xgramHideFolders, R.id.btn_xgramHideAllChats -> intArrayOf(R.string.XgramSearchKwFolders)
     R.id.btn_xgramShowPeerIds -> intArrayOf(R.string.XgramSearchKwProfile)
     R.id.btn_xgramUndoSend, R.id.btn_xgramUndoSendVoice, R.id.btn_xgramUndoSendBubbles, R.id.btn_xgramUndoSendNewest -> intArrayOf(R.string.XgramSearchKwUnsend, R.string.XgramSearchKwDelaySend)
+    R.id.btn_xgramForwardSender -> intArrayOf(R.string.XgramSearchKwForward)
     R.id.btn_xgramActivityShow, R.id.btn_xgramActivityReactions, R.id.btn_xgramActivityMuted, R.id.btn_xgramActivityDiscussion,
     R.id.btn_xgramActivityLookBack, R.id.btn_xgramActivityBadge, R.id.btn_xgramActivityHeader,
     R.id.btn_xgramActivityHidden, R.id.btn_xgramActivityClearAll -> intArrayOf(R.string.XgramSearchKwActivity)

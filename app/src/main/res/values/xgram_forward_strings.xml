@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: forward without the sender (exteraGram / AyuGram), see com.fahadali.xgram.chats.XgramForwardOptions -->
+
+  <!-- The forward sheet: the options above the comment field -->
+  <string name="XgramFwdShowSender">Show sender</string>
+  <string name="XgramFwdHideSender">Hide sender</string>
+  <string name="XgramFwdHideCaptions">Hide captions</string>
+  <!-- Why Hide sender is greyed out: nothing selected can be copied (protected chats, some polls and quizzes, paid media) -->
+  <string name="XgramFwdCantHideOne">This message can\'t be copied, so its sender always shows</string>
+  <string name="XgramFwdCantHideAll">These messages can\'t be copied, so their senders always show</string>
+  <!-- A mixed selection: these are forwarded with their sender, the others as copies -->
+  <string name="XgramFwdOneKeepsSender">1 can\'t be copied and will show its sender</string>
+  <string name="XgramFwdSomeKeepSender">%1$d can\'t be copied and will show their sender</string>
+  <!-- The preview: how many messages follow the first one (or its album) -->
+  <string name="XgramFwdMore">+%1$d</string>
+  <!-- TalkBack: the preview card -->
+  <string name="XgramFwdPreview">Preview: %1$s</string>
+  <string name="XgramFwdPreviewNoSender">Arrives without the sender\'s name</string>
+  <string name="XgramFwdPreviewCaptionHidden">Caption hidden</string>
+  <string name="XgramFwdPreviewMore">and %1$d more</string>
+
+  <!-- The message menu and Swipe on a message: the forward sheet opens with Hide sender set -->
+  <string name="XgramFwdWithoutSender">Forward without sender</string>
+  <!-- The swipe's label, next to its icon (short) -->
+  <string name="XgramFwdSwipe">Without sender</string>
+
+  <!-- Settings → XGram → Messages → Defaults -->
+  <string name="XgramFwdSetting">Forwarding</string>
+  <string name="XgramFwdRemember">Remember my last choice</string>
+  <string name="XgramFwdSettingInfo">How the forward sheet starts. Hide sender sends copies, without \"Forwarded from\"; messages that can\'t be copied always show their sender.</string>
+  <string name="XgramSearchKwForward">send as copy, forward without author, hide sender, hide name, without quoting, anonymous forward, hide captions, remove captions</string>
+</resources>
