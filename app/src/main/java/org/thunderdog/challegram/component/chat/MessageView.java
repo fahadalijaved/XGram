@@ -1548,6 +1548,13 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
   }
 
   private void onLongPress () {
+    // XGram: Long press on a sender's avatar: View Profile, Send message, Mention, Search messages (exteraGram)
+    if (((flags & (FLAG_CAUGHT_CLICK | FLAG_CAUGHT_MESSAGE_TOUCH)) != 0) && com.fahadali.xgram.chats.XgramAvatarMenu.show(this, msg, touchX, touchY)) {
+      msg.xgramCancelTouch(this, touchX, touchY);
+      flags &= ~(FLAG_CAUGHT_CLICK | FLAG_CAUGHT_MESSAGE_TOUCH);
+      setLongPressed(true);
+      return;
+    }
     // XGram: Long press on text selects it (XgramTextSelection): the long press waits to see whether the finger moves
     // (it selects then); lifted without moving, it does what it did before (onLongPress(false) from onTouchEvent)
     if (((flags & (FLAG_CAUGHT_CLICK | FLAG_CAUGHT_MESSAGE_TOUCH)) != 0) && com.fahadali.xgram.chats.XgramTextSelection.startPress(this, msg, touchX, touchY)) {

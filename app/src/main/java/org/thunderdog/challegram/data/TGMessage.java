@@ -3083,6 +3083,23 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     return CLICK_TYPE_NONE;
   }
 
+  /**
+   * XGram: the user whose avatar is under (x, y) beside this message (its long press opens XgramAvatarMenu), or 0: no
+   * avatar there, or not a user's own one (a channel, an anonymous admin, a forward's origin, an ad).
+   */
+  public long xgramAvatarUserAt (MessageView view, float x, float y) {
+    if (forceForwardOrImportInfo() || isSponsoredMessage() || !sender.isUser()) {
+      return 0;
+    }
+    final boolean onAvatar = (xgramAvatarAtBottom() ? isBottomMessage() && !headerDisabled() : hasHeader()) && needAvatar() && view.getAvatarReceiver().isInsideReceiver(x, y);
+    return onAvatar ? sender.getUserId() : 0;
+  }
+
+  /** XGram: ends the touch a long press took over (XgramAvatarMenu), so lifting the finger doesn't open the profile too. */
+  public void xgramCancelTouch (View view, float x, float y) {
+    clickHelper.cancel(view, x, y);
+  }
+
   // XGram: the time and the forward date open the time details
   private boolean xgramIsTimeClick (float x, float y) {
     boolean timeVisible = !StringUtils.isEmpty(time) && (useBubbles() ? useBubbleTime() : BitwiseUtils.hasFlag(flags, FLAG_HEADER_ENABLED));

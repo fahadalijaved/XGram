@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: long press on a sender's avatar in a chat (com.fahadali.xgram.chats.XgramAvatarMenu) -->
+<resources>
+  <item name="btn_xgramAvatarProfile" type="id" />
+  <item name="btn_xgramAvatarMessage" type="id" />
+  <item name="btn_xgramAvatarMention" type="id" />
+  <item name="btn_xgramAvatarSearch" type="id" />
+</resources>
