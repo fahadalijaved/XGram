@@ -647,7 +647,17 @@ public class CreateGroupController extends ViewController<Void> implements EditH
 
   @Override
   public void onReadyStateChanged (boolean ready) {
+    final boolean changed = isReady != ready;
     isReady = ready;
+    if (xgram && changed && floatingButton != null) {
+      // XGram M3E: under a standard app bar the button doesn't come with the header (Telegram X hangs it on the tall
+      // one), so, like New channel, it shows once the group has a name and hides when the name is cleared
+      if (ready) {
+        floatingButton.show(this);
+      } else {
+        floatingButton.hide();
+      }
+    }
   }
 
   @Override
@@ -672,6 +682,9 @@ public class CreateGroupController extends ViewController<Void> implements EditH
 
   @Override
   protected int getFloatingButtonId () {
+    if (xgram) {
+      return xgramTitle.toString().trim().isEmpty() ? 0 : R.drawable.baseline_check_24; // XGram M3E: the name is in the content
+    }
     return R.drawable.baseline_check_24;
   }
 }
