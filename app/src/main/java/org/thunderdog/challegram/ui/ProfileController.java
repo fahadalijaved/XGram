@@ -2156,6 +2156,8 @@ public class ProfileController extends ViewController<ProfileController.Args> im
           }
         } else if (itemId == R.id.btn_xgramTopicsMode) {
           view.setData(com.fahadali.xgram.topics.XgramForums.topicsModeLabel(tdlib, chat)); // XGram
+        } else if (itemId == R.id.btn_xgramTopicsView) {
+          view.setData(com.fahadali.xgram.topics.XgramForums.topicsViewLabel(tdlib, chat)); // XGram: the user's own layout
         } else if (itemId == R.id.btn_chatPermissions) {
           IntRange range = Td.count(chat.permissions, tdlib.isForum(chat.id));
           view.setData(Lang.plural(R.string.xPermissions, range.getStart(), range.getEndInclusive()));
@@ -3728,6 +3730,11 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     }
     items.add(newNotificationItem());
+    if (tdlib.isForum(chat.id)) {
+      // XGram: every member picks how the topics show for them (tabs or list), not only the owner for the group
+      items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+      items.add(new ListItem(ListItem.TYPE_VALUED_SETTING, R.id.btn_xgramTopicsView, R.drawable.baseline_forum_24, R.string.XgramTopics));
+    }
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
 
     addMediaItems(items);
@@ -5534,6 +5541,13 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       com.fahadali.xgram.topics.XgramForums.promptTopicsMode(this, chat, () -> {
         if (!isDestroyed()) {
           baseAdapter.updateValuedSettingById(R.id.btn_xgramTopicsMode);
+        }
+      });
+    } else if (viewId == R.id.btn_xgramTopicsView) {
+      // XGram: the user's own topics layout, used the next time the group opens
+      com.fahadali.xgram.topics.XgramForums.promptTopicsView(this, chat, () -> {
+        if (!isDestroyed()) {
+          baseAdapter.updateValuedSettingById(R.id.btn_xgramTopicsView);
         }
       });
     } else if (viewId == R.id.btn_chatPermissions) {

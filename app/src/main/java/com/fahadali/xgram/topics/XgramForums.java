@@ -34,6 +34,7 @@ import org.thunderdog.challegram.util.StringList;
 import me.vkryl.core.collection.IntList;
 import me.vkryl.core.lambda.FutureInt;
 import me.vkryl.core.lambda.RunnableData;
+import me.vkryl.core.lambda.RunnableInt;
 import me.vkryl.core.lambda.RunnableLong;
 import tgx.td.MessageId;
 
@@ -604,13 +605,77 @@ public final class XgramForums {
   /** Tab id of the merged "All" view. */
   public static final int TAB_ALL = 0;
 
-  /** Forums whose admins chose the tabs layout open on a topic with a tab strip instead of the topic list. */
+  /**
+   * Forums open on a topic with a tab strip instead of the topic list when their admins chose the tabs layout, unless
+   * the user chose Tabs or List for themselves (the group profile's Topics row, kept on this phone only).
+   */
   public static boolean hasForumTabs (Tdlib tdlib, @Nullable TdApi.Chat chat) {
+    if (chat == null || !tdlib.isForum(chat.id)) {
+      return false;
+    }
+    switch (XgramSettings.instance().forumLayout(tdlib.id(), chat.id)) {
+      case XgramSettings.FORUM_LAYOUT_TABS:
+        return true;
+      case XgramSettings.FORUM_LAYOUT_LIST:
+        return false;
+    }
+    return groupHasForumTabs(tdlib, chat);
+  }
+
+  /** The layout the group's admins chose for everyone: tabs, or (false) the topic list. */
+  public static boolean groupHasForumTabs (Tdlib tdlib, @Nullable TdApi.Chat chat) {
     if (chat == null || !tdlib.isForum(chat.id)) {
       return false;
     }
     TdApi.Supergroup supergroup = tdlib.chatToSupergroup(chat.id);
     return supergroup != null && supergroup.hasForumTabs;
+  }
+
+  // The user's own topics layout (group profile → Topics), for members who can't change the group's
+
+  public static String topicsViewLabel (Tdlib tdlib, TdApi.Chat chat) {
+    return Lang.getString(hasForumTabs(tdlib, chat) ? R.string.XgramTopicsTabs : R.string.XgramTopicsList);
+  }
+
+  /** Group's choice, Tabs or List, for this user only; the chat opens in it from then on. */
+  public static void promptTopicsView (ViewController<?> context, TdApi.Chat chat, Runnable onChanged) {
+    Tdlib tdlib = context.tdlib();
+    final int current = XgramSettings.instance().forumLayout(tdlib.id(), chat.id);
+    final String groupChoice = Lang.getString(R.string.XgramTopicsViewGroup, Lang.getString(groupHasForumTabs(tdlib, chat) ? R.string.XgramTopicsTabs : R.string.XgramTopicsList));
+    int[] ids = {R.id.btn_xgramTopicsViewGroup, R.id.btn_xgramTopicsViewTabs, R.id.btn_xgramTopicsViewList};
+    String[] titles = {groupChoice, Lang.getString(R.string.XgramTopicsTabs), Lang.getString(R.string.XgramTopicsList)};
+    int[] layouts = {XgramSettings.FORUM_LAYOUT_GROUP, XgramSettings.FORUM_LAYOUT_TABS, XgramSettings.FORUM_LAYOUT_LIST};
+    RunnableInt apply = layout -> {
+      if (layout != current) {
+        XgramSettings.instance().setForumLayout(tdlib.id(), chat.id, layout);
+        onChanged.run();
+      }
+    };
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the same radio sheet as the group's own Topics setting
+      org.thunderdog.challegram.ui.ListItem[] items = new org.thunderdog.challegram.ui.ListItem[ids.length];
+      for (int i = 0; i < ids.length; i++) {
+        items[i] = new org.thunderdog.challegram.ui.ListItem(org.thunderdog.challegram.ui.ListItem.TYPE_RADIO_OPTION, ids[i], 0, titles[i], R.id.btn_xgramTopicsViewGroup, layouts[i] == current);
+      }
+      context.showSettings(new org.thunderdog.challegram.navigation.SettingsWrapBuilder(R.id.btn_xgramTopicsViewGroup)
+        .addHeaderItem(Lang.getString(R.string.XgramTopicsViewDesc))
+        .setRawItems(items)
+        .setIntDelegate((id, result) -> {
+          final int selectedId = result.get(R.id.btn_xgramTopicsViewGroup);
+          if (selectedId != 0) {
+            apply.runWithInt(selectedId == R.id.btn_xgramTopicsViewTabs ? XgramSettings.FORUM_LAYOUT_TABS : selectedId == R.id.btn_xgramTopicsViewList ? XgramSettings.FORUM_LAYOUT_LIST : XgramSettings.FORUM_LAYOUT_GROUP);
+          }
+        }));
+      return;
+    }
+    int[] icons = new int[ids.length];
+    for (int i = 0; i < ids.length; i++) {
+      icons[i] = layouts[i] == current ? R.drawable.baseline_check_24 : 0;
+    }
+    context.showOptions(Lang.getString(R.string.XgramTopicsViewDesc), ids, titles, null, icons, (itemView, id) -> {
+      apply.runWithInt(id == R.id.btn_xgramTopicsViewTabs ? XgramSettings.FORUM_LAYOUT_TABS : id == R.id.btn_xgramTopicsViewList ? XgramSettings.FORUM_LAYOUT_LIST : XgramSettings.FORUM_LAYOUT_GROUP);
+      return true;
+    });
   }
 
   public static int lastTab (Tdlib tdlib, long chatId) {
@@ -730,13 +795,13 @@ public final class XgramForums {
     if (!tdlib.isForum(chat.id)) {
       return Lang.getString(R.string.XgramTopicsOff);
     }
-    return Lang.getString(hasForumTabs(tdlib, chat) ? R.string.XgramTopicsTabs : R.string.XgramTopicsList);
+    return Lang.getString(groupHasForumTabs(tdlib, chat) ? R.string.XgramTopicsTabs : R.string.XgramTopicsList);
   }
 
   /** Off, tabs or list. Basic groups are upgraded to supergroups first, as topics need one. */
   public static void promptTopicsMode (ViewController<?> context, TdApi.Chat chat, Runnable onChanged) {
     Tdlib tdlib = context.tdlib();
-    int current = !tdlib.isForum(chat.id) ? 0 : hasForumTabs(tdlib, chat) ? 1 : 2;
+    int current = !tdlib.isForum(chat.id) ? 0 : groupHasForumTabs(tdlib, chat) ? 1 : 2;
     int[] ids = {R.id.btn_xgramTopicsOff, R.id.btn_xgramTopicsTabs, R.id.btn_xgramTopicsList};
     String[] titles = {Lang.getString(R.string.XgramTopicsOff), Lang.getString(R.string.XgramTopicsTabs), Lang.getString(R.string.XgramTopicsList)};
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {

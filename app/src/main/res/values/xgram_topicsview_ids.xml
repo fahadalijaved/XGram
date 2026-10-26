@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: the user's own topics layout for a forum (XgramForums.promptTopicsView) -->
+<resources>
+  <item name="btn_xgramTopicsView" type="id" />
+  <item name="btn_xgramTopicsViewGroup" type="id" />
+  <item name="btn_xgramTopicsViewTabs" type="id" />
+  <item name="btn_xgramTopicsViewList" type="id" />
+</resources>

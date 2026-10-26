@@ -1556,6 +1556,22 @@ public final class XgramSettings {
     return pmc().getBoolean("xgram_tabs_side_" + accountId + "_" + chatId, false);
   }
 
+  /** A forum's topics as the group shows them (its admins' choice), or as tabs or a list for this user only. */
+  public static final int FORUM_LAYOUT_GROUP = 0, FORUM_LAYOUT_TABS = 1, FORUM_LAYOUT_LIST = 2;
+
+  /** The user's own topics layout for a forum (its profile's Topics row), {@link #FORUM_LAYOUT_GROUP} by default. */
+  public int forumLayout (int accountId, long chatId) {
+    return pmc().getInt("xgram_forum_layout_" + accountId + "_" + chatId, FORUM_LAYOUT_GROUP);
+  }
+
+  public void setForumLayout (int accountId, long chatId, int layout) {
+    if (layout == FORUM_LAYOUT_TABS || layout == FORUM_LAYOUT_LIST) {
+      pmc().putInt("xgram_forum_layout_" + accountId + "_" + chatId, layout);
+    } else {
+      pmc().remove("xgram_forum_layout_" + accountId + "_" + chatId);
+    }
+  }
+
   public void setForumTabsOnSide (int accountId, long chatId, boolean onSide) {
     pmc().putBoolean("xgram_tabs_side_" + accountId + "_" + chatId, onSide);
   }
