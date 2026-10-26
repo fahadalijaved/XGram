@@ -57,6 +57,9 @@ public final class XgramMessageTime {
       return;
     }
     final TdApi.Message message = msg.getMessage();
+    if (XgramMessagePopup.isEnabled() && showPopup(msg, message)) {
+      return; // Message menu → Popup menu: beside the message, as its own menu
+    }
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
       showM3(c, msg, message);
       return;
@@ -106,6 +109,69 @@ public final class XgramMessageTime {
     }
 
     c.showOptions(text, optionIds.get(), strings.get(), null, icons.get(), (itemView, id) -> {
+      if (id == R.id.btn_copyText) {
+        UI.copyText(text, R.string.CopiedText);
+      } else if (id == R.id.btn_xgramCopyMessageId) {
+        if (ids != null) {
+          UI.copyText(ids, R.string.CopiedText);
+        }
+      } else if (id == R.id.btn_xgramMessageDetails) {
+        XgramMessageDetailsController details = new XgramMessageDetailsController(msg.context(), msg.tdlib());
+        details.setArguments(new XgramMessageDetailsController.Args(message));
+        msg.navigateTo(details);
+      }
+      return true;
+    });
+  }
+
+  /**
+   * Message menu → Popup menu: the times and the ID as the popup's info lines beside the message, Copy, Copy message ID
+   * and Details under them. False when the popup can't open there (the caller shows its sheet).
+   */
+  private static boolean showPopup (TGMessage msg, TdApi.Message message) {
+    final org.thunderdog.challegram.ui.MessagesController m = msg.messagesController();
+    if (m == null || m.isDestroyed()) {
+      return false;
+    }
+    StringBuilder b = new StringBuilder();
+    if (message.schedulingState instanceof TdApi.MessageSchedulingStateSendAtDate) {
+      row(b, R.string.XgramDetailsScheduledFor, formatExact(((TdApi.MessageSchedulingStateSendAtDate) message.schedulingState).sendDate));
+    } else if (message.date != 0) {
+      row(b, R.string.XgramDetailsSent, formatExact(message.date));
+    }
+    int editDate = msg.getEditDate();
+    if (editDate != 0 && editDate != message.date) {
+      row(b, R.string.XgramDetailsEdited, formatExact(editDate));
+    }
+    int originalDate = msg.getForwardOrImportDate();
+    if (originalDate != 0) {
+      row(b, R.string.XgramDetailsOriginallySent, formatExact(originalDate));
+    }
+    final String ids = serverIds(msg);
+    if (ids != null) {
+      row(b, R.string.XgramDetailsMessageId, ids);
+    }
+    if (b.length() == 0) {
+      return false;
+    }
+    final String text = b.toString();
+    IntList optionIds = new IntList(3);
+    StringList strings = new StringList(3);
+    IntList icons = new IntList(3);
+    optionIds.append(R.id.btn_copyText);
+    strings.append(R.string.Copy);
+    icons.append(R.drawable.baseline_content_copy_24);
+    if (ids != null) {
+      optionIds.append(R.id.btn_xgramCopyMessageId);
+      strings.append(R.string.XgramCopyMessageId);
+      icons.append(R.drawable.baseline_identifier_24);
+    }
+    if (message.id != 0) {
+      optionIds.append(R.id.btn_xgramMessageDetails);
+      strings.append(R.string.XgramMessageDetails);
+      icons.append(R.drawable.baseline_info_24);
+    }
+    return m.xgramShowPopupOptions(msg, text, optionIds.get(), strings.get(), icons.get(), (itemView, id) -> {
       if (id == R.id.btn_copyText) {
         UI.copyText(text, R.string.CopiedText);
       } else if (id == R.id.btn_xgramCopyMessageId) {

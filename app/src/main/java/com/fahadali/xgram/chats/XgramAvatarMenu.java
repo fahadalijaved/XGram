@@ -72,7 +72,8 @@ public final class XgramAvatarMenu {
     }
     ids[i] = R.id.btn_xgramAvatarSearch; titles[i] = Lang.getString(R.string.XgramAvatarSearchMessages); icons[i] = R.drawable.baseline_search_24;
     final TdApi.MessageSender sender = new TdApi.MessageSenderUser(userId);
-    m.showOptions(TD.getUserName(user.firstName, user.lastName), ids, titles, null, icons, (itemView, id) -> {
+    final String name = TD.getUserName(user.firstName, user.lastName);
+    final org.thunderdog.challegram.util.OptionDelegate delegate = (itemView, id) -> {
       if (id == R.id.btn_xgramAvatarProfile) {
         tdlib.ui().openPrivateProfile(m, userId, msg.openParameters());
       } else if (id == R.id.btn_xgramAvatarMessage) {
@@ -83,7 +84,11 @@ public final class XgramAvatarMenu {
         m.viewMessagesFromSender(sender, true);
       }
       return true;
-    });
+    };
+    // With Message menu → Popup menu on, a popup beside the message as its own menu opens; else the sheet
+    if (!m.xgramShowPopupOptions(msg, name, ids, titles, icons, delegate)) {
+      m.showOptions(name, ids, titles, null, icons, delegate);
+    }
     return true;
   }
 

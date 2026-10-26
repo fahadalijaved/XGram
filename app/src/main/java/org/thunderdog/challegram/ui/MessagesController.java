@@ -5520,6 +5520,45 @@ public class MessagesController extends ViewController<MessagesController.Argume
     });
   }
 
+  /**
+   * XGram: another menu of a message (long press on its sender's avatar, a tap on its time) as Message menu → Popup menu
+   * shows the message's own: a card beside the message, {@code info} on top of it. False when the popup menu is off, a
+   * menu is already open or the message isn't on screen: the caller opens its sheet then.
+   */
+  public boolean xgramShowPopupOptions (TGMessage msg, @Nullable CharSequence info, int[] ids, String[] titles, @Nullable int[] icons, OptionDelegate delegate) {
+    if (!com.fahadali.xgram.chats.XgramMessagePopup.isEnabled() || isMessageOptionsVisible || msg == null || msg.isDestroyed()) {
+      return false;
+    }
+    final Options options = getOptions(info, ids, titles, null, icons, 4);
+    return com.fahadali.xgram.chats.XgramMessagePopup.show(this, msg, options, delegate, false, false, new com.fahadali.xgram.chats.XgramMessagePopup.Host() {
+      @Override
+      public void onPopupOpen () {
+        if (xgramPopupCount++ == 0) {
+          isMessageOptionsVisible = true;
+        }
+      }
+
+      @Override
+      public void onPopupClosed () {
+        if (xgramPopupCount > 0 && --xgramPopupCount == 0) {
+          isMessageOptionsVisible = false;
+        }
+      }
+
+      @Override
+      public void openReactionPicker () { } // no reactions in these menus
+
+      @Override
+      public void openEmojiPacks (long[] emojiPackIds) {
+        if (isDestroyed()) {
+          return;
+        }
+        hideAllKeyboards();
+        tdlib.ui().showStickerSets(MessagesController.this, emojiPackIds, true, null);
+      }
+    }) != null;
+  }
+
   public void showMessageAddedReactions (TGMessage message, TdApi.ReactionType reactionType) {
     showMessageOptions(null, message, reactionType, newMessageOptionDelegate(message, null, null));
   }
