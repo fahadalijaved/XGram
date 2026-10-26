@@ -146,6 +146,19 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
     invalidate();
   }
 
+  private int xgramBottomInset;
+
+  /**
+   * XGram: the side strip is a full-height column down to the bottom of the chat (the composer sits beside it), so its
+   * last tabs scroll clear of the navigation bar or the keyboard by this much.
+   */
+  public void xgramSetBottomInset (int inset) {
+    if (vertical && xgramBottomInset != inset) {
+      xgramBottomInset = inset;
+      setPadding(getPaddingLeft(), getPaddingTop(), getPaddingRight(), Screen.dp(8f) + inset);
+    }
+  }
+
   /** XGram M3E: redraws the fill and the fades in the app bar's current colour (see {@link #xgramSetAppBarColor}). */
   public void xgramInvalidateAppBarColor () {
     if (xgramLook != null) {

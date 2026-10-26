@@ -638,6 +638,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
     Views.setLayoutHeight(bottomBar, Screen.dp(48f) + extraBottomInsetWithoutIme + xgramBottomBarRoom() * 2);
     Views.setPaddingBottom(bottomBar, extraBottomInsetWithoutIme + xgramBottomBarRoom());
     checkScrollButtonOffsets();
+    if (xgramSideTabs != null) {
+      xgramSideTabs.xgramSetBottomInset(extraBottomInset); // XGram: its last tabs above the navigation bar or keyboard
+    }
     updateMessagesViewInset();
     onMessagesFrameChanged();
     if (searchControlsForChannel) {
@@ -1043,7 +1046,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     xgramTabs.setCallback(tabsCallback);
     xgramSideTabs = new com.fahadali.xgram.topics.ForumTabsView(context, tdlib, this, true);
     RelativeLayout.LayoutParams sideParams = new RelativeLayout.LayoutParams(com.fahadali.xgram.topics.ForumTabsView.getSideWidth(), ViewGroup.LayoutParams.MATCH_PARENT);
-    sideParams.addRule(RelativeLayout.ABOVE, R.id.msg_bottom);
+    sideParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM); // a full-height column: the composer sits beside it (xgramApplyRailInset)
     sideParams.addRule(Lang.rtl() ? RelativeLayout.ALIGN_PARENT_RIGHT : RelativeLayout.ALIGN_PARENT_LEFT);
     xgramSideTabs.setLayoutParams(sideParams);
     xgramSideTabs.setVisibility(View.GONE);
@@ -8010,6 +8013,40 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   /** The bar keeps the message list's side margins (the topic tabs along the side). */
+  // XGram: with a forum's tabs along the side, the tabs are a full-height column (Material 3 navigation rail) and the
+  // composer, its reply block, the join or closed-topic bar and the search controls sit beside it, as the messages do.
+
+  private int xgramRailInset () {
+    return xgramTabsOnSide ? com.fahadali.xgram.topics.ForumTabsView.getSideWidth() : 0;
+  }
+
+  private void xgramApplyRailInset () {
+    final int inset = xgramRailInset();
+    for (View v : new View[] {bottomSpace, bottomWrap, replyBarView, bottomShadowView, bottomBar, searchControlsLayout, emojiButton, messageSenderButton}) {
+      xgramSetStartInset(v, inset);
+    }
+  }
+
+  /** Moves {@code view}'s start edge by the column's width (its own margin kept: the inset applied is kept in a tag). */
+  private static void xgramSetStartInset (@Nullable View view, int inset) {
+    if (view == null || !(view.getLayoutParams() instanceof ViewGroup.MarginLayoutParams)) {
+      return;
+    }
+    final Object tag = view.getTag(R.id.xgram_tag_rail_inset);
+    final int applied = tag instanceof Integer ? (Integer) tag : 0;
+    if (applied == inset) {
+      return;
+    }
+    final ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) view.getLayoutParams();
+    if (Lang.rtl()) {
+      params.rightMargin += inset - applied;
+    } else {
+      params.leftMargin += inset - applied;
+    }
+    view.setTag(R.id.xgram_tag_rail_inset, inset);
+    view.setLayoutParams(params);
+  }
+
   private void xgramSyncUndoBarMargins () {
     if (xgramUndoBar == null || messagesView == null) {
       return;
@@ -12788,6 +12825,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
         params.leftMargin = margin;
       }
       messagesView.setLayoutParams(params);
+      xgramApplyRailInset(); // and the composer and everything along the bottom sit beside the full-height column
     }
     if (xgramCornersView != null) {
       // The container's corners keep the messages' side margins: with the tabs along the side, the start notch sits
@@ -14059,6 +14097,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     };
     searchControlsLayout.setMinimumHeight(Screen.dp(49f));
     searchControlsLayout.setLayoutParams(rp);
+    xgramSetStartInset(searchControlsLayout, xgramRailInset()); // XGram: beside the side tabs' column
 
     searchControlsReveal = new RippleRevealView(context);
     searchControlsReveal.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
