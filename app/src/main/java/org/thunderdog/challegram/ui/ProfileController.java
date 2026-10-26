@@ -3583,9 +3583,18 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     baseHeaderItemCount = 2;
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     items.add(newNotificationItem());
+    xgramAddTopicsViewRow(items);
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
     addMediaItems(items);
     baseAdapter.setItems(items, false);
+  }
+
+  /** XGram: in a forum, every member picks how its topics show for them (tabs or list), not only the owner for the group. */
+  private void xgramAddTopicsViewRow (ArrayList<ListItem> items) {
+    if (chat != null && tdlib.isForum(chat.id)) {
+      items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+      items.add(new ListItem(ListItem.TYPE_VALUED_SETTING, R.id.btn_xgramTopicsView, R.drawable.baseline_forum_24, R.string.XgramTopics));
+    }
   }
 
   @Override
@@ -3636,6 +3645,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     }
     items.add(newNotificationItem());
+    xgramAddTopicsViewRow(items);
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
 
     addMediaItems(items);
@@ -3730,11 +3740,6 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     }
     items.add(newNotificationItem());
-    if (tdlib.isForum(chat.id)) {
-      // XGram: every member picks how the topics show for them (tabs or list), not only the owner for the group
-      items.add(new ListItem(ListItem.TYPE_SEPARATOR));
-      items.add(new ListItem(ListItem.TYPE_VALUED_SETTING, R.id.btn_xgramTopicsView, R.drawable.baseline_forum_24, R.string.XgramTopics));
-    }
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
 
     addMediaItems(items);
