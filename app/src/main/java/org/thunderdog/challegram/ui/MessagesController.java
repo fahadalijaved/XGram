@@ -4551,6 +4551,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   public void onFocus () {
     super.onFocus();
     xgramUpdateSnackbarRoom(); // XGram: snackbars float above the message box (first: Later's in-chat snackbar below)
+    xgramCheckForumLayout(); // XGram: the user's own topics layout changed while this chat was covered
     xgramCheckAutoTranslate(); // XGram: e.g. a chat preview opened in full
     com.fahadali.xgram.later.XgramLater.onChatOpened(this); // XGram: Later (the bell goes, a snoozed chat says so)
     if (promptDraftPrefillOnFocus) {
@@ -12726,6 +12727,36 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   private int xgramCurrentTab () {
     return messageTopicId instanceof TdApi.MessageTopicForum ? ((TdApi.MessageTopicForum) messageTopicId).forumTopicId : com.fahadali.xgram.topics.XgramForums.TAB_ALL;
+  }
+
+  /** XGram: whether this chat opened as its forum's tabs view (decided on the first focus). */
+  private boolean xgramForumLayoutChecked, xgramOpenedAsTabs;
+
+  /**
+   * XGram: the user's own topics layout (group profile → Topics). On the first focus, a topic list that turned into this
+   * tabs view (ForumTopicsController.onFocus) goes from under it. Later, a tabs view whose forum the user switched to
+   * List becomes the topic list.
+   */
+  private void xgramCheckForumLayout () {
+    if (chat == null || inPreviewMode || isInForceTouchMode()) {
+      return;
+    }
+    if (!xgramForumLayoutChecked) {
+      xgramForumLayoutChecked = true;
+      xgramOpenedAsTabs = xgramTabsMode();
+      if (xgramOpenedAsTabs) {
+        final int below = stackSize() - 2;
+        final ViewController<?> c = below >= 0 ? stackItemAt(below) : null;
+        if (c instanceof com.fahadali.xgram.topics.ForumTopicsController && c.getChatId() == chat.id && ((com.fahadali.xgram.topics.ForumTopicsController) c).xgramReplacingWithTabs()) {
+          destroyStackItemAt(below);
+        }
+      }
+      return;
+    }
+    if (xgramOpenedAsTabs && !com.fahadali.xgram.topics.XgramForums.hasForumTabs(tdlib, chat) && com.fahadali.xgram.topics.XgramForums.shouldOpenTopicList(tdlib, chat)) {
+      xgramOpenedAsTabs = false;
+      com.fahadali.xgram.topics.XgramForums.openTopicList(this, chat, true);
+    }
   }
 
   private boolean xgramTabsMode () {

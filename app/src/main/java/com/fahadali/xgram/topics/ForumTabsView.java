@@ -635,10 +635,22 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
           line1 = title;
           line2 = "";
         } else {
-          int space = title.lastIndexOf(' ', fit);
-          int cut = space > 0 ? space : fit;
-          line1 = title.substring(0, cut).trim();
-          line2 = TextUtils.ellipsize(title.substring(cut).trim(), paint, maxWidth, TextUtils.TruncateAt.END).toString();
+          // XGram: two lines break between words, or after a slash or dash ("Media/" "Music/Vi…"); a word too long
+          // for the rail stays on one line with an ellipsis instead of being cut in the middle ("Suggestio" "ns")
+          int cut = title.lastIndexOf(' ', fit);
+          for (char c : new char[] {'/', '-', '_', '|', '&'}) {
+            int i = title.lastIndexOf(c, fit - 1);
+            if (i >= 0 && i + 1 > cut && i + 1 < title.length()) {
+              cut = i + 1;
+            }
+          }
+          if (cut > 0) {
+            line1 = title.substring(0, cut).trim();
+            line2 = TextUtils.ellipsize(title.substring(cut).trim(), paint, maxWidth, TextUtils.TruncateAt.END).toString();
+          } else {
+            line1 = TextUtils.ellipsize(title, paint, maxWidth, TextUtils.TruncateAt.END).toString();
+            line2 = "";
+          }
         }
       } else {
         displayTitle = TextUtils.ellipsize(title, titlePaint(false), Screen.dp(MAX_TITLE_WIDTH_DP), TextUtils.TruncateAt.END).toString();

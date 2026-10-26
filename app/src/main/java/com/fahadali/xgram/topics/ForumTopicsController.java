@@ -480,6 +480,7 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
   @Override
   protected void onCreateView (Context context, CustomRecyclerView recyclerView) {
     chat = getArgumentsStrict().chat;
+    xgramOpenedWithTabs = XgramForums.hasForumTabs(tdlib, chat);
 
     headerCell = new ChatHeaderView(context, tdlib, this);
     headerCell.setCallback(this);
@@ -544,6 +545,21 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
       list.refreshOnReturn();
     }
     xgramFocusedOnce = true;
+    // The user picked Tabs for this forum (its profile → Topics) while this list was covered: the forum opens in tabs
+    // and that chat takes this list's place (MessagesController drops it from under itself once it has slid in)
+    if (!xgramReplacingWithTabs && !xgramOpenedWithTabs && chat != null && XgramForums.hasForumTabs(tdlib, chat)) {
+      xgramReplacingWithTabs = true;
+      TdlibUi.ChatOpenParameters params = new TdlibUi.ChatOpenParameters().keepStack();
+      XgramForums.prepareTabsOpen(tdlib, chat, params);
+      tdlib.ui().openChat(this, chat, params);
+    }
+  }
+
+  /** XGram: this list opened when the forum showed as a list; it is being replaced by the tabs view (see onFocus). */
+  private boolean xgramOpenedWithTabs, xgramReplacingWithTabs;
+
+  public boolean xgramReplacingWithTabs () {
+    return xgramReplacingWithTabs;
   }
 
   @Override
