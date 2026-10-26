@@ -638,8 +638,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
     Views.setLayoutHeight(bottomBar, Screen.dp(48f) + extraBottomInsetWithoutIme + xgramBottomBarRoom() * 2);
     Views.setPaddingBottom(bottomBar, extraBottomInsetWithoutIme + xgramBottomBarRoom());
     checkScrollButtonOffsets();
+    xgramLastBottomInset = extraBottomInset; // XGram: the full-height side tabs' last tabs clear the navigation bar or keyboard
     if (xgramSideTabs != null) {
-      xgramSideTabs.xgramSetBottomInset(extraBottomInset); // XGram: its last tabs above the navigation bar or keyboard
+      xgramSideTabs.xgramSetBottomInset(xgramRailFullHeight() ? extraBottomInset : 0);
     }
     updateMessagesViewInset();
     onMessagesFrameChanged();
@@ -1046,7 +1047,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     xgramTabs.setCallback(tabsCallback);
     xgramSideTabs = new com.fahadali.xgram.topics.ForumTabsView(context, tdlib, this, true);
     RelativeLayout.LayoutParams sideParams = new RelativeLayout.LayoutParams(com.fahadali.xgram.topics.ForumTabsView.getSideWidth(), ViewGroup.LayoutParams.MATCH_PARENT);
-    sideParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM); // a full-height column: the composer sits beside it (xgramApplyRailInset)
+    sideParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM); // xgramApplyRailLayout: a full-height column, or a floating card above the composer
     sideParams.addRule(Lang.rtl() ? RelativeLayout.ALIGN_PARENT_RIGHT : RelativeLayout.ALIGN_PARENT_LEFT);
     xgramSideTabs.setLayoutParams(sideParams);
     xgramSideTabs.setVisibility(View.GONE);
@@ -4064,6 +4065,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
   @Override
   public void onConfigurationChanged (Configuration newConfig) {
     super.onConfigurationChanged(newConfig);
+    if (xgramTabsOnSide) {
+      // XGram: folding or unfolding switches the side tabs between the floating card and the full-height column
+      xgramApplyRailLayout();
+      xgramUpdateSideTabsOffset();
+    }
 
     manager.rebuildLayouts();
 
@@ -8016,11 +8022,89 @@ public class MessagesController extends ViewController<MessagesController.Argume
   // XGram: with a forum's tabs along the side, the tabs are a full-height column (Material 3 navigation rail) and the
   // composer, its reply block, the join or closed-topic bar and the search controls sit beside it, as the messages do.
 
-  private int xgramRailInset () {
-    return xgramTabsOnSide ? com.fahadali.xgram.topics.ForumTabsView.getSideWidth() : 0;
+  // In a narrow window (the cover screen) they float instead, as Telegram X's floating look does: a card rounded at every
+  // corner on the chat's background, a gap from the edge, the app bar and the composer, and the composer keeps its full
+  // width, so nothing runs under the composer or cuts the column off. Folding or unfolding switches (onConfigurationChanged).
+
+  private static final float XGRAM_RAIL_FLOAT_GAP_DP = 8f;
+  /** Windows this wide or wider (an unfolded foldable, a tablet) get the full-height column. */
+  private static final int XGRAM_RAIL_FULL_HEIGHT_MIN_DP = 600;
+
+  private boolean xgramRailFullHeight () {
+    return xgramTabsOnSide && com.fahadali.xgram.layout.XgramTwoPane.windowWidth(context) >= XGRAM_RAIL_FULL_HEIGHT_MIN_DP;
   }
 
-  private void xgramApplyRailInset () {
+  private boolean xgramRailFloating () {
+    return xgramTabsOnSide && !xgramRailFullHeight();
+  }
+
+  private int xgramRailInset () {
+    return xgramRailFullHeight() ? com.fahadali.xgram.topics.ForumTabsView.getSideWidth() : 0;
+  }
+
+  /** The bottom inset last given to this chat (navigation bar or keyboard): the full-height column's last tabs clear it. */
+  private int xgramLastBottomInset;
+  /** How the side tabs are laid out now: 0 not along the side, 1 the full-height column, 2 the floating card. */
+  private int xgramRailMode;
+
+  private void xgramApplyRailLayout () {
+    if (messagesView == null || xgramSideTabs == null) {
+      return;
+    }
+    final boolean rtl = Lang.rtl();
+    final int side = com.fahadali.xgram.topics.ForumTabsView.getSideWidth();
+    final boolean full = xgramRailFullHeight(), floating = xgramRailFloating();
+    final int mode = full ? 1 : floating ? 2 : 0;
+    if (mode == xgramRailMode) {
+      return; // laid out for this already (it's asked on every tabs update)
+    }
+    xgramRailMode = mode;
+    final int gap = Screen.dp(XGRAM_RAIL_FLOAT_GAP_DP);
+
+    // The messages start past the column (or the card and its gap)
+    final int messagesMargin = full ? side : floating ? side + gap : 0;
+    RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams) messagesView.getLayoutParams();
+    if ((rtl ? params.rightMargin : params.leftMargin) != messagesMargin) {
+      if (rtl) {
+        params.rightMargin = messagesMargin;
+      } else {
+        params.leftMargin = messagesMargin;
+      }
+      messagesView.setLayoutParams(params);
+    }
+
+    // The container's corners: at the column's edge beside the full-height column, at the screen's edge under the card
+    if (xgramCornersView != null) {
+      final int cornersMargin = full ? side : 0;
+      RelativeLayout.LayoutParams cornersParams = (RelativeLayout.LayoutParams) xgramCornersView.getLayoutParams();
+      final int left = rtl ? 0 : cornersMargin, right = rtl ? cornersMargin : 0;
+      if (cornersParams.leftMargin != left || cornersParams.rightMargin != right) {
+        cornersParams.leftMargin = left;
+        cornersParams.rightMargin = right;
+        xgramCornersView.setLayoutParams(cornersParams);
+      }
+    }
+
+    // The column: down to the bottom, or a card above the composer
+    RelativeLayout.LayoutParams sideParams = (RelativeLayout.LayoutParams) xgramSideTabs.getLayoutParams();
+    if (full) {
+      sideParams.removeRule(RelativeLayout.ABOVE);
+      sideParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+    } else {
+      sideParams.removeRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+      sideParams.addRule(RelativeLayout.ABOVE, R.id.msg_bottom);
+    }
+    sideParams.bottomMargin = floating ? gap : 0;
+    if (rtl) {
+      sideParams.rightMargin = floating ? gap : 0;
+    } else {
+      sideParams.leftMargin = floating ? gap : 0;
+    }
+    xgramSideTabs.setLayoutParams(sideParams);
+    xgramSideTabs.xgramSetFloating(floating);
+    xgramSideTabs.xgramSetBottomInset(full ? xgramLastBottomInset : 0);
+
+    // The composer and everything along the bottom sit beside the full-height column
     final int inset = xgramRailInset();
     for (View v : new View[] {bottomSpace, bottomWrap, replyBarView, bottomShadowView, bottomBar, searchControlsLayout, emojiButton, messageSenderButton}) {
       xgramSetStartInset(v, inset);
@@ -12814,30 +12898,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
     topBar.setItemVisible(xgramTabsItem, show && !onSide, false);
     xgramSideTabs.setVisibility(onSide ? View.VISIBLE : View.GONE);
-    if (xgramTabsOnSide != onSide) {
-      xgramTabsOnSide = onSide;
-      // The messages make room for the side tabs.
-      RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams) messagesView.getLayoutParams();
-      int margin = onSide ? com.fahadali.xgram.topics.ForumTabsView.getSideWidth() : 0;
-      if (Lang.rtl()) {
-        params.rightMargin = margin;
-      } else {
-        params.leftMargin = margin;
-      }
-      messagesView.setLayoutParams(params);
-      xgramApplyRailInset(); // and the composer and everything along the bottom sit beside the full-height column
-    }
-    if (xgramCornersView != null) {
-      // The container's corners keep the messages' side margins: with the tabs along the side, the start notch sits
-      // at the tabs' edge (the container's own corner), not under the tabs
-      RelativeLayout.LayoutParams messagesParams = (RelativeLayout.LayoutParams) messagesView.getLayoutParams();
-      RelativeLayout.LayoutParams cornersParams = (RelativeLayout.LayoutParams) xgramCornersView.getLayoutParams();
-      if (cornersParams.leftMargin != messagesParams.leftMargin || cornersParams.rightMargin != messagesParams.rightMargin) {
-        cornersParams.leftMargin = messagesParams.leftMargin;
-        cornersParams.rightMargin = messagesParams.rightMargin;
-        xgramCornersView.setLayoutParams(cornersParams);
-      }
-    }
+    xgramTabsOnSide = onSide;
+    xgramApplyRailLayout(); // the messages, the container's corners and the composer make room for the side tabs
     xgramSyncUndoBarMargins(); // the Undo send bar too: the side tabs draw over anything under them
     xgramUpdateSideTabsOffset();
   }
@@ -13137,7 +13199,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       return;
     }
     RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams) xgramSideTabs.getLayoutParams();
-    final int top = xgramTabsOnSide ? getTopOffset() : params.topMargin;
+    final int top = xgramTabsOnSide ? getTopOffset() + (xgramRailFloating() ? Screen.dp(XGRAM_RAIL_FLOAT_GAP_DP) : 0) : params.topMargin; // XGram: a floating card keeps its gap
     float dy = 0f;
     if (moving && xgramTabsOnSide) {
       if (top < params.topMargin) {

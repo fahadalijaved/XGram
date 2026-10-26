@@ -147,6 +147,33 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
   }
 
   private int xgramBottomInset;
+  private boolean xgramFloating;
+
+  /**
+   * XGram: the side strip as a floating card (narrow windows, MessagesController.xgramApplyRailLayout): rounded at every
+   * corner, its tabs and fades clipped to that shape, on the chat's background. Off: the full-height column.
+   */
+  public void xgramSetFloating (boolean floating) {
+    if (!vertical || xgramFloating == floating) {
+      return;
+    }
+    xgramFloating = floating;
+    if (floating) {
+      final float radius = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L_INC);
+      setOutlineProvider(new android.view.ViewOutlineProvider() {
+        @Override
+        public void getOutline (View view, android.graphics.Outline outline) {
+          outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), radius);
+        }
+      });
+      setClipToOutline(true);
+    } else {
+      setClipToOutline(false);
+      setOutlineProvider(android.view.ViewOutlineProvider.BACKGROUND);
+    }
+    invalidateOutline();
+    invalidate();
+  }
 
   /**
    * XGram: the side strip is a full-height column down to the bottom of the chat (the composer sits beside it), so its

@@ -230,6 +230,11 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     return width >= MIN_WIDTH_DP - slack && height >= MIN_HEIGHT_DP - slack;
   }
 
+  /** The window's width in dp (the window's own size in multi-window and on foldables). */
+  public static int windowWidth (BaseActivity context) {
+    return windowWidthDp(context);
+  }
+
   private static int windowWidthDp (BaseActivity context) {
     XgramWindow window = context.xgramWindow();
     if (window != null && window.widthDp() > 0 && window.heightDp() > 0) {
