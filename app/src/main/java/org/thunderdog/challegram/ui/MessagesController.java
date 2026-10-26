@@ -801,6 +801,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
       }
     };
     bottomWrap.setId(R.id.msg_bottom);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && previewMode == PREVIEW_MODE_NONE && !isInForceTouchMode()) {
+      bottomWrap.setBackground(new XgramSideStripBackground()); // XGram: the side tabs' column also below the field
+    }
     bottomWrap.setOrientation(LinearLayout.VERTICAL);
     bottomWrap.setMinimumHeight(Screen.dp(49f));
     bottomWrap.setLayoutParams(params);
@@ -873,6 +876,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
           @Override
           public float fieldEndPx () {
             return xgramFieldEndPx();
+          }
+
+          @Override
+          public void drawSideStrip (@NonNull Canvas c, @NonNull Rect bounds) {
+            xgramDrawSideStrip(c, bounds);
           }
         }));
         int blockInset = com.fahadali.xgram.appearance.XgramM3Chat.composerBlockEndInset();
@@ -9211,6 +9219,57 @@ public class MessagesController extends ViewController<MessagesController.Argume
   // centred, and keeps 16dp from the field's end (XgramM3Composer). The trailing record or send
   // button is a 40dp filled circle outside the field; the record button morphs into the send one.
 
+  // XGram M3E: with a forum's tabs along the side, their column runs down to the bottom of the screen. The composer's
+  // surface (the field row, the reply block, the room below them) paints the column's width at the start in the tabs'
+  // colour instead of its own, so the composer doesn't cut the column off above itself; the field floats over both.
+
+  private boolean xgramSideStripShown () {
+    return xgramTabsOnSide && xgramSideTabs != null && xgramSideTabs.getVisibility() == View.VISIBLE;
+  }
+
+  private void xgramDrawSideStrip (@NonNull Canvas c, @NonNull Rect bounds) {
+    if (!xgramSideStripShown()) {
+      return;
+    }
+    final int width = Math.min(bounds.width(), com.fahadali.xgram.topics.ForumTabsView.getSideWidth());
+    if (Lang.rtl()) {
+      c.drawRect(bounds.right - width, bounds.top, bounds.right, bounds.bottom, Paints.fillingPaint(xgramAppBarColor()));
+    } else {
+      c.drawRect(bounds.left, bounds.top, bounds.left + width, bounds.bottom, Paints.fillingPaint(xgramAppBarColor()));
+    }
+  }
+
+  private void xgramInvalidateSideStrip () {
+    if (inputView != null) {
+      inputView.invalidate();
+    }
+    if (replyBarView != null) {
+      replyBarView.invalidate();
+    }
+    if (bottomWrap != null) {
+      bottomWrap.invalidate();
+    }
+  }
+
+  private final class XgramSideStripBackground extends android.graphics.drawable.Drawable {
+    @Override
+    public void draw (@NonNull Canvas c) {
+      xgramDrawSideStrip(c, getBounds());
+    }
+
+    @Override
+    public void setAlpha (int alpha) { }
+
+    @Override
+    public void setColorFilter (@Nullable android.graphics.ColorFilter colorFilter) { }
+
+    @Override
+    @SuppressWarnings("deprecation")
+    public int getOpacity () {
+      return android.graphics.PixelFormat.TRANSLUCENT;
+    }
+  }
+
   private final class XgramInputFieldBackground extends android.graphics.drawable.Drawable {
     private final android.graphics.RectF rect = new android.graphics.RectF();
 
@@ -9218,6 +9277,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     public void draw (@NonNull Canvas c) {
       Rect bounds = getBounds();
       c.drawRect(bounds, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE)));
+      xgramDrawSideStrip(c, bounds);
       final float verticalInset = (Screen.dp(49f) - Screen.dp(com.fahadali.xgram.appearance.XgramExpressiveC.ICON_BUTTON_BOX)) / 2f;
       final float start = com.fahadali.xgram.appearance.XgramM3Chat.fieldStart();
       // The end follows the send button in when there is no record button (the text keeps its 16dp from the send slot)
@@ -12802,6 +12862,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
     xgramSyncUndoBarMargins(); // the Undo send bar too: the side tabs draw over anything under them
     xgramUpdateSideTabsOffset();
+    xgramInvalidateSideStrip(); // the composer keeps the side tabs' column (or gives it back)
   }
 
   // XGram: Material 3 Expressive container corners, below the topic tabs when they are shown on top.
@@ -12827,6 +12888,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   /** XGram M3E: redraws what is painted in {@link #xgramAppBarColor()}; cheap enough for every frame of a header fade. */
   private void xgramInvalidateAppBarColor () {
+    xgramInvalidateSideStrip(); // the side tabs' column under the composer takes the same colour
     if (xgramCornersView != null) {
       xgramCornersView.invalidate();
     }

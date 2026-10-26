@@ -278,6 +278,9 @@ public final class XgramM3Chat {
     default float fieldEndPx () {
       return fieldEnd(hasTrailingButton());
     }
+
+    /** Paints what stands beside the composer over its surface (a forum's side tabs keep their column, see MessagesController). */
+    default void drawSideStrip (@NonNull Canvas c, @NonNull Rect bounds) { }
   }
 
   /** Start margin of the composer field. */
@@ -312,6 +315,7 @@ public final class XgramM3Chat {
       // The composer panel is one surface: the preview row shares it with the field row below.
       paint.setColor(XgramExpressive.color(XgramExpressive.SURFACE));
       c.drawRect(b, paint);
+      trailing.drawSideStrip(c, b);
       boolean rtl = Lang.rtl();
       // The block follows the field's end, also while the field makes room for the send button.
       float start = fieldStart(), end = trailing.fieldEndPx();
