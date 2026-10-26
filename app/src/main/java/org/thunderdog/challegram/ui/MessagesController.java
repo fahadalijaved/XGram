@@ -1055,12 +1055,14 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
       // XGram: both strips follow the app bar colour (selection and search included), as the card backing and the corners do
       final com.fahadali.xgram.appearance.XgramM3Chat.ColorSource appBarColor = this::xgramAppBarColor;
-      xgramTabs.xgramSetAppBarColor(appBarColor);
+      // On top the tabs are a card of the bar stack (below): their edge fades take the card's colour
+      xgramTabs.xgramSetAppBarColor(() -> com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH));
       xgramSideTabs.xgramSetAppBarColor(appBarColor);
     }
 
     xgramTabsItem = new CollapseListView.ViewItem(xgramTabs, com.fahadali.xgram.topics.ForumTabsView.getBarHeight());
-    topBar.xgramSetPlainItems(xgramTabsItem); // XGram: the topic tabs stay a full-width row above the Material 3 Expressive cards
+    // XGram: the topic tabs on top are a card of the Material 3 Expressive group (with the pinned message and the other
+    // bars), so they stand apart from the app bar instead of reading as part of it
     topBar.initWithList(new CollapseListView.Item[] {
       // TODO voice chat bar
       xgramTabsItem,
