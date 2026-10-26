@@ -3997,6 +3997,17 @@ public class MessagesController extends ViewController<MessagesController.Argume
       }
     }
 
+    // XGram: the topic tabs on top scroll sideways. A swipe on them scrolls them; the back swipe starts there only from
+    // the screen's edge, or once they are scrolled back to their start (as with other sideways lists)
+    if (xgramTabs != null && xgramTabs.isShown() && xgramTabs.getHeight() > 0) {
+      final int tabsTop = Views.getLocationInWindow(xgramTabs)[1] - baseY;
+      if (y >= tabsTop && y < tabsTop + xgramTabs.getHeight()) {
+        final int width = contentView.getMeasuredWidth();
+        final boolean fromEdge = Lang.rtl() ? x >= width - Screen.dp(12f) : x <= Screen.dp(12f);
+        return fromEdge || !xgramTabs.canScrollHorizontally(Lang.rtl() ? 1 : -1);
+      }
+    }
+
     if (needTabs() && y < HeaderView.getSize(true))
       return false;
 
