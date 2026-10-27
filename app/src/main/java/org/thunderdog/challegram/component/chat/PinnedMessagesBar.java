@@ -1016,23 +1016,35 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
     messageViewport.performDestroy();
   }
 
+  // XGram: the rows follow the list as one diff (xgramSyncItems) rather than an add, move or remove at the list's index.
+  // SettingsAdapter postpones an add or remove that comes during a layout (UI.post) with the index of that moment; a
+  // sync or another change in between made it land on the wrong row, and RecyclerView stopped with "Inconsistency
+  // detected" (owner's Fold, 2026-10-27). A change during a layout now syncs in the next frame, once.
+
+  private boolean xgramSyncPosted;
+
+  private void xgramRequestSync () {
+    if (recyclerView != null && recyclerView.isComputingLayout()) {
+      if (!xgramSyncPosted) {
+        xgramSyncPosted = true;
+        recyclerView.post(() -> {
+          xgramSyncPosted = false;
+          if (messageList != null && !xgramHeld) {
+            xgramSyncItems();
+          }
+        });
+      }
+      return;
+    }
+    xgramSyncItems();
+  }
+
   @Override
   public void onItemsAdded (ListManager<TdApi.Message> list, List<TdApi.Message> items, int startIndex, boolean isInitialChunk) {
     if (xgramHoldItems()) {
       return; // XGram: shown when the bar is released (xgramSyncItems)
     }
-    ListItem[] messageList = new ListItem[items.size()];
-    int index = 0;
-    for (TdApi.Message message : items) {
-      messageList[index] = itemOf(list.tdlib(), message);
-      index++;
-    }
-    if (needsClear || messagesAdapter.getItems().isEmpty()) {
-      needsClear = false;
-      messagesAdapter.setItems(messageList, false);
-    } else {
-      messagesAdapter.addItems(startIndex, messageList);
-    }
+    xgramRequestSync();
   }
 
   @Override
@@ -1040,17 +1052,10 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
     if (xgramHoldItems()) {
       return; // XGram
     }
-    if (needsClear || messagesAdapter.getItems().isEmpty()) {
-      needsClear = false;
-      messagesAdapter.setItems(new ListItem[] {
-        itemOf(list.tdlib(), item)
-      }, false);
-    } else {
-      boolean scrollBy = ((LinearLayoutManager) recyclerView.getLayoutManager()).findFirstCompletelyVisibleItemPosition() == 0;
-      messagesAdapter.addItem(toIndex, itemOf(list.tdlib(), item));
-      if (scrollBy) {
-        ((LinearLayoutManager) recyclerView.getLayoutManager()).scrollToPositionWithOffset(0, 0);
-      }
+    boolean scrollBy = !messagesAdapter.getItems().isEmpty() && ((LinearLayoutManager) recyclerView.getLayoutManager()).findFirstCompletelyVisibleItemPosition() == 0;
+    xgramRequestSync();
+    if (scrollBy && toIndex == 0) {
+      ((LinearLayoutManager) recyclerView.getLayoutManager()).scrollToPositionWithOffset(0, 0);
     }
   }
 
@@ -1059,7 +1064,7 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
     if (xgramHoldItems()) {
       return; // XGram
     }
-    messagesAdapter.moveItem(fromIndex, toIndex);
+    xgramRequestSync();
   }
 
   private boolean needsClear;
@@ -1069,11 +1074,8 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
     if (xgramHoldItems()) {
       return; // XGram
     }
-    if (fromIndex == 0 && messagesAdapter.getItems().size() == 1) {
-      needsClear = true;
-    } else {
-      messagesAdapter.removeItem(fromIndex);
-    }
+    // The last row stays until the next one comes (xgramSyncItems keeps it when the list is empty)
+    xgramRequestSync();
   }
 
   @Override
@@ -1083,6 +1085,10 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
     }
     // XGram: the list put a new object of this message in its place (it changed while the chat was closed, see
     // ListManager.xgramRevalidate): the row takes it, so its preview is built again
+    if (index < 0 || index >= messagesAdapter.getItemCount()) {
+      xgramRequestSync(); // XGram: the rows and the list disagree here: they follow the list
+      return;
+    }
     ListItem shown = messagesAdapter.getItem(index);
     Entry shownEntry = shown != null && shown.getData() instanceof Entry ? (Entry) shown.getData() : null;
     if (shownEntry != null && shownEntry.message != null && shownEntry.message != item &&
