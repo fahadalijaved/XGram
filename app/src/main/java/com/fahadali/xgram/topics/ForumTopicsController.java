@@ -547,12 +547,20 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
     xgramFocusedOnce = true;
     // The user picked Tabs for this forum (its profile → Topics) while this list was covered: the forum opens in tabs
     // and that chat takes this list's place (MessagesController drops it from under itself once it has slid in)
-    if (!xgramReplacingWithTabs && !xgramOpenedWithTabs && chat != null && XgramForums.hasForumTabs(tdlib, chat)) {
-      xgramReplacingWithTabs = true;
-      TdlibUi.ChatOpenParameters params = new TdlibUi.ChatOpenParameters().keepStack();
-      XgramForums.prepareTabsOpen(tdlib, chat, params);
-      tdlib.ui().openChat(this, chat, params);
+    if (!xgramOpenedWithTabs) {
+      xgramReplaceWithTabs();
     }
+  }
+
+  /** The forum shows as tabs for this user now: it opens in tabs and that chat takes this list's place. */
+  private void xgramReplaceWithTabs () {
+    if (xgramReplacingWithTabs || chat == null || !XgramForums.hasForumTabs(tdlib, chat)) {
+      return;
+    }
+    xgramReplacingWithTabs = true;
+    TdlibUi.ChatOpenParameters params = new TdlibUi.ChatOpenParameters().keepStack();
+    XgramForums.prepareTabsOpen(tdlib, chat, params);
+    tdlib.ui().openChat(this, chat, params);
   }
 
   /** XGram: this list opened when the forum showed as a list; it is being replaced by the tabs view (see onFocus). */
@@ -879,6 +887,8 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
       ids.append(R.id.btn_xgramOpenCommunity);
       titles.append(R.string.XgramOpenCommunity);
     }
+    ids.append(R.id.btn_xgramTopicsLayout); // XGram: Tabs or List for this user (as the group profile's Topics row)
+    titles.append(R.string.XgramTopicsLayoutMenu);
     ids.append(R.id.btn_xgramViewAsMessages);
     titles.append(R.string.XgramViewAsMessages);
     showMore(ids.get(), titles.get(), 0);
@@ -898,6 +908,8 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
         org.thunderdog.challegram.tool.UI.showToast(R.string.XgramReorderTopicsHint, android.widget.Toast.LENGTH_LONG);
       }
       xgramUpdateReorderChrome(true); // XGram M3E
+    } else if (id == R.id.btn_xgramTopicsLayout) {
+      XgramForums.promptTopicsView(this, chat, this::xgramReplaceWithTabs); // Tabs: the tabs take this list's place now
     } else if (id == R.id.btn_xgramViewAsMessages) {
       if (context().isNavigationBusy()) {
         return;

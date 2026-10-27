@@ -2601,6 +2601,19 @@ public class MessagesController extends ViewController<MessagesController.Argume
       navigateTo(new com.fahadali.xgram.chats.XgramSavedTopicsController(context, tdlib)); // XGram
     } else if (id == R.id.btn_xgramOpenCommunity) {
       com.fahadali.xgram.chats.XgramCommunityController.open(this, com.fahadali.xgram.chats.XgramCommunityController.communityOf(tdlib, chat));
+    } else if (id == R.id.btn_xgramTopicsLayout) {
+      if (chat != null) {
+        com.fahadali.xgram.topics.XgramForums.promptTopicsView(this, chat, () -> {
+          if (isDestroyed()) {
+            return;
+          }
+          xgramUpdateTabs(); // Tabs picked here: the tabs show at once
+          if (xgramTabsMode()) {
+            xgramOpenedAsTabs = true;
+          }
+          xgramCheckForumLayout(); // List picked in the tabs: the topic list takes this chat's place
+        });
+      }
     } else if (id == R.id.btn_xgramViewAsTopics) {
       if (chat != null) {
         TdApi.Chat forum = chat;
@@ -5108,6 +5121,12 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (scheduleButton != null && messageThread == null && !xgramInputButtonShown(com.fahadali.xgram.XgramSettings.INPUT_BUTTON_SCHEDULED) && tdlib.chatHasScheduled(chat.id)) {
       ids.append(R.id.btn_viewScheduled); // XGram: the message box button is hidden
       strings.append(R.string.ScheduledMessages);
+    }
+
+    if (!inPreviewMode && messageThread == null && tdlib.isForum(chat.id) && (messageTopicId == null || xgramTabsMode())) {
+      // XGram: Tabs or List for this user, as the group profile's Topics row (it switches at once)
+      ids.append(R.id.btn_xgramTopicsLayout);
+      strings.append(R.string.XgramTopicsLayoutMenu);
     }
 
     if (messageTopicId == null && !inPreviewMode && tdlib.isForum(chat.id) && !com.fahadali.xgram.topics.XgramForums.hasForumTabs(tdlib, chat)) {

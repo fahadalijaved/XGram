@@ -6,4 +6,5 @@
   <item name="btn_xgramTopicsViewTabs" type="id" />
   <item name="btn_xgramTopicsViewList" type="id" />
   <item name="xgram_tag_rail_inset" type="id" />
+  <item name="btn_xgramTopicsLayout" type="id" />
 </resources>

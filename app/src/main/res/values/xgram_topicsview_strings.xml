@@ -3,4 +3,5 @@
 <resources>
   <string name="XgramTopicsViewGroup">Group\'s choice (%1$s)</string>
   <string name="XgramTopicsViewDesc">How this group\'s topics show for you: Tabs above or beside the messages, or List as a list of chats. Only you see this; the group stays the same for everyone else.</string>
+  <string name="XgramTopicsLayoutMenu">Show topics as…</string>
 </resources>
