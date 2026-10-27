@@ -57,6 +57,18 @@ fun MessagesPage() {
       ) {
         host.openPage(XgramPage.MESSAGE_MENU)
       }
+      // The chat's ⋮ menu, trimmed the same way
+      val chatMenuHidden = com.fahadali.xgram.chats.XgramChatMenu.hiddenCount()
+      value(
+        R.id.btn_xgramChatMenu, s(R.string.XgramChatMenu),
+        if (chatMenuHidden > 0) {
+          s(R.string.XgramHiddenCount, chatMenuHidden)
+        } else {
+          s(if (XgramReorder.hasOrder(XgramReorder.CHAT_MENU)) R.string.XgramOrderCustom else R.string.XgramOrderDefault)
+        }
+      ) {
+        host.openPage(XgramPage.CHAT_MENU)
+      }
     }
 
     header(R.string.XgramHeaderGestures)

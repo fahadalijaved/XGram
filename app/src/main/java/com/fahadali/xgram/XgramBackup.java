@@ -157,7 +157,7 @@ public final class XgramBackup {
     }
     return count;
   }
-  private static final String[] STRING_PREFIXES = {"xgram_filters", "xgram_ln_", "xgram_menu_hidden", com.fahadali.xgram.chats.XgramMessageMenu.KEY_MORE, com.fahadali.xgram.chats.XgramMessageMenu.KEY_IN_MENU, XgramReorder.KEY_PREFIX, XgramSettings.KEY_TR_TARGET};
+  private static final String[] STRING_PREFIXES = {"xgram_filters", "xgram_ln_", "xgram_menu_hidden", com.fahadali.xgram.chats.XgramMessageMenu.KEY_MORE, com.fahadali.xgram.chats.XgramChatMenu.KEY_HIDDEN, com.fahadali.xgram.chats.XgramChatMenu.KEY_MORE, com.fahadali.xgram.chats.XgramMessageMenu.KEY_IN_MENU, XgramReorder.KEY_PREFIX, XgramSettings.KEY_TR_TARGET};
   private static final String[] INT_PREFIXES = {"xgram_tab_", "xgram_history_retention", "xgram_avatar_corners", "xgram_chat_long_press", "xgram_look_", "xgram_icon_pack", "xgram_cmode_", "xgram_update_channel", "xgram_download_boost_level", "xgram_swipe_", "xgram_tr_provider", XgramSettings.KEY_INLINE_VIDEO_START, XgramSettings.KEY_ENTER_TO_SEND, XgramSettings.KEY_PANE_LIST_WIDTH, XgramSettings.KEY_NOTIFICATION_ICON, XgramSettings.KEY_REACTION_BAR, XgramSettings.KEY_NAV_TABS, XgramSettings.KEY_NAV_PROFILE, XgramSettings.KEY_NAV_STYLE, XgramSettings.KEY_NAV_FAB, XgramSettings.KEY_UNDO_SEND, XgramSettings.KEY_ACTIVITY_BAR,
     com.fahadali.xgram.later.XgramLater.KEY_WAKE_EARLY, // Later
     XgramSettings.KEY_APP_FONT, // Font (Appearance): applies at the next start
@@ -259,7 +259,7 @@ public final class XgramBackup {
       if (strings != null) {
         for (Iterator<String> it = strings.keys(); it.hasNext(); ) {
           String key = it.next();
-          if (key.equals("xgram_filters") || key.startsWith("xgram_ln_") || key.equals("xgram_menu_hidden") || key.equals(com.fahadali.xgram.chats.XgramMessageMenu.KEY_MORE) || key.equals(com.fahadali.xgram.chats.XgramMessageMenu.KEY_IN_MENU) || key.startsWith(XgramReorder.KEY_PREFIX) || key.equals(XgramSettings.KEY_TR_TARGET)) {
+          if (key.equals("xgram_filters") || key.startsWith("xgram_ln_") || key.equals("xgram_menu_hidden") || key.equals(com.fahadali.xgram.chats.XgramMessageMenu.KEY_MORE) || key.equals(com.fahadali.xgram.chats.XgramChatMenu.KEY_HIDDEN) || key.equals(com.fahadali.xgram.chats.XgramChatMenu.KEY_MORE) || key.equals(com.fahadali.xgram.chats.XgramMessageMenu.KEY_IN_MENU) || key.startsWith(XgramReorder.KEY_PREFIX) || key.equals(XgramSettings.KEY_TR_TARGET)) {
             pmc().putString(key, strings.getString(key));
             count++;
           }
@@ -315,5 +315,6 @@ public final class XgramBackup {
     // Ghost mode is off after a reset: counters lowered on this device go back to the server's.
     com.fahadali.xgram.ghost.XgramLocalRead.clearAll();
     com.fahadali.xgram.chats.XgramAutoTranslate.reload();
+    com.fahadali.xgram.chats.XgramChatMenu.reload();
   }
 }

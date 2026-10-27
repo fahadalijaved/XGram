@@ -2560,6 +2560,18 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   @Override
   public void onMoreItemPressed (int id) {
+    if (id == R.id.btn_xgramChatMenuMore) {
+      // XGram: Chat menu: the options waiting under More… (in the next frame: the menu closes first)
+      final com.fahadali.xgram.chats.XgramChatMenu.Menu menu = xgramChatMenuMore;
+      if (menu != null && menu.moreIds.length > 0) {
+        UI.post(() -> {
+          if (!isDestroyed()) {
+            showMore(menu.moreIds, menu.moreTitles, 0);
+          }
+        });
+      }
+      return;
+    }
     if (tdlib.ui().processLeaveButton(this, null, getChatId(), id, null)) {
       return;
     }
@@ -5272,8 +5284,14 @@ public class MessagesController extends ViewController<MessagesController.Argume
       }
     }
 
-    showMore(ids.get(), strings.get(), 0);
+    // XGram: Chat menu (Settings → XGram → Messages): hidden options out, those under More… behind its item, in order
+    com.fahadali.xgram.chats.XgramChatMenu.Menu xgramMenu = com.fahadali.xgram.chats.XgramChatMenu.apply(ids.get(), strings.get());
+    xgramChatMenuMore = xgramMenu;
+    showMore(xgramMenu.ids, xgramMenu.titles, 0);
   }
+
+  /** XGram: the chat menu last shown, for its More… item (the options under it). */
+  private @Nullable com.fahadali.xgram.chats.XgramChatMenu.Menu xgramChatMenuMore;
 
   // Clear history
 

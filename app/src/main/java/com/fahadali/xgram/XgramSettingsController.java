@@ -76,9 +76,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
 
   /** Pages further in (their own controllers) that the settings search reads too. */
   static final int SUB_SIDE_MENU = 1, SUB_CHAT_ACTIONS = 2, SUB_MESSAGE_MENU = 3, SUB_INPUT_BUTTONS = 4,
-    SUB_WORD_FILTERS = 5, SUB_HIDDEN_PEOPLE = 6, SUB_HEADER_BUTTONS = 7;
+    SUB_WORD_FILTERS = 5, SUB_HIDDEN_PEOPLE = 6, SUB_HEADER_BUTTONS = 7, SUB_CHAT_MENU = 8;
   static final int[] SEARCH_SUB_PAGES = {
-    SUB_SIDE_MENU, SUB_CHAT_ACTIONS, SUB_MESSAGE_MENU, SUB_INPUT_BUTTONS, SUB_WORD_FILTERS, SUB_HIDDEN_PEOPLE, SUB_HEADER_BUTTONS
+    SUB_SIDE_MENU, SUB_CHAT_ACTIONS, SUB_MESSAGE_MENU, SUB_CHAT_MENU, SUB_INPUT_BUTTONS, SUB_WORD_FILTERS, SUB_HIDDEN_PEOPLE, SUB_HEADER_BUTTONS
   };
 
   private SettingsAdapter adapter;
@@ -183,6 +183,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       case SUB_CHAT_ACTIONS:
       case SUB_HEADER_BUTTONS: return SECTION_CHAT_LIST;
       case SUB_MESSAGE_MENU:
+      case SUB_CHAT_MENU:
       case SUB_INPUT_BUTTONS: return SECTION_MESSAGES;
       case SUB_WORD_FILTERS:
       case SUB_HIDDEN_PEOPLE: return SECTION_FILTERS;
@@ -195,6 +196,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       case SUB_CHAT_ACTIONS: return R.string.XgramChatActionsOrder;
       case SUB_HEADER_BUTTONS: return R.string.XgramHeaderButtons;
       case SUB_MESSAGE_MENU: return R.string.XgramMessageMenu;
+      case SUB_CHAT_MENU: return R.string.XgramChatMenu;
       case SUB_INPUT_BUTTONS: return R.string.XgramInputButtons;
       case SUB_WORD_FILTERS: return R.string.XgramWordFilters;
       case SUB_HIDDEN_PEOPLE: return R.string.XgramShadowBanned;
@@ -213,6 +215,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       case SUB_CHAT_ACTIONS: return com.fahadali.xgram.chats.XgramChatActionsController.buildItems();
       case SUB_HEADER_BUTTONS: return com.fahadali.xgram.chats.XgramHeaderButtonsController.buildItems();
       case SUB_MESSAGE_MENU: return com.fahadali.xgram.chats.XgramMessageMenuController.buildItems();
+      case SUB_CHAT_MENU: return com.fahadali.xgram.chats.XgramChatMenuController.buildItems();
       case SUB_INPUT_BUTTONS: return com.fahadali.xgram.chats.XgramInputButtonsController.buildItems();
       case SUB_WORD_FILTERS: {
         List<ListItem> items = com.fahadali.xgram.chats.XgramFiltersController.buildItems(false);
@@ -240,6 +243,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       case SUB_CHAT_ACTIONS: return new com.fahadali.xgram.chats.XgramChatActionsController(context, tdlib);
       case SUB_HEADER_BUTTONS: return new com.fahadali.xgram.chats.XgramHeaderButtonsController(context, tdlib);
       case SUB_MESSAGE_MENU: return new com.fahadali.xgram.chats.XgramMessageMenuController(context, tdlib);
+      case SUB_CHAT_MENU: return new com.fahadali.xgram.chats.XgramChatMenuController(context, tdlib);
       case SUB_INPUT_BUTTONS: return new com.fahadali.xgram.chats.XgramInputButtonsController(context, tdlib);
       case SUB_WORD_FILTERS: return com.fahadali.xgram.chats.XgramFiltersController.words(context, tdlib);
       case SUB_HIDDEN_PEOPLE: return com.fahadali.xgram.chats.XgramFiltersController.people(context, tdlib);
@@ -390,6 +394,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
         } else if (id == R.id.btn_xgramMessageMenu) {
           int hidden = messageMenuHiddenCount();
           view.setData(hidden > 0 ? Lang.getString(R.string.XgramHiddenCount, hidden) : Lang.getString(XgramReorder.hasOrder(XgramReorder.MESSAGE_MENU) ? R.string.XgramOrderCustom : R.string.XgramOrderDefault));
+        } else if (id == R.id.btn_xgramChatMenu) {
+          int hidden = com.fahadali.xgram.chats.XgramChatMenu.hiddenCount();
+          view.setData(hidden > 0 ? Lang.getString(R.string.XgramHiddenCount, hidden) : Lang.getString(XgramReorder.hasOrder(XgramReorder.CHAT_MENU) ? R.string.XgramOrderCustom : R.string.XgramOrderDefault));
         } else if (id == R.id.btn_xgramInputButtons) {
           int hidden = com.fahadali.xgram.chats.XgramInputButtonsController.hiddenCount();
           view.setData(hidden > 0 ? Lang.getString(R.string.XgramHiddenCount, hidden) : Lang.getString(R.string.XgramAllShown));
@@ -935,7 +942,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
   private void buildMessages (List<ListItem> items) {
     // No header: the row is called Message menu already.
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
-    addRows(items, link(R.id.btn_xgramMessageMenu, R.string.XgramMessageMenu));
+    addRows(items, link(R.id.btn_xgramMessageMenu, R.string.XgramMessageMenu), link(R.id.btn_xgramChatMenu, R.string.XgramChatMenu));
 
     items.add(header(R.string.XgramHeaderGestures));
     addRows(items,
@@ -2271,6 +2278,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     } else if (id == R.id.btn_xgramMessageMenu) {
       navigateTo(new com.fahadali.xgram.chats.XgramMessageMenuController(context, tdlib));
+      return;
+    } else if (id == R.id.btn_xgramChatMenu) {
+      navigateTo(new com.fahadali.xgram.chats.XgramChatMenuController(context, tdlib));
       return;
     } else if (id == R.id.btn_xgramFilters) {
       navigateTo(com.fahadali.xgram.chats.XgramFiltersController.words(context, tdlib));

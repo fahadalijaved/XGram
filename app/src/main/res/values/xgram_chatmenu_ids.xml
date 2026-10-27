@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: the chat's ⋮ menu settings (com.fahadali.xgram.chats.XgramChatMenu) -->
+<resources>
+  <item name="btn_xgramChatMenu" type="id" />
+  <item name="btn_xgramChatMenuMore" type="id" />
+  <item name="btn_xgramChatMenuItem" type="id" />
+  <item name="controller_xgramChatMenu" type="id" />
+</resources>

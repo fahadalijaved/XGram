@@ -57,7 +57,7 @@ import me.vkryl.core.collection.IntList;
 public final class XgramReorder {
   private XgramReorder () { }
 
-  public static final String DRAWER = "drawer", MESSAGE_MENU = "menu", CHAT_ACTIONS = "chat_actions";
+  public static final String DRAWER = "drawer", MESSAGE_MENU = "menu", CHAT_ACTIONS = "chat_actions", CHAT_MENU = "chat_menu";
   /** The floating navigation toolbar's tabs (com.fahadali.xgram.layout.XgramNavToolbar.TAB_KEYS). */
   public static final String NAV_BAR = "navbar";
   /** Stored as "xgram_order_" + list, a comma separated list of keys (included in the XGram backup). */

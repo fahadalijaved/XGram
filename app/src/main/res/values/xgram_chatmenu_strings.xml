@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: the chat's ⋮ menu, trimmed to what the user wants (com.fahadali.xgram.chats.XgramChatMenu) -->
+<resources>
+  <string name="XgramChatMenu">Chat menu</string>
+  <string name="XgramChatMenuInfo">Choose what the ⋮ menu in a chat shows, and drag an option by its handle, or hold it, to change the order. Put rarely used options under More… at the end of the menu. An option still only shows where it applies, like Leave group in groups or Recent Actions for admins.</string>
+  <string name="XgramChatMenuMoreItem">More…</string>
+  <string name="XgramChatMenuMute">Mute or unmute</string>
+  <string name="XgramChatMenuLinked">Linked group or channel</string>
+  <string name="XgramChatMenuLeave">Leave or delete chat</string>
+</resources>
