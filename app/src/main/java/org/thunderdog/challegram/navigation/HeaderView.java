@@ -1144,6 +1144,14 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
   }
 
   /**
+   * XGram: whether the ⋮ menu is still on screen (shown, or closing after a tap): another menu opens in the same view only
+   * once it has gone (the chat menu's More…).
+   */
+  public boolean xgramIsMoreMenuShowing () {
+    return moreWrap != null && moreWrap.isAttachedToWindow();
+  }
+
+  /**
    * XGram: the app bar's ⋮ menu: scrollable and bound to the safe area, so every row of a long menu (the chat's ⋮ has up
    * to 20) can be reached: it ends 8dp above the navigation bar or the keyboard and scrolls the rest. Its place stays
    * the same (at the header's end or start, under the status bar).

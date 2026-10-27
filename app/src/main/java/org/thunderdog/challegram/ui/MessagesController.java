@@ -2561,14 +2561,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
   @Override
   public void onMoreItemPressed (int id) {
     if (id == R.id.btn_xgramChatMenuMore) {
-      // XGram: Chat menu: the options waiting under More… (in the next frame: the menu closes first)
+      // XGram: Chat menu: the options waiting under More…, once the menu has closed (both use the same menu view)
       final com.fahadali.xgram.chats.XgramChatMenu.Menu menu = xgramChatMenuMore;
       if (menu != null && menu.moreIds.length > 0) {
-        UI.post(() -> {
-          if (!isDestroyed()) {
-            showMore(menu.moreIds, menu.moreTitles, 0);
-          }
-        });
+        xgramShowChatMenuMore(menu, 0);
       }
       return;
     }
@@ -5288,6 +5284,20 @@ public class MessagesController extends ViewController<MessagesController.Argume
     com.fahadali.xgram.chats.XgramChatMenu.Menu xgramMenu = com.fahadali.xgram.chats.XgramChatMenu.apply(ids.get(), strings.get());
     xgramChatMenuMore = xgramMenu;
     showMore(xgramMenu.ids, xgramMenu.titles, 0);
+  }
+
+  /** XGram: the options under the chat menu's More…, as soon as the menu it was tapped in has left the screen. */
+  private void xgramShowChatMenuMore (com.fahadali.xgram.chats.XgramChatMenu.Menu menu, int attempt) {
+    if (isDestroyed()) {
+      return;
+    }
+    if ((headerView != null && headerView.xgramIsMoreMenuShowing()) || context().isNavigationBusy()) {
+      if (attempt < 40) {
+        UI.post(() -> xgramShowChatMenuMore(menu, attempt + 1), 40);
+      }
+      return;
+    }
+    showMore(menu.moreIds, menu.moreTitles, 0);
   }
 
   /** XGram: the chat menu last shown, for its More… item (the options under it). */
