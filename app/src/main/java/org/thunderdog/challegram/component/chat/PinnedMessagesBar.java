@@ -117,7 +117,7 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
     recyclerView.setOverScrollMode(Config.HAS_NICE_OVER_SCROLL_EFFECT ? RecyclerView.OVER_SCROLL_IF_CONTENT_SCROLLS : RecyclerView.OVER_SCROLL_NEVER);
     recyclerView.setVerticalScrollBarEnabled(false);
     Views.setScrollBarPosition(recyclerView);
-    recyclerView.setLayoutManager(new LinearLayoutManager(context, LinearLayoutManager.VERTICAL, reverseLayout));
+    recyclerView.setLayoutManager(new XgramPinnedLayoutManager(context, reverseLayout));
     recyclerView.addItemDecoration(new RecyclerView.ItemDecoration() {
       @Override
       public void onDrawOver (@NonNull Canvas c, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
@@ -483,6 +483,37 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
       collapse == 0f ? 0 :
         Math.round((float) contentInset * (1f - MathUtils.clamp(Math.abs((float) position - focusPosition))) * collapse);
     view.setContentInset(inset);
+  }
+
+  /**
+   * XGram: the pinned rows' layout. RecyclerView stopped the app with "Inconsistency detected" (a row at a position past
+   * the adapter's end) whenever the bar showed, on the owner's Fold (2026-10-27), with every change of the rows matched
+   * by its notification. No predictive animations (their pre-layout is where it threw), and should a layout still find
+   * the rows out of step, they are laid out again from the adapter in the next frame instead of crashing (logged).
+   */
+  private final class XgramPinnedLayoutManager extends LinearLayoutManager {
+    XgramPinnedLayoutManager (Context context, boolean reverseLayout) {
+      super(context, LinearLayoutManager.VERTICAL, reverseLayout);
+    }
+
+    @Override
+    public boolean supportsPredictiveItemAnimations () {
+      return false;
+    }
+
+    @Override
+    public void onLayoutChildren (RecyclerView.Recycler recycler, RecyclerView.State state) {
+      try {
+        super.onLayoutChildren(recycler, state);
+      } catch (IndexOutOfBoundsException e) {
+        android.util.Log.e("XGram", "Pinned bar: rows out of step with the adapter, laying them out again", e);
+        recyclerView.post(() -> {
+          if (messagesAdapter != null) {
+            messagesAdapter.notifyDataSetChanged();
+          }
+        });
+      }
+    }
   }
 
   public void initialize (@NonNull ViewController<?> viewController) {
