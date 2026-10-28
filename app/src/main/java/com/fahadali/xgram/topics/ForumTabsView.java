@@ -637,6 +637,18 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
       invalidate();
     }
 
+    /** XGram: what the badge was last built from, so it can be built again once the topic's newest reaction is known. */
+    private int xgramBadgeType;
+    private @Nullable TdApi.ForumTopic xgramBadgeTopic;
+    private long xgramBadgeChatId;
+    private final Runnable xgramBadgeReload = () -> {
+      if (xgramBadgeTopic != null) {
+        xgramBind(xgramBadgeType, xgramBadgeTopic, xgramBadgeChatId, isSelected());
+        requestLayout(); // the badge may be wider
+        invalidate();
+      }
+    };
+
     /** XGram: the selection spring (animated when the same tab is rebound) and the badge text. */
     private void xgramBind (int type, @Nullable TdApi.ForumTopic topic, long chatId, boolean selected) {
       long key = topic != null ? topic.info.forumTopicId : -1L - type;
@@ -655,7 +667,12 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
       // chat list and the topic list show them ("♥ 3", "@", "@♥ 12")
       final boolean mention = topic != null && topic.unreadMentionCount > 0;
       final boolean reaction = topic != null && topic.unreadReactionCount > 0;
-      String marks = (mention ? "@" : "") + (reaction ? "\u2665" : "");
+      xgramBadgeType = type;
+      xgramBadgeTopic = topic;
+      xgramBadgeChatId = chatId;
+      // The newest unread reaction itself when known (XgramUnreadReaction), the heart until then
+      final String reactionMark = reaction ? com.fahadali.xgram.chats.XgramUnreadReaction.emoji(tdlib, chatId, topic.info.forumTopicId, topic.unreadReactionCount, xgramBadgeReload) : null;
+      String marks = (mention ? "@" : "") + (reaction ? (reactionMark != null ? reactionMark : "\u2665") : "");
       String text = count > 0 ? (marks.isEmpty() ? Strings.buildCounter(count) : marks + " " + Strings.buildCounter(count)) : marks;
       if (count != xgramBadgeCount || !text.equals(xgramBadgeText)) {
         xgramBadgeCount = count;

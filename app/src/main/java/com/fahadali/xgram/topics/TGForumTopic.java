@@ -59,6 +59,15 @@ public final class TGForumTopic implements Counter.Callback, ContentPreview.Refr
 
   private final MultipleViewProvider currentViews = new MultipleViewProvider();
   private final Counter counter, mentionCounter, reactionsCounter;
+  /** XGram: the unread reactions badge shows the newest reaction in this topic, the heart until it's known. */
+  private final com.fahadali.xgram.chats.XgramReactionBadgeDrawable xgramReactionBadge = new com.fahadali.xgram.chats.XgramReactionBadgeDrawable();
+  private final Runnable xgramReactionBadgeLoaded = this::xgramOnReactionBadgeLoaded;
+
+  private void xgramOnReactionBadgeLoaded () {
+    if (xgramReactionBadge.setEmoji(com.fahadali.xgram.chats.XgramUnreadReaction.emoji(tdlib, chatId, topic.info.forumTopicId, topic.unreadReactionCount, null))) {
+      currentViews.invalidate();
+    }
+  }
   private ForumTopicIconDrawable iconDrawable;
   // What iconDrawable was built from. A rename arrives on the same ForumTopic object the row already holds,
   // so comparing the new info with this.topic.info would never notice it.
@@ -94,7 +103,7 @@ public final class TGForumTopic implements Counter.Callback, ContentPreview.Refr
       .callback(this)
       .build();
     Counter.Builder reactions = new Counter.Builder()
-      .drawable(R.drawable.baseline_favorite_14, 16f, 0f, Gravity.CENTER)
+      .drawable(xgramReactionBadge, 0f, Gravity.CENTER) // XGram: the newest unread reaction itself (else the heart)
       .callback(this);
     if (XgramExpressive.isEnabled()) {
       reactions.colorSet(XGRAM_REACTIONS_COLORS); // XGram M3E: a tertiary container badge, muted or not
@@ -303,6 +312,8 @@ public final class TGForumTopic implements Counter.Callback, ContentPreview.Refr
     boolean muted = isMuted();
     boolean hasMentions = topic.unreadMentionCount > 0;
     reactionsCounter.setCount(topic.unreadReactionCount > 0 ? Tdlib.CHAT_MARKED_AS_UNREAD : 0, muted, animated);
+    xgramReactionBadge.setEmoji(topic.unreadReactionCount > 0 ?
+      com.fahadali.xgram.chats.XgramUnreadReaction.emoji(tdlib, chatId, topic.info.forumTopicId, topic.unreadReactionCount, xgramReactionBadgeLoaded) : null); // XGram
     mentionCounter.setCount(hasMentions ? Tdlib.CHAT_MARKED_AS_UNREAD : 0, false, animated);
     counter.setCount(hasMentions && topic.unreadCount == 1 ? 0 : topic.unreadCount, muted, animated);
   }

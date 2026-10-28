@@ -140,6 +140,15 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
 
   private final BounceAnimator scheduleAnimator;
   private final Counter counter, mentionCounter, reactionsCounter, viewCounter;
+  /** XGram: the unread reactions badge shows the newest reaction (XgramUnreadReaction), the heart until it's known. */
+  private final com.fahadali.xgram.chats.XgramReactionBadgeDrawable xgramReactionBadge = new com.fahadali.xgram.chats.XgramReactionBadgeDrawable();
+  private final Runnable xgramReactionBadgeLoaded = this::xgramOnReactionBadgeLoaded;
+
+  private void xgramOnReactionBadgeLoaded () {
+    if (chat != null && xgramReactionBadge.setEmoji(com.fahadali.xgram.chats.XgramUnreadReaction.emoji(tdlib, chat.id, 0, chat.unreadReactionCount, null))) {
+      currentViews.invalidate();
+    }
+  }
   private final Counter xgramLaterCounter;
   private final com.fahadali.xgram.later.XgramLaterUi.BellColors xgramBellColors;
 
@@ -194,7 +203,7 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
       .callback(this)
       .build();
     this.reactionsCounter = new Counter.Builder()
-      .drawable(R.drawable.baseline_favorite_14, 16f, 0f, Gravity.CENTER)
+      .drawable(xgramReactionBadge, 0f, Gravity.CENTER) // XGram: the newest unread reaction itself (else the heart)
       .callback(this)
       .build();
     // XGram Later: the bell (a woken snooze, a due reminder or follow-up not seen yet), after the @ and the heart
@@ -244,7 +253,7 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
       .callback(this)
       .build();
     this.reactionsCounter = new Counter.Builder()
-      .drawable(R.drawable.baseline_favorite_14, 16f, 0f, Gravity.CENTER)
+      .drawable(xgramReactionBadge, 0f, Gravity.CENTER) // XGram: the newest unread reaction itself (else the heart)
       .callback(this)
       .build();
     // XGram Later: the bell (a woken snooze, a due reminder or follow-up not seen yet), after the @ and the heart
@@ -978,6 +987,9 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
     int unreadCount = getUnreadCount();
 
     reactionsCounter.setCount(hasReactions ? Tdlib.CHAT_MARKED_AS_UNREAD : 0, !notificationsEnabled(), allowAnimation && needAnimateChanges());
+    // XGram: which reaction (one chat's; the archive and communities keep the heart)
+    xgramReactionBadge.setEmoji(hasReactions && chat != null && !isArchive() && xgramCommunityId == 0 ?
+      com.fahadali.xgram.chats.XgramUnreadReaction.emoji(tdlib, chat.id, 0, chat.unreadReactionCount, xgramReactionBadgeLoaded) : null);
     mentionCounter.setCount(hasMentions ? Tdlib.CHAT_MARKED_AS_UNREAD : 0, false, allowAnimation && needAnimateChanges());
     counter.setCount(hasMentions && unreadCount == 1 ? 0 : unreadCount, !notificationsEnabled(), allowAnimation && needAnimateChanges());
     xgramLaterCounter.setCount(xgramHasBell() ? Tdlib.CHAT_MARKED_AS_UNREAD : 0, !notificationsEnabled(), allowAnimation && needAnimateChanges()); // XGram Later
