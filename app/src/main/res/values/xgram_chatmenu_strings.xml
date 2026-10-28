@@ -7,4 +7,6 @@
   <string name="XgramChatMenuMute">Mute or unmute</string>
   <string name="XgramChatMenuLinked">Linked group or channel</string>
   <string name="XgramChatMenuLeave">Leave or delete chat</string>
+  <string name="XgramHomeScreen">Add to Home Screen</string>
+  <string name="XgramHomeScreenUnsupported">Your launcher can\'t add shortcuts</string>
 </resources>

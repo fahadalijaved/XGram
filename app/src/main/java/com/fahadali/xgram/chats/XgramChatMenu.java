@@ -79,6 +79,7 @@ public final class XgramChatMenu {
     new Option("check_in", R.string.XgramCheckIn, R.drawable.baseline_location_on_24, R.id.btn_xgramCheckIn),
     new Option("report", R.string.Report, R.drawable.baseline_report_24, R.id.btn_reportChat),
     new Option("passcode", R.string.PasscodeTitle, R.drawable.baseline_lock_24, R.id.btn_setPasscode),
+    new Option("home_screen", R.string.XgramHomeScreen, R.drawable.baseline_home_24, R.id.btn_xgramAddToHomeScreen),
     new Option("share_contact", R.string.ShareMyContactInfo, R.drawable.baseline_contact_phone_24, R.id.btn_shareMyContact),
     new Option("pinned", R.string.PinnedMessage, R.drawable.deproko_baseline_pin_24, R.id.btn_showPinnedMessage),
     new Option("bot_help", R.string.BotHelp, R.drawable.baseline_help_24, R.id.btn_botHelp),

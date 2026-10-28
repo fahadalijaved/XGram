@@ -5,4 +5,5 @@
   <item name="btn_xgramChatMenuMore" type="id" />
   <item name="btn_xgramChatMenuItem" type="id" />
   <item name="controller_xgramChatMenu" type="id" />
+  <item name="btn_xgramAddToHomeScreen" type="id" />
 </resources>

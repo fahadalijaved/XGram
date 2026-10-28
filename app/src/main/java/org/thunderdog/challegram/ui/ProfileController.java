@@ -709,6 +709,11 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       strings.append(R.string.OpenCloudChat);
     }
 
+    if (user != null && com.fahadali.xgram.chats.XgramHomeShortcut.isSupported(context)) {
+      ids.append(R.id.btn_xgramAddToHomeScreen); // XGram: a launcher shortcut to this chat (Telegram's)
+      strings.append(R.string.XgramHomeScreen);
+    }
+
     showMore(ids.get(), strings.get(), 0);
   }
 
@@ -753,6 +758,11 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       strings.append(com.fahadali.xgram.chats.XgramAutoTranslate.isEnabled(tdlib, getChatId()) ? R.string.XgramStopTranslating : R.string.XgramTranslateChat);
     }
 
+    if (com.fahadali.xgram.chats.XgramHomeShortcut.isSupported(context)) {
+      ids.append(R.id.btn_xgramAddToHomeScreen); // XGram: a launcher shortcut to this group or channel (Telegram's)
+      strings.append(R.string.XgramHomeScreen);
+    }
+
     tdlib.ui().addDeleteChatOptions(getChatId(), ids, strings, false, true);
 
     if (ids.size() > 0) {
@@ -768,6 +778,15 @@ public class ProfileController extends ViewController<ProfileController.Args> im
 
   @Override
   public void onMoreItemPressed (int id) {
+    if (id == R.id.btn_xgramAddToHomeScreen) {
+      // XGram: a launcher shortcut to this chat (a user's private chat is made first when there is none)
+      if (user != null && mode == Mode.USER) {
+        com.fahadali.xgram.chats.XgramHomeShortcut.addUser(tdlib, user.id);
+      } else if (getChatId() != 0) {
+        com.fahadali.xgram.chats.XgramHomeShortcut.add(tdlib, getChatId());
+      }
+      return;
+    }
     if (id == R.id.btn_xgramVideoCall) {
       if (user != null && userFull != null) {
         tdlib.context().calls().makeVideoCall(this, user.id, userFull, true); // XGram

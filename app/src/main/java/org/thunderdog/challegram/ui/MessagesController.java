@@ -2560,6 +2560,12 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   @Override
   public void onMoreItemPressed (int id) {
+    if (id == R.id.btn_xgramAddToHomeScreen) {
+      if (chat != null) {
+        com.fahadali.xgram.chats.XgramHomeShortcut.add(tdlib, chat.id); // XGram
+      }
+      return;
+    }
     if (id == R.id.btn_xgramChatMenuMore) {
       // XGram: Chat menu: the options waiting under More…, once the menu has closed (both use the same menu view)
       final com.fahadali.xgram.chats.XgramChatMenu.Menu menu = xgramChatMenuMore;
@@ -5232,6 +5238,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (tdlib.canSetPasscode(chat)) {
       ids.append(R.id.btn_setPasscode);
       strings.append(R.string.PasscodeTitle);
+    }
+    if (!inPreviewMode && com.fahadali.xgram.chats.XgramHomeShortcut.isSupported(context)) {
+      ids.append(R.id.btn_xgramAddToHomeScreen); // XGram: a launcher shortcut to this chat (Telegram's)
+      strings.append(R.string.XgramHomeScreen);
     }
     tdlib.ui().addDeleteChatOptions(getChatId(), ids, strings, !tdlib.isChannel(chat.id), false);
 

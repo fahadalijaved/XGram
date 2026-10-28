@@ -651,12 +651,19 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
       xgramBoundKey = key;
       setSelected(selected); // the pill state layer turns onSecondaryContainer (XgramM3TopicTabs.tabBackground)
       int count = topic != null ? Math.max(0, topic.unreadCount) : 0;
-      if (count != xgramBadgeCount) {
+      // XGram: the topic's unread mention (@) and unread reactions to the user's messages (♥) before the count, as the
+      // chat list and the topic list show them ("♥ 3", "@", "@♥ 12")
+      final boolean mention = topic != null && topic.unreadMentionCount > 0;
+      final boolean reaction = topic != null && topic.unreadReactionCount > 0;
+      String marks = (mention ? "@" : "") + (reaction ? "\u2665" : "");
+      String text = count > 0 ? (marks.isEmpty() ? Strings.buildCounter(count) : marks + " " + Strings.buildCounter(count)) : marks;
+      if (count != xgramBadgeCount || !text.equals(xgramBadgeText)) {
         xgramBadgeCount = count;
-        xgramBadgeText = count > 0 ? Strings.buildCounter(count) : "";
+        xgramBadgeText = text;
         xgramBadgeTextWidth = XgramM3TopicTabs.badgeTextWidth(xgramBadgeText);
       }
-      xgramBadgeMuted = count > 0 && XgramForums.isTopicMuted(tdlib, chatId, topic);
+      // A mention stands out even in a muted topic, as in the chat list
+      xgramBadgeMuted = !mention && !text.isEmpty() && XgramForums.isTopicMuted(tdlib, chatId, topic);
       if (type == TYPE_ALL || type == TYPE_TOPIC) {
         setContentDescription(title);
       }
