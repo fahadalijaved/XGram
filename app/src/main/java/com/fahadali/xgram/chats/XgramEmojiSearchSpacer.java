@@ -26,7 +26,6 @@ import org.thunderdog.challegram.theme.Theme;
 import org.thunderdog.challegram.tool.Drawables;
 import org.thunderdog.challegram.tool.Fonts;
 import org.thunderdog.challegram.tool.Paints;
-import org.thunderdog.challegram.tool.PorterDuffPaint;
 import org.thunderdog.challegram.tool.Screen;
 
 /**
@@ -63,7 +62,7 @@ public final class XgramEmojiSearchSpacer extends View {
     c.drawRoundRect(pill, radius, radius, Paints.fillingPaint(fill));
     final boolean rtl = Lang.rtl();
     final float iconX = rtl ? pill.right - Screen.dp(12f) - icon.getMinimumWidth() : pill.left + Screen.dp(12f);
-    Drawables.draw(c, icon, iconX, pill.centerY() - icon.getMinimumHeight() / 2f, PorterDuffPaint.get(ColorId.textPlaceholder));
+    Drawables.draw(c, icon, iconX, pill.centerY() - icon.getMinimumHeight() / 2f, Paints.getPorterDuffPaint(content)); // the hint's colour (PorterDuffPaint only takes icon colour ids)
     textPaint.setColor(content);
     final float textWidth = textPaint.measureText(hint);
     final float textX = rtl ? iconX - Screen.dp(12f) - textWidth : iconX + icon.getMinimumWidth() + Screen.dp(12f);
