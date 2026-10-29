@@ -56,7 +56,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 
 /**
- * Telegram's emoji search, under the message box: a search field and the emoji that match it (TDLib's emoji keywords in
+ * Telegram's emoji search, above the message box: a search field and the emoji that match it (TDLib's emoji keywords in
  * the keyboard languages, and Telegram X's own English ones), with the keyboard below. A tap puts the emoji in the
  * message (where its cursor was) and keeps the search open for more; ← or Back goes back to the emoji panel. Before
  * anything is typed it shows the recent emoji.

@@ -11027,7 +11027,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   /**
-   * XGram: the emoji page's "Search emoji" (Telegram's): the emoji panel gives way to a search field under the message
+   * XGram: the emoji page's "Search emoji" (Telegram's): the emoji panel gives way to a search field above the message
    * box with the keyboard below it; the matching emoji show as they are typed, and a tap puts one in the message.
    * ← or Back brings the emoji panel back (XgramEmojiSearch).
    */
@@ -11055,8 +11055,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
       xgramEmojiSearch.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
     }
     if (xgramEmojiSearch.getParent() == null) {
+      // Above the message box (the owner's choice): the search and its emoji, then the message box, then the keyboard
       final int index = bottomWrap.indexOfChild(inputView);
-      bottomWrap.addView(xgramEmojiSearch, index >= 0 ? index + 1 : bottomWrap.getChildCount());
+      bottomWrap.addView(xgramEmojiSearch, index >= 0 ? index : 0);
     }
     emojiState = false; // the emoji panel goes without bringing the message box's keyboard
     forceCloseEmojiKeyboard();
