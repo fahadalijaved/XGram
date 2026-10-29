@@ -243,6 +243,9 @@ public class TdlibNotificationStyle implements TdlibNotificationStyleDelegate, F
   @SuppressWarnings("deprecation")
   protected final int displayChildNotification (NotificationManagerCompat manager, Context context, @NonNull TdlibNotificationHelper helper, int badgeCount, boolean allowPreview, @NonNull TdlibNotificationGroup group, TdlibNotificationSettings settings, int notificationId, boolean isSummary, boolean isRebuild) {
     final int category = group.getCategory();
+    if (Config.REUSE_NOTIFICATION_ICONS) {
+      tdlib.context().notificationIcons().resetUsedIcons(tdlib.id(), group.getChatId());
+    }
 
     if (!allowPreview || group.isEmpty()) {
       manager.cancel(helper.tag(category), notificationId);
@@ -852,12 +855,16 @@ public class TdlibNotificationStyle implements TdlibNotificationStyleDelegate, F
     }
   }
 
-  static Person buildPerson (TdlibNotificationManager context, boolean isSelfChat, boolean isGroupChat, boolean isChannel, TdApi.User user, @Nullable String id, boolean isScheduled, boolean isSilent, boolean allowDownload) {
-    return buildPerson(context, isSelfChat, isGroupChat, isChannel, user, id, isScheduled, isSilent, allowDownload, null);
+  static Person buildPerson (TdlibNotificationManager context, long chatId, boolean isSelfChat,
+    boolean isGroupChat, boolean isChannel, TdApi.User user, @Nullable String id,
+    boolean isScheduled, boolean isSilent, boolean allowDownload) {
+    return buildPerson(context, chatId, isSelfChat, isGroupChat, isChannel, user, id, isScheduled, isSilent, allowDownload, null);
   }
 
   // XGram: xgramTopic is the forum topic of the message, shown as "Name › Topic".
-  static Person buildPerson (TdlibNotificationManager context, boolean isSelfChat, boolean isGroupChat, boolean isChannel, TdApi.User user, @Nullable String id, boolean isScheduled, boolean isSilent, boolean allowDownload, @Nullable String xgramTopic) {
+  static Person buildPerson (TdlibNotificationManager context, long chatId, boolean isSelfChat,
+    boolean isGroupChat, boolean isChannel, TdApi.User user, @Nullable String id,
+    boolean isScheduled, boolean isSilent, boolean allowDownload, @Nullable String xgramTopic) {
     if (user == null)
       return new Person.Builder().setName(Strings.ELLIPSIS).build();
     if (context.isSelfUserId(user.id))
@@ -871,7 +878,10 @@ public class TdlibNotificationStyle implements TdlibNotificationStyleDelegate, F
     if (xgramTopic != null) {
       name = name + " › " + xgramTopic;
     }
-    return buildPerson(context, isSelfChat, isGroupChat, isChannel, id, TD.isBot(user), name, TD.getLetters(user), context.tdlib().cache().userAccentColor(user), user.profilePhoto != null ? user.profilePhoto.small : null, isScheduled, isSilent, allowDownload);
+    return buildPerson(context, chatId, isSelfChat, isGroupChat, isChannel, id, TD.isBot(user),
+      name, TD.getLetters(user), context.tdlib().cache().userAccentColor(user),
+      user.profilePhoto != null ? user.profilePhoto.small : null, isScheduled, isSilent,
+      allowDownload);
   }
 
   public static Person buildPerson (TdlibNotificationManager context, TdApi.Chat chat, TdlibNotification notification, boolean isScheduled, boolean isSilent, boolean allowDownload) {
@@ -884,7 +894,11 @@ public class TdlibNotificationStyle implements TdlibNotificationStyleDelegate, F
     final String xgramTopic = com.fahadali.xgram.topics.XgramForums.notificationTopicName(tdlib, chat, notification.findMessage()); // XGram
     if (userId != 0) {
       TdApi.User user = tdlib.cache().user(userId);
-      return buildPerson(context, notification.isSelfChat(), TD.isMultiChat(chat), tdlib.isChannelChat(chat), user, ChatId.isSecret(chat.id) ? Long.toString(chat.id) : Long.toString(ChatId.fromUserId(userId)), isScheduled, isSilent, allowDownload, xgramTopic);
+      return buildPerson(context, chat.id, notification.isSelfChat(), TD.isMultiChat(chat),
+        tdlib.isChannelChat(chat), user,
+        ChatId.isSecret(chat.id) ? Long.toString(chat.id) :
+          Long.toString(ChatId.fromUserId(userId)),
+        isScheduled, isSilent, allowDownload, xgramTopic);
     }
     if (TD.isMultiChat(chat)) {
       String senderName = notification.findSenderName();
@@ -892,21 +906,32 @@ public class TdlibNotificationStyle implements TdlibNotificationStyleDelegate, F
         senderName = senderName + " › " + xgramTopic; // XGram
       }
       TdApi.Chat senderChat = tdlib.chat(senderChatId);
-      return buildPerson(context, notification.isSelfChat(), TD.isMultiChat(chat), tdlib.isChannelChat(chat), Long.toString(senderChatId), tdlib.isBotChat(senderChatId) || tdlib.isChannel(senderChatId), senderName, TD.getLetters(senderName), tdlib.chatAccentColor(senderChatId), senderChat != null && senderChat.photo != null ? senderChat.photo.small : null, isScheduled, isSilent, allowDownload);
+      return buildPerson(context, chat.id, notification.isSelfChat(), TD.isMultiChat(chat),
+        tdlib.isChannelChat(chat), Long.toString(senderChatId),
+        tdlib.isBotChat(senderChatId) || tdlib.isChannel(senderChatId), senderName,
+        TD.getLetters(senderName), tdlib.chatAccentColor(senderChatId),
+        senderChat != null && senderChat.photo != null ? senderChat.photo.small : null, isScheduled,
+        isSilent, allowDownload);
     }
-    return buildPerson(context, notification.isSelfChat(), TD.isMultiChat(chat), tdlib.isChannelChat(chat), Long.toString(chat.id), tdlib.isBotChat(chat) || tdlib.isChannelChat(chat), chat.title, tdlib.chatLetters(chat), tdlib.chatAccentColor(chat), chat.photo != null ? chat.photo.small : null, isScheduled, isSilent, allowDownload);
+    return buildPerson(context, chat.id, notification.isSelfChat(), TD.isMultiChat(chat),
+      tdlib.isChannelChat(chat), Long.toString(chat.id),
+      tdlib.isBotChat(chat) || tdlib.isChannelChat(chat), chat.title, tdlib.chatLetters(chat),
+      tdlib.chatAccentColor(chat), chat.photo != null ? chat.photo.small : null, isScheduled,
+      isSilent, allowDownload);
   }
 
-  public static Person buildPerson (TdlibNotificationManager context, boolean isSelfChat, boolean isGroupChat, boolean isChannel, String id, boolean isBot, String name, Letters letters, TdlibAccentColor accentColor, TdApi.File photo, boolean isScheduled, boolean isSilent, boolean allowDownload) {
+  public static Person buildPerson (TdlibNotificationManager context, long chatId,
+    boolean isSelfChat, boolean isGroupChat, boolean isChannel, String id, boolean isBot,
+    String name, Letters letters, TdlibAccentColor accentColor, TdApi.File photo,
+    boolean isScheduled, boolean isSilent, boolean allowDownload) {
     Person.Builder b = new Person.Builder();
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
       b.setKey(id);
       b.setBot(isBot);
       b.setName(Lang.getSilentNotificationTitle(name, true, isSelfChat, isGroupChat, isChannel, isScheduled, isSilent));
-      Bitmap bitmap = null; // TODO load from cache
-      if (!U.isValidBitmap(bitmap)) {
-        bitmap = isSelfChat ? TdlibNotificationUtils.buildSelfIcon(context.tdlib()) : TdlibNotificationUtils.buildLargeIcon(context.tdlib(), photo, accentColor, letters, true, allowDownload);
-      }
+      Bitmap bitmap = isSelfChat ? TdlibNotificationUtils.buildSelfIcon(context.tdlib(), chatId) :
+        TdlibNotificationUtils.buildLargeIcon(context.tdlib(), chatId, photo, accentColor, letters,
+          true, allowDownload);
       if (U.isValidBitmap(bitmap)) {
         b.setIcon(IconCompat.createWithBitmap(bitmap));
       }
@@ -1030,7 +1055,8 @@ public class TdlibNotificationStyle implements TdlibNotificationStyleDelegate, F
     TdApi.User user = context.myUser();
     NotificationCompat.MessagingStyle style;
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && user != null) {
-      Person person = buildPerson(context, tdlib.isSelfChat(chat), tdlib.isMultiChat(chat), tdlib.isChannelChat(chat), user, null, false, false, allowDownload);
+      Person person = buildPerson(context, chat.id, tdlib.isSelfChat(chat), tdlib.isMultiChat(chat),
+        tdlib.isChannelChat(chat), user, null, false, false, allowDownload);
       style = new NotificationCompat.MessagingStyle(person);
     } else {
       // Person person = new Person.Builder().setName("\u200B" /*zero-width space*/).build();
