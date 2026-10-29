@@ -11810,6 +11810,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   public void sendText (boolean applyMarkdown, TdApi.MessageSendOptions sendOptions) {
+    xgramCloseEmojiSearch(false); // XGram: sending collapses the emoji search back to the message box
     if (inputView != null) {
       // XGram: only text from the message box (Send, Enter to send) may wait (Undo send); "Send now" skips it.
       sendText(inputView.getOutputText(applyMarkdown), true, applyMarkdown, true, true, sendOptions, !xgramUndoBypass);
