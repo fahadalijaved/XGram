@@ -4813,6 +4813,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   @Override
   public void onBlur () {
     com.fahadali.xgram.chats.XgramTextSelection.dismiss(this); // XGram: leaving the chat ends the text selection
+    xgramCloseEmojiSearch(false); // XGram: leaving the chat ends the emoji search
     saveDraft();
     com.fahadali.xgram.chats.XgramUndoSend.onComposerHidden(this); // XGram: Undo send, what was in sight (ghost read on send)
     if (xgramNextChatId != 0) {
@@ -10779,6 +10780,12 @@ public class MessagesController extends ViewController<MessagesController.Argume
       return true;
     }
 
+    if (!fromTop && xgramEmojiSearch != null && xgramEmojiSearch.getParent() != null) {
+      if (commit) {
+        xgramCloseEmojiSearch(true); // XGram: Back leaves the emoji search for the emoji panel
+      }
+      return true;
+    }
     if (!fromTop) {
       if (emojiShown) {
         if (commit) {
@@ -11020,29 +11027,53 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   /**
-   * XGram: the emoji page's "Search emoji": the keyboard comes up with ":" at the cursor, so the word typed next lists
-   * the emoji that match it above the message box (InlineSearchContext's emoji suggestions, TDLib's emoji keywords in
-   * the keyboard languages), and picking one puts it in place of the word.
+   * XGram: the emoji page's "Search emoji" (Telegram's): the emoji panel gives way to a search field under the message
+   * box with the keyboard below it; the matching emoji show as they are typed, and a tap puts one in the message.
+   * ← or Back brings the emoji panel back (XgramEmojiSearch).
    */
+  private @Nullable com.fahadali.xgram.chats.XgramEmojiSearch xgramEmojiSearch;
+
   @Override
   public void xgramOnEmojiSearch (EmojiLayout layout) {
     if (inputView == null || !canWriteMessages()) {
       return;
     }
-    final android.text.Editable text = inputView.getText();
-    int position = inputView.getSelectionEnd();
-    if (position < 0 || position > text.length()) {
-      position = text.length();
+    if (xgramEmojiSearch == null) {
+      xgramEmojiSearch = new com.fahadali.xgram.chats.XgramEmojiSearch(context(), tdlib, new com.fahadali.xgram.chats.XgramEmojiSearch.Host() {
+        @Override
+        public void onEmojiPicked (String emoji) {
+          if (inputView != null) {
+            inputView.onEmojiSelected(emoji);
+          }
+        }
+
+        @Override
+        public void onSearchClose () {
+          xgramCloseEmojiSearch(true);
+        }
+      });
+      xgramEmojiSearch.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
     }
-    final String insert = position > 0 && !Character.isWhitespace(text.charAt(position - 1)) ? " :" : ":";
-    text.insert(position, insert);
-    inputView.setSelection(Math.min(text.length(), position + insert.length()));
-    closeEmojiKeyboard(true);
-    if (emojiKeyboardFrameLayout != null) {
-      emojiKeyboardFrameLayout.showKeyboard(inputView);
-    } else {
-      Keyboard.show(inputView);
+    if (xgramEmojiSearch.getParent() == null) {
+      final int index = bottomWrap.indexOfChild(inputView);
+      bottomWrap.addView(xgramEmojiSearch, index >= 0 ? index + 1 : bottomWrap.getChildCount());
     }
+    emojiState = false; // the emoji panel goes without bringing the message box's keyboard
+    forceCloseEmojiKeyboard();
+    xgramEmojiSearch.focus();
+  }
+
+  /** XGram: closes the emoji search; {@code reopenPanel}: the emoji panel comes back (← or Back). */
+  private boolean xgramCloseEmojiSearch (boolean reopenPanel) {
+    if (xgramEmojiSearch == null || xgramEmojiSearch.getParent() == null) {
+      return false;
+    }
+    xgramEmojiSearch.hideKeyboard();
+    bottomWrap.removeView(xgramEmojiSearch);
+    if (reopenPanel && !isDestroyed()) {
+      openEmojiKeyboard();
+    }
+    return true;
   }
 
   public void onInputTextChange (CharSequence charSequence, boolean byUserAction) {

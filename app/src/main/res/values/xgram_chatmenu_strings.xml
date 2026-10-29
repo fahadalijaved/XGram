@@ -10,4 +10,6 @@
   <string name="XgramHomeScreen">Add to Home Screen</string>
   <string name="XgramHomeScreenUnsupported">Your launcher can\'t add shortcuts</string>
   <string name="XgramEmojiSearch">Search emoji</string>
+  <string name="XgramEmojiSearchNone">No emoji found</string>
+  <string name="XgramEmojiSearchBack">Back to emoji</string>
 </resources>
