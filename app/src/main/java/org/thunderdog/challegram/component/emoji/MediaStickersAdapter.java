@@ -388,7 +388,15 @@ public class MediaStickersAdapter extends RecyclerView.Adapter<MediaStickersAdap
   }
 
   private int xgramKeyboardTopHeight () {
-    return LayoutParams.getKeyboardTopViewHeight(layoutParams) + xgramTopClearance;
+    return LayoutParams.getKeyboardTopViewHeight(layoutParams) + xgramTopClearance + (xgramEmojiSearch != null ? Screen.dp(com.fahadali.xgram.chats.XgramEmojiSearchSpacer.ROW_DP) : 0);
+  }
+
+  // XGram: the emoji page's "Search emoji" field, drawn at the bottom of the top spacer (taller by its row), so the
+  // scroll positions measureScrollTop works out include it. Set before the items.
+  private @Nullable Runnable xgramEmojiSearch;
+
+  public void xgramSetEmojiSearch (@Nullable Runnable onSearch) {
+    this.xgramEmojiSearch = onSearch;
   }
 
   @Override
@@ -781,7 +789,7 @@ public class MediaStickersAdapter extends RecyclerView.Adapter<MediaStickersAdap
           return new StickerHolder(contentView);
         }
         case TYPE_KEYBOARD_TOP: {
-          View view = new View(context);
+          View view = adapter.xgramEmojiSearch != null ? new com.fahadali.xgram.chats.XgramEmojiSearchSpacer(context, adapter.xgramEmojiSearch) : new View(context);
           view.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, adapter.xgramKeyboardTopHeight()));
           return new StickerHolder(view);
         }

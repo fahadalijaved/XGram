@@ -11014,6 +11014,37 @@ public class MessagesController extends ViewController<MessagesController.Argume
     setInputInlineBot(0, "@" + tdlib.getAnimationSearchBotUsername());
   }
 
+  @Override
+  public boolean xgramCanSearchEmoji () {
+    return inputView != null && !inPreviewMode;
+  }
+
+  /**
+   * XGram: the emoji page's "Search emoji": the keyboard comes up with ":" at the cursor, so the word typed next lists
+   * the emoji that match it above the message box (InlineSearchContext's emoji suggestions, TDLib's emoji keywords in
+   * the keyboard languages), and picking one puts it in place of the word.
+   */
+  @Override
+  public void xgramOnEmojiSearch (EmojiLayout layout) {
+    if (inputView == null || !canWriteMessages()) {
+      return;
+    }
+    final android.text.Editable text = inputView.getText();
+    int position = inputView.getSelectionEnd();
+    if (position < 0 || position > text.length()) {
+      position = text.length();
+    }
+    final String insert = position > 0 && !Character.isWhitespace(text.charAt(position - 1)) ? " :" : ":";
+    text.insert(position, insert);
+    inputView.setSelection(Math.min(text.length(), position + insert.length()));
+    closeEmojiKeyboard(true);
+    if (emojiKeyboardFrameLayout != null) {
+      emojiKeyboardFrameLayout.showKeyboard(inputView);
+    } else {
+      Keyboard.show(inputView);
+    }
+  }
+
   public void onInputTextChange (CharSequence charSequence, boolean byUserAction) {
     if (sendMenu != null) {
       sendMenu.hideMenu();

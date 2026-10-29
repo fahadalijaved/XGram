@@ -136,6 +136,13 @@ public class EmojiListController extends ViewController<EmojiLayout> implements 
     adapter.setClassicEmojiClickListener(this::onClassicEmojiClick);
     adapter.setRepaintingColorId(ColorId.text);
     adapter.xgramSetTopClearance(xgramTopClearance); // XGram
+    if (getArguments() != null && getArguments().xgramCanSearchEmoji()) {
+      adapter.xgramSetEmojiSearch(() -> { // XGram: Telegram's emoji search
+        if (getArguments() != null) {
+          getArguments().xgramRequestEmojiSearch();
+        }
+      });
+    }
 
     this.useDarkMode = getArgumentsStrict().useDarkMode();
 

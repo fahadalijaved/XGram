@@ -9,4 +9,5 @@
   <string name="XgramChatMenuLeave">Leave or delete chat</string>
   <string name="XgramHomeScreen">Add to Home Screen</string>
   <string name="XgramHomeScreenUnsupported">Your launcher can\'t add shortcuts</string>
+  <string name="XgramEmojiSearch">Search emoji</string>
 </resources>

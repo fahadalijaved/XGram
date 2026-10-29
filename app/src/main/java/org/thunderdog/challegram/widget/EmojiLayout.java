@@ -85,6 +85,9 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
     default void onDeleteEmoji () {}
 
     default void onSearchRequested (EmojiLayout layout, boolean areStickers) {}
+    /** XGram: Telegram's emoji search on the emoji page; false where there is no message box to search in. */
+    default boolean xgramCanSearchEmoji () { return false; }
+    default void xgramOnEmojiSearch (EmojiLayout layout) {}
 
     default long getOutputChatId () { return 0; }
 
@@ -94,6 +97,17 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
 
   private ViewController<?> parentController;
   private @Nullable Listener listener;
+
+  /** XGram: the emoji page shows Telegram's "Search emoji" field (the message box searches, see the listener). */
+  public boolean xgramCanSearchEmoji () {
+    return listener != null && !animatedEmojiOnly && listener.xgramCanSearchEmoji();
+  }
+
+  public void xgramRequestEmojiSearch () {
+    if (listener != null) {
+      listener.xgramOnEmojiSearch(this);
+    }
+  }
 
   private RtlViewPager pager;
   private Adapter adapter;
