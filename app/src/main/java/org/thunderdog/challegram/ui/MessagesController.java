@@ -11066,11 +11066,26 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   /** XGram: closes the emoji search; {@code reopenPanel}: the emoji panel comes back (← or Back). */
   private boolean xgramCloseEmojiSearch (boolean reopenPanel) {
+    return xgramCloseEmojiSearch(reopenPanel, false);
+  }
+
+  /**
+   * {@code keepKeyboard}: the keyboard stays up and goes to the message box (after Send, to type on), instead of
+   * closing with the search.
+   */
+  private boolean xgramCloseEmojiSearch (boolean reopenPanel, boolean keepKeyboard) {
     if (xgramEmojiSearch == null || xgramEmojiSearch.getParent() == null) {
       return false;
     }
-    xgramEmojiSearch.hideKeyboard();
+    if (keepKeyboard && inputView != null) {
+      inputView.requestFocus(); // the keyboard moves to the message box without closing
+    } else {
+      xgramEmojiSearch.hideKeyboard();
+    }
     bottomWrap.removeView(xgramEmojiSearch);
+    if (keepKeyboard && inputView != null) {
+      Keyboard.show(inputView);
+    }
     if (reopenPanel && !isDestroyed()) {
       openEmojiKeyboard();
     }
@@ -11810,7 +11825,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   public void sendText (boolean applyMarkdown, TdApi.MessageSendOptions sendOptions) {
-    xgramCloseEmojiSearch(false); // XGram: sending collapses the emoji search back to the message box
+    xgramCloseEmojiSearch(false, true); // XGram: sending collapses the emoji search; the keyboard stays for the message box
     if (inputView != null) {
       // XGram: only text from the message box (Send, Enter to send) may wait (Undo send); "Send now" skips it.
       sendText(inputView.getOutputText(applyMarkdown), true, applyMarkdown, true, true, sendOptions, !xgramUndoBypass);
