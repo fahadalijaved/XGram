@@ -2026,6 +2026,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     xgramUpdateGhostButton(); // XGram
     xgramConnCheckSnackBar(); // XGram M3E: a connection snackbar held back while another page was on top
     com.fahadali.xgram.update.XgramUpdateScreen.welcomeIfNeeded(this); // XGram: What's new in XGram <version>, once after an update
+    com.fahadali.xgram.call.XgramFullScreenCalls.promptIfNeeded(this); // XGram: calls ring full screen only when allowed (Android 14+)
     // FIXME check tdlib.isUnauthorized()
     tdlib.context().changePreferredAccountId(tdlib.id(), TdlibManager.SWITCH_REASON_NAVIGATION);
     if (UI.TEST_MODE == UI.TEST_MODE_USER) {

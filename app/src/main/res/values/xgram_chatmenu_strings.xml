@@ -12,4 +12,9 @@
   <string name="XgramEmojiSearch">Search emoji</string>
   <string name="XgramEmojiSearchNone">No emoji found</string>
   <string name="XgramEmojiSearchBack">Back to emoji</string>
+  <string name="XgramFullScreenCallsPrompt">Calls can\'t ring while XGram is closed. Allow full-screen notifications for XGram so incoming calls ring on the lock screen and over other apps.</string>
+  <string name="XgramFullScreenCallsAllow">Allow full-screen calls</string>
+  <string name="XgramFullScreenCallsLater">Not now</string>
+  <string name="XgramFullScreenCallsRow">Allow full-screen calls</string>
+  <string name="XgramFullScreenCallsRowInfo">Full-screen notifications are off for XGram, so calls that come while it is closed don\'t ring on the lock screen.</string>
 </resources>

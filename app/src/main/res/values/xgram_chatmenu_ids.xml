@@ -6,4 +6,6 @@
   <item name="btn_xgramChatMenuItem" type="id" />
   <item name="controller_xgramChatMenu" type="id" />
   <item name="btn_xgramAddToHomeScreen" type="id" />
+  <item name="btn_xgramFullScreenCalls" type="id" />
+  <item name="btn_xgramFullScreenCallsAllow" type="id" />
 </resources>
