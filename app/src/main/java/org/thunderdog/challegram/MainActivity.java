@@ -1819,7 +1819,7 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
     // XGram: an update's "Update this app?" that couldn't open while XGram was off screen opens now; "XGram updated" goes
     com.fahadali.xgram.update.XgramInstallReceiver.onResume(this);
     tdlib.context().global().notifyResolvableProblemAvailabilityMightHaveChanged();
-    tdlib.context().dateManager().checkCurrentDate();
+    tdlib.context().dateManager().checkDateAndTimeFormat();
     UI.startNotificationService();
     TemporaryNotification.hide(this);
   }

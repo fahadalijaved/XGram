@@ -41,6 +41,7 @@ import org.thunderdog.challegram.loader.ImageFileLocal;
 import org.thunderdog.challegram.mediaview.MediaViewThumbLocation;
 import org.thunderdog.challegram.mediaview.data.MediaItem;
 import org.thunderdog.challegram.player.TGPlayerController;
+import org.thunderdog.challegram.telegram.DateManager;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.telegram.TdlibAccentColor;
 import org.thunderdog.challegram.telegram.TdlibFilesManager;
@@ -69,6 +70,7 @@ import me.vkryl.core.StringUtils;
 public class InlineResultCommon extends InlineResult<TdApi.InlineQueryResult> implements FileProgressComponent.SimpleListener, FactorAnimator.Target {
   private final String title;
   private String description;
+  private int timeFormatVersion;
 
   private AvatarPlaceholder avatarPlaceholder;
 
@@ -716,6 +718,9 @@ public class InlineResultCommon extends InlineResult<TdApi.InlineQueryResult> im
 
   @Override
   protected void drawInternal (CustomResultView view, Canvas c, ComplexReceiver receiver, int viewWidth, int viewHeight, int startY) {
+    if (getMessage() != null && timeFormatVersion != DateManager.timeFormatVersion()) {
+      updateDescription();
+    }
     if (xgramM3()) {
       xgramDraw(view, c, receiver, viewWidth, startY); // XGram
       return;
@@ -863,6 +868,7 @@ public class InlineResultCommon extends InlineResult<TdApi.InlineQueryResult> im
   }
 
   private void updateDescription () {
+    timeFormatVersion = DateManager.timeFormatVersion();
     switch (getType()) {
       case TYPE_AUDIO: {
         String progress = FileComponent.buildProgressSubtitle(audio.audio, fileProgress != null && fileProgress.isLoading(), false);

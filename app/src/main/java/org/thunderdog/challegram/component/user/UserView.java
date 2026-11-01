@@ -37,6 +37,7 @@ import org.thunderdog.challegram.loader.AvatarReceiver;
 import org.thunderdog.challegram.loader.ComplexReceiver;
 import org.thunderdog.challegram.loader.ComplexReceiverProvider;
 import org.thunderdog.challegram.navigation.TooltipOverlayView;
+import org.thunderdog.challegram.telegram.DateManager;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.telegram.TdlibAccentColor;
 import org.thunderdog.challegram.telegram.TdlibContactManager;
@@ -245,6 +246,7 @@ public class UserView extends BaseView implements Destroyable, RemoveHelper.Remo
   }
 
   public void updateSubtext () {
+    timeFormatVersion = DateManager.timeFormatVersion();
     if (user != null) {
       user.updateStatus();
     }
@@ -385,6 +387,7 @@ public class UserView extends BaseView implements Destroyable, RemoveHelper.Remo
   private Text trimmedName;
   private String sourceStatus, trimmedStatus;
   private float trimmedStatusWidth;
+  private int timeFormatVersion;
 
   private void updateLetters () {
     if (unregisteredContact != null) {
@@ -419,6 +422,9 @@ public class UserView extends BaseView implements Destroyable, RemoveHelper.Remo
 
   @Override
   protected void onDraw (Canvas c) {
+    if (user != null && timeFormatVersion != DateManager.timeFormatVersion()) {
+      updateSubtext();
+    }
     if (xgram()) {
       removeHelper.save(c);
       xgramDraw(c);
