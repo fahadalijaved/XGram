@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram chat export like Telegram Desktop (com.fahadali.xgram.export): HTML and JSON in one .zip in Download/XGram, from Chat ⋮ → Export chat -->
+<resources>
+  <string name="XgramExportOptionsInfo">Messages as HTML and JSON, like Telegram Desktop, in one .zip in Download/XGram</string>
+  <string name="XgramExportWholeChat">The whole chat is exported, with all of its topics.</string>
+  <string name="XgramExportStart">Export</string>
+  <string name="XgramExportProtected">This chat doesn\'t allow saving content, so it can\'t be exported</string>
+  <string name="XgramExportBusy">Another chat is being exported</string>
+  <string name="XgramExportIndexing">Reading history · %1$s</string>
+  <string name="XgramExportWriting">%1$s of %2$s messages</string>
+  <string name="XgramExportFinishing">Finishing the .zip…</string>
+  <string name="XgramExportWaitFlood">Telegram asked to wait %1$s</string>
+  <string name="XgramExportWaitNetwork">Waiting for network</string>
+  <string name="XgramExportNoSpace">Not enough space: needs %1$s, %2$s free</string>
+  <string name="XgramExportCanceled">Export canceled</string>
+  <string name="XgramExportCancelExport">Cancel export</string>
+  <string name="XgramExportCancelConfirm">Stop exporting %1$s? What was exported so far is deleted.</string>
+  <string name="XgramExportKeepGoing">Keep exporting</string>
+  <string name="XgramExportSavedIn">Saved in %1$s</string>
+  <string name="XgramExportShareSubject">%1$s · chat export</string>
+</resources>

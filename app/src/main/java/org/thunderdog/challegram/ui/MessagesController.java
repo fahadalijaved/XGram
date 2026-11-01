@@ -2641,7 +2641,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       }
     } else if (id == R.id.btn_xgramExportChat) {
       if (chat != null) {
-        com.fahadali.xgram.chats.XgramChatExport.prompt(this, chat.id); // XGram
+        com.fahadali.xgram.export.XgramExport.prompt(this, chat.id, messageTopicId); // XGram: Telegram Desktop's HTML + JSON export
       }
     } else if (id == R.id.btn_xgramRecentActions) {
       if (chat != null) {
@@ -5200,8 +5200,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (!manager.isTotallyEmpty() && !messagesHidden && !isSecretChat()) {
       ids.append(R.id.btn_xgramGoToFirstMessage); // XGram
       strings.append(R.string.XgramGoToFirstMessage);
-      ids.append(R.id.btn_xgramExportChat); // XGram: like Telegram Desktop's export
-      strings.append(R.string.XgramExportChat);
+      if (com.fahadali.xgram.export.XgramExport.canOffer(tdlib, chat)) { // XGram: not for chats that forbid saving
+        ids.append(R.id.btn_xgramExportChat); // XGram: like Telegram Desktop's export
+        strings.append(R.string.XgramExportChat);
+      }
     }
 
     if (status != null && TD.isAdmin(status) && ChatId.isSupergroup(chat.id) && !isSecretChat()) {

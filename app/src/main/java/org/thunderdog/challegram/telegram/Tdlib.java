@@ -818,6 +818,15 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     decrementReferenceCount(REFERENCE_TYPE_JOB, id);
   }
 
+  /** XGram: a long background job (the chat export) keeps TDLib awake while it runs; every increment needs a decrement. */
+  public void xgramIncrementJobReferenceCount (String id) {
+    incrementJobReferenceCount(id);
+  }
+
+  public void xgramDecrementJobReferenceCount (String id) {
+    decrementJobReferenceCount(id);
+  }
+
   private void incrementReferenceCount (int type, String id) {
     boolean wakeup;
     int referenceCount;
