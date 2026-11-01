@@ -35,9 +35,10 @@ import org.thunderdog.challegram.tool.UI
 /**
  * Chat list > Navigation > Navigation bar (Expressive design): the floating navigation toolbar of narrow windows. A live
  * preview of it (the real pill and photo, a tap moves the selection), the switch and the colors, the tabs (up to 4,
- * Chats always, in the user's order), where the profile photo goes, whether the side menu stays, and a reset to XGram's
- * layout (XgramSettings.resetNavBar). Every change reaches the toolbar at once. Where the New chat button goes is Chat
- * list > Navigation's New chat button (XgramSettingDeps.newChatButton).
+ * Chats always, in the user's order), where the profile photo goes (and whether a swipe on it switches accounts,
+ * XgramAccountSwipe), whether the side menu stays, and a reset to XGram's layout (XgramSettings.resetNavBar). Every
+ * change reaches the toolbar at once. Where the New chat button goes is Chat list > Navigation's New chat button
+ * (XgramSettingDeps.newChatButton).
  */
 @Composable
 fun NavBarPage() {
@@ -113,8 +114,16 @@ fun NavBarPage() {
       ) { mode ->
         setProfileMode(host, settings, mode)
       }
+      // Up or down on the photo: the next or previous account, as in Google's apps (no photo with Your profile off)
+      switch(
+        R.id.btn_xgramNavAccountSwipe, s(R.string.XgramAccountSwipe), s(R.string.XgramAccountSwipeSub),
+        checked = settings.navAccountSwipe(), enabled = profileMode != XgramSettings.NAV_PROFILE_OFF
+      ) {
+        settings.setNavAccountSwipe(it)
+        updateToolbar(host)
+      }
     }
-    description(R.string.XgramNavBarProfileInfo)
+    description(if (settings.navAccountSwipe()) R.string.XgramNavBarProfileInfoSwipe else R.string.XgramNavBarProfileInfo)
 
     // No menu button and no edge swipe while the bar is shown: the side menu's items go to the chat list's overflow
     group {

@@ -25,6 +25,7 @@ import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
+import android.os.Bundle;
 import android.text.TextPaint;
 import android.text.TextUtils;
 import android.view.Gravity;
@@ -99,7 +100,8 @@ import tgx.td.ChatId;
  *   morph: the widths move together (they always add up to the pill's content), the inner pill's leading edge runs
  *   ahead of its tail, the icon crossfades (XgramIconCrossfade) and pops, the label is wiped in.</li>
  *   <li>A 56dp profile button (the account's photo) 8dp after the pill: a circle at rest, a squircle while the own
- *   profile is on screen. Long press: switch account.</li>
+ *   profile is on screen. Long press: switch account. A swipe up or down on the photo (the button's or the profile
+ *   tab's) switches to the next or previous account, as in Google's apps (XgramAccountSwipe).</li>
  *   <li>Contacts, Settings, the profile (and Calls with folders) are tab screens: opened by the toolbar right above the
  *   chat list (a short fade-through), no back arrow, Back fades to the chat list. One live instance of each is kept
  *   warm and shown again as it was (no rebuild, its scroll position). The toolbar lives above the navigation (in the
@@ -129,6 +131,8 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
   private static final float BAND_ABOVE = 16f;
   private static final float GROUP_MAX = 480f;
   private static final float POP_FROM = .84f, AVATAR_PRESSED_SCALE = .94f;
+  /** A swipe on the photo switches accounts past this much travel (or thrown). */
+  private static final float SWIPE_COMMIT = 24f;
   /** BadgeTokens, as on the rail: a 6dp dot, or 16dp tall around labelSmall, at the icon's top end corner. */
   private static final float BADGE_SMALL = 6f, BADGE_SMALL_START = 18f, BADGE_LARGE = 16f, BADGE_PADDING = 4f, BADGE_LARGE_START = 12f, BADGE_LARGE_TOP = -2f;
   /** The band: alpha at the pill's centre line; it is solid from the pill's bottom down. */
@@ -220,6 +224,13 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
   private boolean transformSearching;
   @Nullable private RecyclerView scrollSource;
   private boolean ignorePagerScroll, fromDrawer;
+
+  // A swipe on the photo switched accounts away from this section (not Chats): opened again on that account (-1: none)
+  private int swipeSectionDest = -1;
+  private int swipeSectionAccountId = TdlibAccount.NO_ID;
+  // The account a swipe on the photo switches to: in the switch's fade its new chat list counts as a tab root, so the
+  // toolbar stays (the band crossfades) instead of fading out with the old screen and popping back at the bind
+  private int swipeSwitchAccountId = TdlibAccount.NO_ID;
 
   // The side menu button's badge (MainActivity#updateCounter): another account's unread chats, or a problem to
   // resolve. While the side menu is hidden there is no menu button: the photo shows it (in the colour it had while it
@@ -627,6 +638,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       }
       detachHost();
       dropWarm(); // ordinary screens now: the one on screen goes with the stack, the others go
+      clearSwipeSection(); // no section to bring back later, when the toolbar shows again
     }
     onTabScreensChanged();
     if (shown) {
@@ -802,9 +814,12 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     invalidateAll();
   }
 
-  /** Scrolling down hides the toolbar, scrolling up brings it back (never with touch exploration). */
+  /**
+   * Scrolling down hides the toolbar, scrolling up brings it back (never with touch exploration, nor while the photo
+   * is dragged or slides to switch accounts: the list may still scroll from a fling).
+   */
   public void setScrollHidden (boolean hidden) {
-    if (hidden && !scrollHidden && isTouchExploration()) {
+    if (hidden && !scrollHidden && (isTouchExploration() || isSwipingPhoto())) {
       return;
     }
     if (scrollHidden != hidden) {
@@ -974,8 +989,8 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     tRight = right;
     tForward = forward;
     tKind = kind;
-    tabL = isTabRoot(left);
-    tabR = isTabRoot(right);
+    tabL = isTabRoot(left) || isSwipeSwitchRoot(left);
+    tabR = isTabRoot(right) || isSwipeSwitchRoot(right);
     View navigationView = navigation.getValue();
     holeOffsetX = navigationView.getLeft() - host.getLeft();
     holeOffsetY = navigationView.getTop() - host.getTop();
@@ -1022,7 +1037,10 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     // What is on top once the stack has changed: the toolbar is in its final state in this frame (no flash over a
     // screen that stayed, a cancelled back gesture), the rest settles on the next one
     ViewController<?> finalTop = tForward ? (navigated ? tRight : tLeft) : (navigated ? tLeft : tRight);
-    boolean tabRoot = isTabRoot(finalTop);
+    boolean tabRoot = isTabRoot(finalTop) || isSwipeSwitchRoot(finalTop);
+    if (navigated && swipeSectionDest != -1 && !isAccountRoot(finalTop, swipeSectionAccountId)) {
+      clearSwipeSection(); // the user went elsewhere before the switch landed: the new account opens on Chats
+    }
     endTransition();
     away = !tabRoot;
     applyFollow(tabRoot ? 1f : 0f, 0f);
@@ -1189,7 +1207,11 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     forceMask = transform ? forceMask | FORCE_TRANSFORM : forceMask & ~FORCE_TRANSFORM;
     applyFollow(tabRoot ? 1f : 0f, 0f);
     updateHidden(true);
-    if (tabRoot) {
+    // The section a swipe switched accounts from opens again below (as reopenSwipeSection checks): the selection stays
+    // on it, no twitch to Chats and back
+    final int section = swipeSectionDest;
+    final boolean reopening = section != -1 && tdlib != null && tdlib.id() == swipeSectionAccountId && root != null && top == root && (hasTab(section) || (section == DEST_PROFILE && buttonMode));
+    if (tabRoot && !reopening) {
       setTarget(computeSelected(top), isLaidOut());
     }
     attachScrollSource(tabRoot && top != root ? top : null);
@@ -1204,11 +1226,24 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       navigation.xgramReapplyBottomInsets();
     }
     host.invalidate();
+    if (swipeSectionDest != -1 && tdlib != null && tdlib.id() == swipeSectionAccountId) {
+      reopenSwipeSection(top); // a swipe switched to this account from another section
+    }
   }
 
   /** The chat list at the root, or a screen the toolbar opened (always right above it). */
   private boolean isTabRoot (@Nullable ViewController<?> c) {
     return c != null && !c.isDestroyed() && ((root != null && c == root) || c.xgramBarTabRaw() != -1);
+  }
+
+  /** The chat list a swipe on the photo switches to, before the toolbar binds it (the switch's fade). */
+  private boolean isSwipeSwitchRoot (@Nullable ViewController<?> c) {
+    return swipeSwitchAccountId != TdlibAccount.NO_ID && isAccountRoot(c, swipeSwitchAccountId);
+  }
+
+  /** A chat list of {@code accountId} (an account switch's new root). */
+  private static boolean isAccountRoot (@Nullable ViewController<?> c, int accountId) {
+    return c instanceof MainController && !c.isDestroyed() && c.tdlib() != null && c.tdlib().id() == accountId;
   }
 
   /** The tab of what is on top: Chats or Calls on the chat list (by its page), a tab screen's own; else as it was. */
@@ -1291,6 +1326,10 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     Tdlib tdlib = root != null ? root.tdlib() : null;
     if (tdlib != this.tdlib) {
       this.tdlib = tdlib;
+      swipeSwitchAccountId = TdlibAccount.NO_ID; // the switch's chat list is the root now, or it went elsewhere
+      if (swipeSectionDest != -1 && (tdlib == null || tdlib.id() != swipeSectionAccountId)) {
+        clearSwipeSection(); // the switch a swipe started went elsewhere
+      }
       if (badges != null) {
         badges.setTdlib(tdlib);
       }
@@ -1726,6 +1765,98 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       return false;
     }
     return fromDrawer || !context.isActivityBusyWithSomething();
+  }
+
+  /**
+   * A swipe on the photo may switch accounts now: where a tap could navigate, the toolbar not sliding away, and the
+   * photo's account the one in use (no other switch on its way).
+   */
+  private boolean canSwitchAccounts () {
+    return canNavigate(false) && !away && hideSpring.getTarget() < 1f && tdlib.id() == TdlibManager.instance().preferredAccountId();
+  }
+
+  /** A finger drags the photo (beside the bar or as a tab) to switch accounts, or it slides to the new one. */
+  private boolean isSwipingPhoto () {
+    if (profile.swipe.isMoving()) {
+      return true;
+    }
+    for (Tab tab : tabs) {
+      if (tab.swipe != null && tab.swipe.isMoving()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** The toolbar's side of a photo's swipe (XgramAccountSwipe); the view that draws the photo swaps its receiver. */
+  private abstract class SwipeHost implements XgramAccountSwipe.Host {
+    @Override
+    public boolean canSwitchAccounts () {
+      return XgramNavToolbar.this.canSwitchAccounts();
+    }
+
+    @Override
+    public int shownAccountId () {
+      Tdlib tdlib = XgramNavToolbar.this.tdlib;
+      return tdlib != null ? tdlib.id() : TdlibAccount.NO_ID;
+    }
+
+    @Override
+    public void onSwitchStarted (int accountId) {
+      swipeSwitchAccountId = accountId;
+      keepSwipeSection(accountId);
+    }
+
+    @Override
+    public void onSwitchFailed (int accountId) {
+      if (swipeSwitchAccountId == accountId) {
+        swipeSwitchAccountId = TdlibAccount.NO_ID;
+      }
+      if (swipeSectionAccountId == accountId) {
+        clearSwipeSection(); // the account stays: so does the section
+      }
+    }
+  }
+
+  // The section a swipe switched accounts from: as Google's apps keep it, the new account opens on it too
+
+  /**
+   * Remembers the section on screen (a tab screen, or Calls on the chat list) for {@code accountId}: once the toolbar
+   * is bound to its chat list and settled, settle() opens it once. Chats is where a switch lands anyway.
+   */
+  private void keepSwipeSection (int accountId) {
+    ViewController<?> top = navigation != null ? navigation.getCurrentStackItem() : null;
+    int dest = isTabRoot(top) ? computeSelected(top) : DEST_CHATS;
+    if (dest == DEST_CHATS || dest == DEST_SAVED) {
+      clearSwipeSection();
+      return;
+    }
+    swipeSectionDest = dest;
+    swipeSectionAccountId = accountId;
+  }
+
+  private void clearSwipeSection () {
+    swipeSectionDest = -1;
+    swipeSectionAccountId = TdlibAccount.NO_ID;
+  }
+
+  /** The toolbar settled on the account a swipe switched to: its section again, if the new chat list is on top. */
+  private void reopenSwipeSection (@Nullable ViewController<?> top) {
+    final int dest = swipeSectionDest;
+    final MainController root = this.root;
+    clearSwipeSection(); // once, whatever happens
+    if (root == null || top != root || !(hasTab(dest) || (dest == DEST_PROFILE && buttonMode))) {
+      return; // another screen by now, or no longer a tab
+    }
+    // After this settle (the toolbar's state is final), as a tap on the tab
+    UI.post(() -> {
+      if (!destroyed && this.root == root && navigation != null && navigation.getCurrentStackItem() == root && canNavigate(false)) {
+        onTabClick(dest, null);
+      }
+      if (!destroyed && this.root == root && navigation != null && !navigation.isAnimating() && navigation.getCurrentStackItem() == root) {
+        setTarget(computeSelected(root), true); // nothing opened (or it opens later): the selection follows the chat list
+      }
+    });
   }
 
   private void onTabClick (int dest, @Nullable View view) {
@@ -2293,6 +2424,8 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     @Nullable Drawable rest, active;
     /** The profile as a tab: the account's photo instead of the icons. */
     @Nullable AvatarReceiver avatar;
+    /** The profile as a tab: a swipe on its photo switches to the next or previous account. */
+    @Nullable XgramAccountSwipe swipe;
     String label = "";
     private float labelWidthLarge = -1f, labelWidthMedium = -1f;
     String shownLabel = "";
@@ -2323,6 +2456,15 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       this.view = new TabView(context, this);
       if (dest == DEST_PROFILE) {
         avatar = new AvatarReceiver(pill);
+        swipe = new XgramAccountSwipe(view, pill, TAB_AVATAR, SWIPE_COMMIT, !preview, new SwipeHost() {
+          @Nullable
+          @Override
+          public AvatarReceiver replaceAvatar (AvatarReceiver incoming) {
+            AvatarReceiver previous = Tab.this.avatar;
+            Tab.this.avatar = incoming;
+            return previous;
+          }
+        });
         if (androidx.core.view.ViewCompat.isAttachedToWindow(pill)) {
           avatar.attach();
         }
@@ -2347,6 +2489,9 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     void requestAvatar (@Nullable Tdlib tdlib) {
       if (avatar == null) {
         return;
+      }
+      if (swipe != null && swipe.onBind(tdlib != null ? tdlib.id() : TdlibAccount.NO_ID)) {
+        return; // the photo slid in with a swipe already: no flash of the old one
       }
       if (tdlib != null) {
         avatar.requestAccount(tdlib, tdlib.id(), AvatarReceiver.Options.NONE);
@@ -2431,6 +2576,10 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       p.cancel();
       q.cancel();
       badge.cancel();
+      if (swipe != null) {
+        swipe.destroy();
+        swipe = null;
+      }
       if (avatar != null) {
         avatar.destroy();
         avatar = null;
@@ -2745,6 +2894,9 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
         if (tab.avatar != null) {
           tab.avatar.attach();
         }
+        if (tab.swipe != null) {
+          tab.swipe.attach();
+        }
       }
       layoutDirty = true;
     }
@@ -2762,6 +2914,9 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       for (Tab tab : tabs) {
         if (tab.avatar != null) {
           tab.avatar.detach();
+        }
+        if (tab.swipe != null) {
+          tab.swipe.detach();
         }
       }
     }
@@ -2944,11 +3099,15 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       if (tab.avatar != null) {
         float size = Screen.dpf(TAB_AVATAR) * pop;
         int left = Math.round(cx - size / 2f), top = Math.round(cy - size / 2f), sizePx = Math.round(size);
-        tab.avatar.setBounds(left, top, left + sizePx, top + sizePx);
-        if (tab.avatar.needPlaceholder()) {
-          tab.avatar.drawPlaceholder(c);
+        if (tab.swipe != null) {
+          tab.swipe.draw(c, tab.avatar, left, top, sizePx); // two photos sliding while a swipe switches accounts
+        } else {
+          tab.avatar.setBounds(left, top, left + sizePx, top + sizePx);
+          if (tab.avatar.needPlaceholder()) {
+            tab.avatar.drawPlaceholder(c);
+          }
+          tab.avatar.draw(c);
         }
-        tab.avatar.draw(c);
         // The menu button's badge while the side menu is hidden: cut out of the pill, or of the inner pill as the tab is selected
         float selected = innerVisible ? MathUtils.clamp(tab.e.getValue()) * MathUtils.clamp(innerAlpha) : 0f;
         drawMenuBadge(c, left + sizePx / 2f, top + sizePx / 2f, sizePx / 2f, ColorUtils.fromToArgb(containerColor(), indicatorColor(), selected));
@@ -3030,8 +3189,83 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     }
   }
 
+  /**
+   * A view of the toolbar that may carry the account's photo: a vertical swipe on the photo switches to the next or
+   * previous account (XgramAccountSwipe), its tap and long press stay the view's.
+   */
+  private abstract static class PhotoView extends XgramNavRail.StateView {
+    PhotoView (Context context) {
+      super(context);
+    }
+
+    /** The photo's swipe; null without a photo. */
+    @Nullable
+    abstract XgramAccountSwipe accountSwipe ();
+
+    @Override
+    public boolean onTouchEvent (MotionEvent e) {
+      XgramAccountSwipe swipe = accountSwipe();
+      int touch = swipe != null ? swipe.onTouchEvent(e) : XgramAccountSwipe.TOUCH_PASS;
+      if (touch == XgramAccountSwipe.TOUCH_CLAIMED) {
+        // A swipe now: the press ends (its state layer, the pending long press) as if the finger had left the view
+        MotionEvent cancel = MotionEvent.obtain(e);
+        cancel.setAction(MotionEvent.ACTION_CANCEL);
+        super.onTouchEvent(cancel);
+        cancel.recycle();
+        return true;
+      }
+      return touch == XgramAccountSwipe.TOUCH_CONSUMED || super.onTouchEvent(e);
+    }
+
+    // A long press that ran (the accounts' menu) ends the swipe: the finger still down can no longer switch too
+    @Override
+    public boolean performLongClick () {
+      return !cancelSwipeTracking() && super.performLongClick();
+    }
+
+    @Override
+    public boolean performLongClick (float x, float y) {
+      // Android 7+: the press's own long press comes here first
+      return !cancelSwipeTracking() && super.performLongClick(x, y);
+    }
+
+    @Override
+    public boolean performClick () {
+      XgramAccountSwipe swipe = accountSwipe();
+      if (swipe != null && swipe.blocksPress()) {
+        return false; // TalkBack's or a key's click while a swipe switches: never the old account's profile
+      }
+      return super.performClick();
+    }
+
+    /** Ends the photo's swipe tracking; true while a swipe's switch blocks presses (no long press then: a second one). */
+    private boolean cancelSwipeTracking () {
+      XgramAccountSwipe swipe = accountSwipe();
+      if (swipe == null) {
+        return false;
+      }
+      swipe.cancelTracking();
+      return swipe.blocksPress();
+    }
+
+    @Override
+    public void onInitializeAccessibilityNodeInfo (AccessibilityNodeInfo info) {
+      super.onInitializeAccessibilityNodeInfo(info);
+      XgramAccountSwipe swipe = accountSwipe();
+      if (swipe != null) {
+        swipe.addAccessibilityActions(info);
+      }
+    }
+
+    @Override
+    public boolean performAccessibilityAction (int action, @Nullable Bundle arguments) {
+      XgramAccountSwipe swipe = accountSwipe();
+      return (swipe != null && swipe.performAccessibilityAction(action)) || super.performAccessibilityAction(action, arguments);
+    }
+  }
+
   /** A tab's touch area and state layer: a 48dp circle on the icon, or the inner pill when selected (7). */
-  private final class TabView extends XgramNavRail.StateView {
+  private final class TabView extends PhotoView {
     private final Tab tab;
     private boolean pressedState;
 
@@ -3040,6 +3274,12 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       this.tab = tab;
       setOnClickListener(v -> onTabClick(tab.dest, v));
       setOnLongClickListener(v -> onTabLongClick(tab.dest));
+    }
+
+    @Nullable
+    @Override
+    XgramAccountSwipe accountSwipe () {
+      return tab != null ? tab.swipe : null; // the profile tab's photo
     }
 
     private boolean isSelectedTab () {
@@ -3090,8 +3330,11 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
    * The profile button (5.5): the 40dp photo in a 56dp container (8dp ring), a circle at rest, a squircle while the
    * profile is on screen or it is pressed. Level 3 shadow, its outline follows the corner.
    */
-  private final class ProfileView extends XgramNavRail.StateView {
-    private final AvatarReceiver avatar;
+  private final class ProfileView extends PhotoView {
+    /** The photo; a swipe hands it the photo it slid in (no reload, no flash). */
+    private AvatarReceiver avatar;
+    /** Up or down on the photo: the next or previous account. */
+    private final XgramAccountSwipe swipe;
     private final RectF rect = new RectF();
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     /** Selected (colour, effects default), its shape (spatial fast) and the press (the corner, the photo's scale). */
@@ -3101,6 +3344,15 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     ProfileView (Context context) {
       super(context);
       avatar = new AvatarReceiver(this);
+      swipe = new XgramAccountSwipe(this, this, AVATAR, SWIPE_COMMIT, !preview, new SwipeHost() {
+        @Nullable
+        @Override
+        public AvatarReceiver replaceAvatar (AvatarReceiver incoming) {
+          AvatarReceiver previous = ProfileView.this.avatar;
+          ProfileView.this.avatar = incoming;
+          return previous;
+        }
+      });
       select = new XgramExpressive.Spring(XgramExpressive.EFFECTS_DEFAULT, 0f, (s, value) -> invalidate()).setThreshold(.002f);
       shape = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> onShapeChanged()).setThreshold(.002f);
       press = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> onShapeChanged()).setThreshold(.002f);
@@ -3128,7 +3380,17 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       onProfileClick(v);
     }
 
+    @Nullable
+    @Override
+    XgramAccountSwipe accountSwipe () {
+      return swipe;
+    }
+
     void requestAvatar (@Nullable Tdlib tdlib) {
+      if (swipe.onBind(tdlib != null ? tdlib.id() : TdlibAccount.NO_ID)) {
+        invalidate();
+        return; // the photo slid in with a swipe already: no flash of the old one
+      }
       if (tdlib != null) {
         avatar.requestAccount(tdlib, tdlib.id(), AvatarReceiver.Options.NONE);
       } else {
@@ -3163,6 +3425,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       select.cancel();
       shape.cancel();
       press.cancel();
+      swipe.destroy();
       avatar.destroy();
     }
 
@@ -3195,12 +3458,14 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     protected void onAttachedToWindow () {
       super.onAttachedToWindow();
       avatar.attach();
+      swipe.attach();
     }
 
     @Override
     protected void onDetachedFromWindow () {
       super.onDetachedFromWindow();
       avatar.detach();
+      swipe.detach();
     }
 
     @Override
@@ -3231,11 +3496,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       float scale = 1f + (AVATAR_PRESSED_SCALE - 1f) * MathUtils.clamp(press.getValue());
       int size = Math.round(Screen.dpf(AVATAR) * scale);
       int left = Math.round((width - size) / 2f), top = Math.round((height - size) / 2f);
-      avatar.setBounds(left, top, left + size, top + size);
-      if (avatar.needPlaceholder()) {
-        avatar.drawPlaceholder(c);
-      }
-      avatar.draw(c);
+      swipe.draw(c, avatar, left, top, size); // two photos sliding while a swipe switches accounts
       // The menu button's badge while the side menu is hidden, cut out of the button's colour
       drawMenuBadge(c, left + size / 2f, top + size / 2f, size / 2f, fill);
     }

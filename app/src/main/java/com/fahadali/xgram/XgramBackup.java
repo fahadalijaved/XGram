@@ -40,6 +40,7 @@ public final class XgramBackup {
     // Foldables (Appearance > Large screens and foldables)
     XgramSettings.KEY_FOLD_HINGE_SPLIT, XgramSettings.KEY_FOLD_TABLETOP,
     XgramSettings.KEY_PANE_SPLIT_EVENLY, XgramSettings.KEY_PANE_RESIZABLE, XgramSettings.KEY_NAV_RAIL, XgramSettings.KEY_BOTTOM_NAV, XgramSettings.KEY_NAV_HIDE_DRAWER,
+    XgramSettings.KEY_NAV_ACCOUNT_SWIPE, // no int prefix may match it ("xgram_nav_profile", "xgram_swipe_"...)
     // Pure black night mode (Appearance, with Expressive design)
     XgramSettings.KEY_PURE_BLACK,
     // Chat buttons match avatar shape (Appearance, with Expressive design)

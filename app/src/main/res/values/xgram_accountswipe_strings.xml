@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram M3E: a swipe up or down on the toolbar's photo switches accounts, as in Google's apps (XgramAccountSwipe) -->
+<resources>
+  <!-- Chat list > Navigation > Navigation bar, under Your profile -->
+  <string name="XgramAccountSwipe">Swipe on profile photo to switch accounts</string>
+  <string name="XgramAccountSwipeSub">Up for the next account, down for the previous one</string>
+  <!-- Your profile's hint while the swipe is on -->
+  <string name="XgramNavBarProfileInfoSwipe">Your photo opens your profile. Long press it to choose an account, or swipe it up or down for the next or previous one.</string>
+  <!-- TalkBack's actions on the photo (its own gestures stay with TalkBack) -->
+  <string name="XgramAccountSwipeNext">Switch to next account</string>
+  <string name="XgramAccountSwipePrevious">Switch to previous account</string>
+  <!-- The same actions by the account they go to (%1$s: its name), and what TalkBack says once it switched -->
+  <string name="XgramAccountSwipeTo">Switch to %1$s</string>
+  <string name="XgramAccountSwipeDone">Switched to %1$s</string>
+
+  <item type="id" name="btn_xgramNavAccountSwipe" />
+  <!-- The photo's accessibility actions -->
+  <item type="id" name="btn_xgramAccountSwipeNext" />
+  <item type="id" name="btn_xgramAccountSwipePrevious" />
+</resources>

@@ -2064,9 +2064,29 @@ public final class XgramSettings {
     put(KEY_NAV_HIDE_DRAWER, value);
   }
 
+  // A swipe up or down on the toolbar's photo (beside the bar or as a tab): the next or previous account, as in
+  // Google's apps (XgramAccountSwipe). Read at every touch on the photo, so cached.
+
+  public static final String KEY_NAV_ACCOUNT_SWIPE = "xgram_nav_account_swipe";
+
+  private volatile Boolean navAccountSwipe;
+
+  public boolean navAccountSwipe () {
+    Boolean value = navAccountSwipe;
+    if (value == null) {
+      navAccountSwipe = value = pmc().getBoolean(KEY_NAV_ACCOUNT_SWIPE, true);
+    }
+    return value;
+  }
+
+  public void setNavAccountSwipe (boolean value) {
+    navAccountSwipe = value;
+    put(KEY_NAV_ACCOUNT_SWIPE, value);
+  }
+
   /**
    * XGram's layout: Chats, Activity, Settings and the profile as tabs in that order, Standard colours, the compose
-   * button at the side and the side menu.
+   * button at the side, the side menu and the swipe on the photo.
    */
   public void resetNavBar () {
     XgramReorder.reset(XgramReorder.NAV_BAR);
@@ -2075,11 +2095,13 @@ public final class XgramSettings {
     navStyle = NAV_STYLE_STANDARD;
     navFab = NAV_FAB_SIDE;
     navHideDrawer = false;
+    navAccountSwipe = true;
     putInt(KEY_NAV_TABS, NAV_TABS_DEFAULT);
     putInt(KEY_NAV_PROFILE, NAV_PROFILE_TAB);
     putInt(KEY_NAV_STYLE, NAV_STYLE_STANDARD);
     putInt(KEY_NAV_FAB, NAV_FAB_SIDE);
     put(KEY_NAV_HIDE_DRAWER, false);
+    put(KEY_NAV_ACCOUNT_SWIPE, true);
   }
 
   // Activity (Activity and reminders, com.fahadali.xgram.activity): every mention, reply and reaction in one place.

@@ -112,6 +112,7 @@ internal object XgramSearchIndex {
       item("style", R.id.btn_xgramNavBarStyle, R.string.XgramNavBarStyle, null),
       item("tabs", R.id.btn_xgramNavBarTab, R.string.XgramNavBarTabs, firstTab),
       item("profile", R.id.btn_xgramNavBarProfile, R.string.XgramNavBarProfile, null),
+      item("accountSwipe", R.id.btn_xgramNavAccountSwipe, R.string.XgramAccountSwipe, null, intArrayOf(R.string.XgramSearchKwNavBar, R.string.XgramSearchKwAccounts)),
       item("hideDrawer", R.id.btn_xgramNavBarHideDrawer, R.string.XgramNavBarHideDrawer, null),
       item("reset", R.id.btn_xgramNavBarReset, R.string.XgramNavBarReset, null)
     ) + activity
