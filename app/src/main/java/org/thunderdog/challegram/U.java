@@ -490,24 +490,12 @@ public class U {
       switch (notificationId) {
         case TdlibNotificationManager.ID_FOREGROUND_ONGOING_CALL_NOTIFICATION:
         case TdlibNotificationManager.ID_FOREGROUND_INCOMING_CALL_NOTIFICATION: {
-          // XGram: a ringing call (its push woke XGram while it was closed) starts as a phone call only: Android 14+
-          // refuses a microphone service from the background ("must be in the eligible state ... foreground only
-          // permission"), and the call then never showed. The microphone comes with the answered call (the user's tap);
-          // should Android still refuse it, the call keeps its notification as a phone call alone.
-          final int baseType = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL | android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK;
-          int knownType = baseType;
-          if (notificationId == TdlibNotificationManager.ID_FOREGROUND_ONGOING_CALL_NOTIFICATION && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+          int knownType = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL;
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             knownType |= android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE;
           }
-          try {
-            service.startForeground(notificationId, notification, knownType);
-          } catch (SecurityException | IllegalStateException e) {
-            if (knownType == baseType) {
-              throw e;
-            }
-            Log.e("Call service: the microphone type was refused, keeping the call as a phone call", e);
-            service.startForeground(notificationId, notification, baseType);
-          }
+          knownType |= android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK;
+          service.startForeground(notificationId, notification, knownType);
           return;
         }
         case TdlibNotificationManager.ID_FOREGROUND_MUSIC:
