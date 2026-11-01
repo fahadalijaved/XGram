@@ -281,6 +281,12 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
     this.ignoreAlbums = ignoreAlbums;
   }
 
+  private boolean noEmptyProgress;
+
+  public void setNoEmptyProgress () {
+    this.noEmptyProgress = true;
+  }
+
   public void setCollapseButtonVisible (boolean isVisible) {
     collapseButton.setVisibility(isVisible ? View.VISIBLE : View.GONE);
     updateContentInsets();
@@ -571,6 +577,9 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
         }
       }
     };
+    if (noEmptyProgress) {
+      messagesAdapter.setNoEmptyProgress();
+    }
     recyclerView.setAdapter(messagesAdapter);
     recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
       @Override
