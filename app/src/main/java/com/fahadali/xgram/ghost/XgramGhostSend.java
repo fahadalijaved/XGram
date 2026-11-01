@@ -27,10 +27,10 @@ import tgx.td.ChatId;
 /**
  * Ghost mode sending (AyuGram). "Send as scheduled": while staying offline, messages go out as scheduled ones a few
  * seconds later, so sending doesn't show you online; uploads, bots, secret chats and Saved Messages are sent normally.
- * "Send silently": messages are sent without notification sound. Installed as {@link Client#queryInterceptor} only
- * while one of them is on.
+ * "Send silently": messages are sent without notification sound. Every client gets TDLib's interceptor at creation
+ * ({@link #intercept}); it does nothing while both options are off.
  */
-public final class XgramGhostSend implements Client.QueryInterceptor {
+public final class XgramGhostSend {
   // TDLib sends at once anything scheduled up to 10 s after the server time: keep a clear margin above that.
   private static final int DELAY_SECONDS = 20;
   private static final XgramGhostSend INSTANCE = new XgramGhostSend();
@@ -47,11 +47,20 @@ public final class XgramGhostSend implements Client.QueryInterceptor {
   public static void apply (boolean schedule, boolean silent) {
     scheduleEnabled = schedule;
     silentEnabled = silent;
-    Client.queryInterceptor = schedule || silent ? INSTANCE : null;
+    active = schedule || silent;
   }
 
-  @Override
-  public void onSend (Client client, TdApi.Function<?> query) {
+  private static volatile boolean active;
+
+  /** TDLib's interceptor of each client (Tdlib.ClientHolder): adjusts a send query in place, never answers it. */
+  public static TdApi.Object intercept (Client client, TdApi.Function<?> query) {
+    if (active) {
+      INSTANCE.onSend(client, query);
+    }
+    return null;
+  }
+
+  private void onSend (Client client, TdApi.Function<?> query) {
     final long chatId;
     final TdApi.MessageSendOptions options;
     final TdApi.MessageTopic topicId;

@@ -8901,7 +8901,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
           return !Td.equalsTo(oldText, newText);
         }
         default: {
-          Td.assertMessageContent_f7758f8b();
+          Td.assertMessageContent_cc875c63();
           break;
         }
       }
@@ -9394,7 +9394,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
         break;
       }
       default: {
-        Td.assertMessageContent_f7758f8b();
+        Td.assertMessageContent_cc875c63();
         throw Td.unsupported(editContext.message.content);
       }
     }

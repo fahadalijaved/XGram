@@ -9176,7 +9176,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
           return new TGMessageService(context, msg, (TdApi.MessageTonWalletTransfer) content);
         // unsupported
         case TdApi.MessageInvoice.CONSTRUCTOR:
-
+        case TdApi.MessageUnpaidMessagesAllowedByLink.CONSTRUCTOR:
           break;
 
         case TdApi.MessageUnsupported.CONSTRUCTOR:
@@ -9189,7 +9189,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
           break;
         }
         default: {
-          Td.assertMessageContent_f7758f8b();
+          Td.assertMessageContent_cc875c63();
           throw Td.unsupported(msg.content);
         }
       }
