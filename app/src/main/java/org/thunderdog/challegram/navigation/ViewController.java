@@ -1008,6 +1008,11 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     return false;
   }
 
+  /** XGram: the bottom of the page's own app bar in its view (px), or -1 when Telegram X's header is its bar. */
+  public int xgramAppBarBottom () {
+    return -1;
+  }
+
   protected final int getHeaderColor () {
     int color = Theme.getColor(getHeaderColorId());
     return xgramDrawsOwnAppBar() ? me.vkryl.core.ColorUtils.color(0, color) : color; // XGram: the header fades out over a Compose page

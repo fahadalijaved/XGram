@@ -200,6 +200,7 @@ public final class XgramNavMotion {
   private float p0, closingScale0, closingX0, closingY0, scrim0;
   private float rightTx, leftTx;
   private boolean clipChildrenWas = true;
+  private @Nullable Rect leftTopClip;
   private boolean headerMoved;
   private float headerTranslation0;
   private float headerX, headerY;
@@ -288,7 +289,7 @@ public final class XgramNavMotion {
    * Starts a transition between {@code left} (the previous screen) and {@code right}. Returns false when this mode
    * cannot run here, so Telegram X's own transition runs. Call at the end of prepareFactorAnimation.
    */
-  public boolean begin (int mode, @NonNull View left, @NonNull View right, boolean forward, boolean rtl, boolean fromRightEdge, float touchY) {
+  public boolean begin (int mode, @NonNull View left, @NonNull View right, boolean forward, boolean rtl, boolean fromRightEdge, float touchY, int leftBarBottom) {
     if (active) {
       headerMoved = false; // A stale transition: the app bar was just prepared for this one, leave it.
       end(false);
@@ -359,20 +360,37 @@ public final class XgramNavMotion {
           floatingButton.xgramCardHold();
         }
         int barColor = headerView.getFilling().getColor();
-        // Shows through the fading card under the bar: the bar's own colour, not a darkened surface.
-        backdrop.setColor(Color.alpha(barColor) == 255 ? barColor : surface);
+        // Shows through the fading card under the bar: the bar's own colour, not a darkened surface. Over the hidden
+        // root of two panes (clipped to nothing) it stays clear, so the "Select a chat" underlay is revealed by the card
+        // instead of popping in when the gesture ends.
+        Rect leftClip = Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2 ? left.getClipBounds() : null;
+        boolean leftHidden = leftClip != null && leftClip.isEmpty();
+        backdrop.setColor(leftHidden ? 0 : Color.alpha(barColor) == 255 ? barColor : surface);
 
         // The previous screen waits at rest under the bar (no Telegram X preview offset, no scale).
         transform(left, 1f, 0f, 0f);
         EnteringOverlay overlay = new EnteringOverlay();
         int barBottom = Math.round(headerY) + headerView.getFilling().getBottom();
-        overlay.setBounds(-leftPos[0], Math.max(0, barBottom) - leftPos[1], Math.round(w) - leftPos[0], Math.round(h) - leftPos[1]);
+        int overlayTop = Math.max(0, barBottom) - leftPos[1];
+        if (leftBarBottom > overlayTop) {
+          overlayTop = leftBarBottom; // an XGram Compose page's own app bar is taller than the header: no dim edge across it
+        }
+        overlay.setBounds(-leftPos[0], overlayTop, Math.round(w) - leftPos[0], Math.round(h) - leftPos[1]);
         left.getOverlay().add(overlay);
         this.overlay = overlay;
 
         // The closing app bar snapshot sits above the closing screen's own bounds: no clip, no hardware layer.
         clipChildrenWas = contentWrapper.getClipChildren();
         contentWrapper.setClipChildren(false);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2 && left.getClipBounds() == null) {
+          // Only the closing screen draws outside its bounds. The previous one stays cut at its top edge as at rest, so
+          // list rows scrolled under the bar never show through the card. When the fading card's offscreen layer (the
+          // size of the screen) cuts off the bar snapshot on commit, the bar area shows the backdrop, which is the bar's
+          // own colour, while the live bar fades in (size-independent bounds: the Fold may unfold).
+          final int far = 1 << 20;
+          leftTopClip = new Rect(-far, 0, far, far);
+          left.setClipBounds(leftTopClip);
+        }
         dropHardwareLayer(right);
         right.post(() -> {
           if (this.active && this.rightWrap == right) {
@@ -670,6 +688,9 @@ public final class XgramNavMotion {
     boolean card = mode == MODE_CARD_SYSTEM || mode == MODE_CARD_FINGER;
     try {
       if (card) {
+        if (leftTopClip != null && leftWrap != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2 && leftTopClip.equals(leftWrap.getClipBounds())) {
+          leftWrap.setClipBounds(null); // left alone when two panes clipped it meanwhile
+        }
         headerView.xgramSetCardHole(null, 0f);
         if (cardHoleListener != null) {
           cardHoleListener.onCardHole(null, 0f, 0f);
@@ -705,6 +726,7 @@ public final class XgramNavMotion {
     backdrop.setColor(0);
     overlay = null;
     closingHeader = null;
+    leftTopClip = null;
     headerMoved = false;
     leftWrap = rightWrap = null;
     released = false;

@@ -695,7 +695,7 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
     if (xgramNav == null || mode == XgramNavMotion.MODE_NONE || direction != TRANSLATION_HORIZONTAL || left.usePopupMode() || right.usePopupMode()) {
       return;
     }
-    if (!xgramNav.begin(mode, leftWrap, rightWrap, forward, needRtl(), predictiveGestureMode == PredictiveGesture.BACK_FROM_RIGHT_EDGE, xgramTouchY)) {
+    if (!xgramNav.begin(mode, leftWrap, rightWrap, forward, needRtl(), predictiveGestureMode == PredictiveGesture.BACK_FROM_RIGHT_EDGE, xgramTouchY, left.xgramAppBarBottom())) {
       return;
     }
     headerView.xgramSetSharedAxis(xgramNav.getMode() == XgramNavMotion.MODE_SHARED_AXIS); // XGram: the app bar title follows the same axis
@@ -1098,11 +1098,13 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
     }
 
     // XGram, frame drops: a push or a Back sets its layers now and builds them in a still frame before the motion; a
-    // finger or system swipe with Expressive off has no screen layers (both screens drawn directly). The rest
-    // (fades, sheets, popups, the Expressive card) keeps Telegram X's posted layers on both screens.
+    // finger or system swipe with Expressive off has no screen layers (both screens drawn directly), nor has the
+    // Expressive back card (a layer is the size of its screen and cuts off the closing app bar drawn above it). The rest
+    // (fades, sheets, popups) keeps Telegram X's posted layers on both screens.
     final boolean xgramHorizontal = XGRAM_SLIDE_LAYERS_V2 && direction == TRANSLATION_HORIZONTAL && !left.usePopupMode() && !right.usePopupMode();
     final boolean xgramSync = xgramHorizontal && xgramProgrammaticNow;
-    final boolean xgramNoScreenLayers = xgramHorizontal && xgramNav == null;
+    final boolean xgramCard = xgramNav != null && (xgramRequestedMode == XgramNavMotion.MODE_CARD_SYSTEM || xgramRequestedMode == XgramNavMotion.MODE_CARD_FINGER);
+    final boolean xgramNoScreenLayers = xgramHorizontal && (xgramNav == null || xgramCard);
     if (Views.HARDWARE_LAYER_ENABLED) {
       boolean posted = !(xgramSync || xgramNoScreenLayers);
       setLayerType(View.LAYER_TYPE_HARDWARE, posted ? left : null, posted ? right : null); // the floating button keeps its posted layer

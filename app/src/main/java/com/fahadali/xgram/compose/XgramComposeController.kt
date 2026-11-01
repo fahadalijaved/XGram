@@ -82,6 +82,11 @@ class XgramComposeController(context: Context, tdlib: Tdlib) : ViewController<Xg
 
   override fun xgramDrawsOwnAppBar(): Boolean = true
 
+  // Where its own app bar ends (taller than Telegram X's header): the back card's scrim starts below it.
+  private var appBarBottom = -1
+
+  override fun xgramAppBarBottom(): Int = appBarBottom
+
   override fun getBackButton(): Int = BackHeaderButton.TYPE_NONE
 
   override fun getFloatingButtonId(): Int = 0
@@ -307,6 +312,10 @@ class XgramComposeController(context: Context, tdlib: Tdlib) : ViewController<Xg
 
     override fun back() {
       navigateBack()
+    }
+
+    override fun reportAppBarBottom(px: Int) {
+      appBarBottom = px
     }
 
     override val canGoBack: Boolean

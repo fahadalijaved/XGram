@@ -59,6 +59,8 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.MeasurePolicy
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.layoutId
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
@@ -98,7 +100,8 @@ internal fun SettingsTopAppBar(
   scrollBehavior: TopAppBarScrollBehavior,
   topInset: () -> Int,
   navigationIcon: @Composable () -> Unit,
-  actions: @Composable RowScope.() -> Unit
+  actions: @Composable RowScope.() -> Unit,
+  onBottom: ((Int) -> Unit)? = null
 ) {
   val cs = MaterialTheme.colorScheme
   val type = MaterialTheme.typography
@@ -219,6 +222,7 @@ internal fun SettingsTopAppBar(
         }
       )
       .drawBehind { drawRect(lerp(rest, scrolled, FastOutLinearInEasing.transform(state.collapsedFraction))) }
+      .then(if (onBottom != null) Modifier.onGloballyPositioned { onBottom(it.boundsInRoot().bottom.roundToInt()) } else Modifier)
       // The bar takes the touches over it: the rows scrolled under it are not tapped through it.
       .pointerInput(Unit) { }
       .clipToBounds(),

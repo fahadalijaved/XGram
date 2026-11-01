@@ -78,6 +78,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -102,6 +104,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.drinkless.tdlib.TdApi
 import org.thunderdog.challegram.R
+import kotlin.math.roundToInt
 
 /**
  * XDrive: Saved Messages as a drive, in four tabs (Home, Folders, Media, Files) under a search bar. Home leads to
@@ -220,6 +223,8 @@ fun XDrivePage() {
       Column(Modifier.fillMaxSize().then(if (overlay) Modifier.semantics { hideFromAccessibility() } else Modifier)) {
         AnimatedContent(
           targetState = state.selecting && !overlay,
+          // Where the bar ends: the back card's scrim over this page starts there (XgramNavMotion)
+          modifier = Modifier.onGloballyPositioned { host.reportAppBarBottom(it.boundsInRoot().bottom.roundToInt()) },
           transitionSpec = { fadeIn(motion.defaultEffectsSpec()) togetherWith fadeOut(motion.fastEffectsSpec()) },
           label = "xdriveTopBar"
         ) { selecting ->

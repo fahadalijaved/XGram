@@ -78,6 +78,9 @@ interface XgramComposeHost {
   val dialog: Any?
   fun dismissDialog()
 
+  /** The bottom of the page's own app bar in the page's view, px: the back card's scrim starts there. */
+  fun reportAppBarBottom(px: Int) {}
+
   /**
    * An in-page state that back closes first (a selection, an edit mode). Do not use Compose BackHandler: it registers
    * on the activity ahead of Telegram X and breaks the predictive back card. Sheets and dialogs handle back themselves.

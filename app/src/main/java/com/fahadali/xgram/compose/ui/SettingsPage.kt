@@ -133,7 +133,8 @@ fun SettingsPage(
         scrollBehavior = scrollBehavior,
         topInset = topInset,
         navigationIcon = { BackButton(host) },
-        actions = actions
+        actions = actions,
+        onBottom = host::reportAppBarBottom
       )
     }
   ) { padding ->
