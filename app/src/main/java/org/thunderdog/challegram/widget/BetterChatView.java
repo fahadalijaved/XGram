@@ -52,7 +52,6 @@ import org.thunderdog.challegram.loader.ComplexReceiver;
 import org.thunderdog.challegram.loader.ImageFile;
 import org.thunderdog.challegram.navigation.TooltipOverlayView;
 import org.thunderdog.challegram.telegram.ChatListener;
-import org.thunderdog.challegram.telegram.DateManager;
 import org.thunderdog.challegram.telegram.NotificationSettingsListener;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.telegram.TdlibCache;
@@ -86,7 +85,11 @@ import tgx.td.ChatId;
 import tgx.td.MessageId;
 import tgx.td.Td;
 
-public class BetterChatView extends BaseView implements Destroyable, RemoveHelper.RemoveDelegate, ChatListener, TdlibCache.UserDataChangeListener, TdlibCache.SupergroupDataChangeListener, TdlibCache.BasicGroupDataChangeListener, NotificationSettingsListener, TdlibCache.UserStatusChangeListener, DrawableProvider, TooltipOverlayView.LocationProvider, TdlibUi.MessageProvider {
+public class BetterChatView extends BaseView implements Destroyable, RemoveHelper.RemoveDelegate,
+  ChatListener, TdlibCache.UserDataChangeListener, TdlibCache.SupergroupDataChangeListener,
+  TdlibCache.BasicGroupDataChangeListener, NotificationSettingsListener,
+  TdlibCache.UserStatusChangeListener, DrawableProvider, TooltipOverlayView.LocationProvider,
+  TdlibUi.MessageProvider, DateTimeView {
   private static final int FLAG_FAKE_TITLE = 1;
   private static final int FLAG_SECRET = 1 << 1;
   private static final int FLAG_ONLINE = 1 << 2;
@@ -422,10 +425,6 @@ public class BetterChatView extends BaseView implements Destroyable, RemoveHelpe
 
   @Override
   protected void onDraw (Canvas c) {
-    if (lastMessage != null && timeFormatVersion != DateManager.timeFormatVersion()) {
-      timeFormatVersion = DateManager.timeFormatVersion();
-      setTime(Lang.timeOrDateShort(lastMessage.getMessage().date, TimeUnit.SECONDS));
-    }
     if (removeHelper != null) {
       removeHelper.save(c);
     }
@@ -799,8 +798,20 @@ public class BetterChatView extends BaseView implements Destroyable, RemoveHelpe
     }
   }
 
+  @Override
+  public void onDateOrTimeChanged () {
+    if (lastChat != null) {
+      updateSubtitle();
+      invalidate();
+    } else if (lastMessage != null) {
+      setTime(Lang.timeOrDateShort(lastMessage.getMessage().date, TimeUnit.SECONDS));
+      invalidate();
+    }
+  }
+
   public void setChat (@Nullable TGFoundChat chat) {
     if (chat == lastChat) {
+      onDateOrTimeChanged();
       return;
     }
     xgramCallRow = false;
@@ -958,7 +969,6 @@ public class BetterChatView extends BaseView implements Destroyable, RemoveHelpe
   // Message
 
   private TGFoundMessage lastMessage;
-  private int timeFormatVersion;
 
   private void setMessageImpl (TGFoundMessage message) {
     if (lastMessage != null) {
@@ -979,6 +989,7 @@ public class BetterChatView extends BaseView implements Destroyable, RemoveHelpe
     if (lastChat != null) {
       setChatImpl(null);
     } else if (lastMessage == foundMessage) {
+      onDateOrTimeChanged();
       return;
     }
     setMessageImpl(foundMessage);
@@ -987,7 +998,6 @@ public class BetterChatView extends BaseView implements Destroyable, RemoveHelpe
       TdApi.Message message = foundMessage.getMessage();
       flags = BitwiseUtils.setFlag(flags, FLAG_SELF_CHAT, foundMessage.getChat().isSelfChat());
       setTime(Lang.timeOrDateShort(message.date, TimeUnit.SECONDS));
-      timeFormatVersion = DateManager.timeFormatVersion();
       TGFoundChat chat = foundMessage.getChat();
       setTitle(chat.getTitle(), chat.getTitleHighlight());
       setSubtitle(foundMessage.getText(), foundMessage.getHighlight());

@@ -37,7 +37,6 @@ import org.thunderdog.challegram.loader.AvatarReceiver;
 import org.thunderdog.challegram.loader.ComplexReceiver;
 import org.thunderdog.challegram.loader.ComplexReceiverProvider;
 import org.thunderdog.challegram.navigation.TooltipOverlayView;
-import org.thunderdog.challegram.telegram.DateManager;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.telegram.TdlibAccentColor;
 import org.thunderdog.challegram.telegram.TdlibContactManager;
@@ -54,6 +53,7 @@ import org.thunderdog.challegram.util.text.Text;
 import org.thunderdog.challegram.util.text.TextColorSetOverride;
 import org.thunderdog.challegram.util.text.TextColorSets;
 import org.thunderdog.challegram.widget.BaseView;
+import org.thunderdog.challegram.widget.DateTimeView;
 import org.thunderdog.challegram.widget.SimplestCheckBoxHelper;
 
 import java.util.ArrayList;
@@ -62,7 +62,8 @@ import java.util.List;
 import me.vkryl.core.StringUtils;
 import me.vkryl.core.lambda.Destroyable;
 
-public class UserView extends BaseView implements Destroyable, RemoveHelper.RemoveDelegate, TooltipOverlayView.LocationProvider, ComplexReceiverProvider {
+public class UserView extends BaseView implements Destroyable, RemoveHelper.RemoveDelegate,
+  TooltipOverlayView.LocationProvider, ComplexReceiverProvider, DateTimeView {
   /*private static final int ACCENT_COLOR = 0xff569ace;
   private static final int DECENT_COLOR = 0xff8a8a8a;*/
 
@@ -245,8 +246,12 @@ public class UserView extends BaseView implements Destroyable, RemoveHelper.Remo
     }
   }
 
+  @Override
+  public void onDateOrTimeChanged () {
+    updateSubtext();
+  }
+
   public void updateSubtext () {
-    timeFormatVersion = DateManager.timeFormatVersion();
     if (user != null) {
       user.updateStatus();
     }
@@ -364,6 +369,9 @@ public class UserView extends BaseView implements Destroyable, RemoveHelper.Remo
       this.unregisteredContact = null;
       buildLayout();
     } else {
+      // An equal user made again by the owner has its own status, e.g. a time of a view of a
+      // message after a change of the time format
+      this.user = user;
       if (sourceName == null || user.updateName() || !sourceName.equals(user.getName())) {
         updateName();
       }
@@ -387,7 +395,6 @@ public class UserView extends BaseView implements Destroyable, RemoveHelper.Remo
   private Text trimmedName;
   private String sourceStatus, trimmedStatus;
   private float trimmedStatusWidth;
-  private int timeFormatVersion;
 
   private void updateLetters () {
     if (unregisteredContact != null) {
@@ -422,9 +429,6 @@ public class UserView extends BaseView implements Destroyable, RemoveHelper.Remo
 
   @Override
   protected void onDraw (Canvas c) {
-    if (user != null && timeFormatVersion != DateManager.timeFormatVersion()) {
-      updateSubtext();
-    }
     if (xgram()) {
       removeHelper.save(c);
       xgramDraw(c);
