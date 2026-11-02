@@ -548,6 +548,7 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
   private @Nullable View xgramDownScroller;
   private @Nullable RecyclerView xgramDragList;
   private @Nullable XgramMotion.Value xgramDragSpring;
+  private boolean xgramDragSettling; // the drag spring settles the sheet back to its open position
   private boolean xgramNested, xgramNestedMoving;
   private final int[] xgramNestedConsumed = new int[2];
   private float xgramScrimScale = 1f;
@@ -731,6 +732,7 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
   }
 
   private void xgramStopDragSpring () {
+    xgramDragSettling = false;
     if (xgramDragSpring != null) {
       xgramDragSpring.setEndListener(null);
       xgramDragSpring.cancel();
@@ -750,7 +752,7 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
       provider.xgramSheetDragStarted();
     }
     xgramBeginSheetMove();
-    xgramDragStartTranslation = xgramSheetTranslation();
+    xgramDragStartTranslation = Math.max(0f, xgramSheetTranslation()); // grabbed above rest mid-settle: no jump down
     xgramDragOriginY = xgramDragLastY = y;
     final ViewParent parent = getParent();
     if (parent != null) {
@@ -795,13 +797,9 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
         final float y = e.getY();
         final RecyclerView list = xgramDragList;
         if (list == null) {
-          // a sheet of a fixed height follows the finger, with a rubber band upwards (an option sheet paints 24dp
-          // below its bottom)
-          float translation = xgramDragStartTranslation + (y - xgramDragOriginY);
-          if (translation < 0f) {
-            translation = -XgramSheetDrag.rubber(-translation);
-          }
-          xgramSetSheetTranslation(translation);
+          // a sheet of a fixed height follows the finger downwards and stops at its open position upwards, as a
+          // standard bottom sheet (XGram: a rubber band lifted short option menus off the screen's bottom)
+          xgramSetSheetTranslation(Math.max(0f, xgramDragStartTranslation + (y - xgramDragOriginY)));
         } else {
           // a sheet that grows with its list: downwards the list goes back to its top first, upwards the sheet comes
           // back up first; the rest moves the other one
@@ -867,7 +865,19 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
 
   private XgramMotion.Value xgramDragSpringFor (int token) {
     if (xgramDragSpring == null) {
-      xgramDragSpring = new XgramMotion.Value(token, factor, (v, value, velocity) -> setRevealFactor(value));
+      xgramDragSpring = new XgramMotion.Value(token, factor, (v, value, velocity) -> {
+        if (xgramDragSettling && value >= 1f) {
+          // XGram: the settle stops at the open position the first time it gets there, as MDC's bottom sheet does:
+          // the finger's speed no longer throws the sheet above its place (the screen under it showed)
+          xgramDragSettling = false;
+          v.setEndListener(null);
+          v.cancel();
+          setRevealFactor(1f);
+          xgramOnRevealEnd(1f);
+        } else {
+          setRevealFactor(value);
+        }
+      });
       xgramDragSpring.setThreshold(.001f);
     } else {
       xgramDragSpring.setSpring(token);
@@ -884,14 +894,17 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
     }
     XgramMotion.Value spring = xgramDragSpringFor(XgramExpressive.SPATIAL_DEFAULT);
     spring.setEndListener(() -> {
+      xgramDragSettling = false;
       setRevealFactor(1f);
       xgramOnRevealEnd(1f);
     });
+    xgramDragSettling = true;
     spring.animateTo(1f, factorVelocity);
   }
 
   /** The sheet leaves with the finger's velocity (STD_SPATIAL_FAST, as a plain hide), then the popup goes. */
   private void xgramDismissAfterDrag (float factorVelocity) {
+    xgramDragSettling = false;
     XgramMotion.Value spring = xgramDragSpringFor(XgramExpressive.STD_SPATIAL_FAST);
     spring.setEndListener(() -> xgramOnRevealEnd(0f));
     spring.animateTo(0f, Math.min(0f, factorVelocity));
