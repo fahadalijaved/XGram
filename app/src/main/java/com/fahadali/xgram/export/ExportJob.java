@@ -48,7 +48,6 @@ import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import tgx.td.MessageId;
-import tgx.td.Td;
 
 /**
  * One chat export, run on its own background thread from start to finish (one at a time, in any account):
@@ -134,31 +133,32 @@ public final class ExportJob {
     final TdApi.Message message;
     final long serverId;
     final int kind;
-    /** The text or caption, "" when there is none. */
+    /** The text or caption with its entities ({@link ExportMedia#textOf}), empty when there is none and for service messages. */
     @NonNull
-    final String text;
+    final TdApi.FormattedText text;
     /**
-     * The line for service messages and for contents with neither text nor a media block: Telegram X's preview, or
-     * Desktop's sentence with real names where the preview would name people ({@link ExportActions#namedLine}).
+     * The line for what has no Desktop form: a service message Desktop has no action for (its "information_text"), or a
+     * message with neither text, nor a file, nor a block of its own; "" otherwise.
      */
     @NonNull
     final String fallback;
-    /** The line already names the people. */
+    /** {@code fallback} is a whole sentence: the HTML doesn't put the actor before it. */
     final boolean hideAuthor;
-    /** The line is Desktop's sentence that follows the actor's name ("invited Bob"). */
-    final boolean afterActor;
     /** The message's file and what became of it (filled in before the page is written), null when it has none. */
     @Nullable
     final ExportMedia.Result media;
+    /** A shared contact's vCard: its path in the export, or why it was left out; filled in with the page's media. */
+    @Nullable
+    String vcardPath;
+    int vcardSkip = ExportMedia.SKIP_NONE;
 
-    Item (TdApi.Message message, long serverId, int kind, @NonNull String text, @NonNull String fallback, boolean hideAuthor, boolean afterActor, @Nullable ExportMedia.Result media) {
+    Item (TdApi.Message message, long serverId, int kind, @NonNull TdApi.FormattedText text, @NonNull String fallback, boolean hideAuthor, @Nullable ExportMedia.Result media) {
       this.message = message;
       this.serverId = serverId;
       this.kind = kind;
       this.text = text;
       this.fallback = fallback;
       this.hideAuthor = hideAuthor;
-      this.afterActor = afterActor;
       this.media = media;
     }
   }
@@ -211,6 +211,8 @@ public final class ExportJob {
   private volatile boolean waitingForNetwork;
   private volatile long newestServerId, oldestServerId;
   private volatile long lastPublishMs, lastNotifyMs;
+  /** Desktop's counter of contact_N.vcard files. Worker only. */
+  private int contactCount;
 
   // Android's time limit: the service's state, the soft deadline's start, the stop it asked for
   private volatile int foregroundState = FOREGROUND_PENDING;
@@ -564,9 +566,9 @@ public final class ExportJob {
       zip = new ExportZip(output.open(), this);
       ExportAssets.write(zip, root, now);
       final File spool = new File(dir, "result.json.part");
-      json = new ExportJsonWriter(spool, peers, options.chatId);
+      json = new ExportJsonWriter(spool, tdlib, peers, dialog, options.chatId, !options.isTopic());
       json.begin(dialog, options.isTopic() ? options.topicId : 0, topicTitle);
-      final ExportHtmlWriter html = new ExportHtmlWriter(zip, root, peers, index, dialog, topicTitle, options.chatId, now);
+      final ExportHtmlWriter html = new ExportHtmlWriter(zip, root, tdlib, peers, index, dialog, topicTitle, options.chatId, !options.isTopic(), now);
       final int pages = index.pageCount();
       for (int page = 0; page <= pages; page++) {
         zip.reservePath(root + ExportHtmlWriter.messagesFile(page)); // a file named messages2.html stays a file
@@ -595,7 +597,7 @@ public final class ExportJob {
         final List<Item> items;
         stoppable = true;
         try {
-          items = fetch(td, peers, ids);
+          items = fetch(td, ids);
         } catch (Stopped e) {
           stoppedAt = page;
           break;
@@ -604,6 +606,7 @@ public final class ExportJob {
         }
         // The page's files go in first (entries can't interleave); a time-limit stop leaves the rest of them out
         downloader.writePage(items, reserveBytes, pages - page + 2);
+        writeContacts(zip, root, items, reserveBytes, pages - page + 2);
         html.writePage(page, pages, items);
         json.writeItems(items);
         written += ids.length;
@@ -683,7 +686,7 @@ public final class ExportJob {
   }
 
   /** The messages of one page, oldest first; ones deleted since pass 1 are left out. */
-  private List<Item> fetch (ExportTd td, ExportPeers peers, long[] ids) {
+  private List<Item> fetch (ExportTd td, long[] ids) {
     final List<Item> items = new ArrayList<>(ids.length);
     for (int from = 0; from < ids.length; from += FETCH_BATCH) {
       final long[] batch = Arrays.copyOfRange(ids, from, Math.min(ids.length, from + FETCH_BATCH));
@@ -691,7 +694,7 @@ public final class ExportJob {
       if (messages.messages != null) {
         for (TdApi.Message message : messages.messages) {
           if (message != null && message.content != null) {
-            items.add(item(peers, message));
+            items.add(item(message));
           }
         }
       }
@@ -700,38 +703,71 @@ public final class ExportJob {
     return items;
   }
 
-  private Item item (ExportPeers peers, TdApi.Message message) {
+  private Item item (TdApi.Message message) {
     final long serverId = MessageId.toServerMessageId(message.id);
-    final int constructor = message.content.getConstructor();
-    final int kind = constructor == TdApi.MessageUnsupported.CONSTRUCTOR ? Item.KIND_UNSUPPORTED :
-      ExportActions.isService(message.content) ? Item.KIND_SERVICE :
+    final TdApi.MessageContent content = message.content;
+    final int kind = content.getConstructor() == TdApi.MessageUnsupported.CONSTRUCTOR ? Item.KIND_UNSUPPORTED :
+      ExportActions.isService(content) ? Item.KIND_SERVICE :
       Item.KIND_MESSAGE;
-    String text = "";
-    if (kind == Item.KIND_MESSAGE) {
-      final TdApi.FormattedText formatted = Td.textOrCaption(message.content);
-      if (formatted != null && formatted.text != null) {
-        text = formatted.text;
-      }
-    }
+    final TdApi.FormattedText text = kind == Item.KIND_MESSAGE ? ExportMedia.textOf(content) : ExportText.EMPTY;
     final ExportMedia.Plan plan = kind != Item.KIND_UNSUPPORTED ? ExportMedia.plan(message, options) : null;
     String fallback = "";
-    boolean hideAuthor = false, afterActor = false;
-    final boolean needsLine = kind == Item.KIND_SERVICE ||
-      (kind == Item.KIND_MESSAGE && text.isEmpty() && constructor != TdApi.MessageText.CONSTRUCTOR && !ExportMedia.hasFile(message.content));
-    if (needsLine) {
-      // A preview that names people would carry XGram's local renames: those lines are built from the real names
-      final ExportActions.Line line = ExportActions.namedLine(tdlib, peers, message);
-      if (line != null) {
-        fallback = line.text;
-        afterActor = line.afterActor;
-        hideAuthor = !line.afterActor;
+    boolean hideAuthor = false;
+    if (kind == Item.KIND_SERVICE && !ExportActions.hasAction(content)) {
+      // Desktop has no action for it: written as Desktop writes a custom action, the actor and a line
+      final String information = ExportActions.information(content);
+      if (information != null) {
+        fallback = information;
+        hideAuthor = true;
       } else {
-        final ContentPreview preview = ExportActions.preview(tdlib, options.chatId, message);
-        fallback = ExportActions.previewText(preview);
-        hideAuthor = preview != null && preview.hideAuthor;
+        fallback = previewLine(message);
+      }
+    } else if (kind == Item.KIND_MESSAGE && ExportText.isEmpty(text) && !ExportMedia.hasFile(content) && !ExportMedia.hasBlock(content)) {
+      fallback = previewLine(message);
+    }
+    return new Item(message, serverId, kind, text, fallback, hideAuthor, plan != null ? new ExportMedia.Result(plan) : null);
+  }
+
+  /**
+   * Telegram X's preview of a content XGram has no form for, in the app language; "" when the preview names people:
+   * it reads their names from Telegram X's cache, where XGram's local renames are written in (critique #19), and the
+   * export carries only real names. The actor is never part of it.
+   */
+  private String previewLine (TdApi.Message message) {
+    final ContentPreview preview = ExportActions.preview(tdlib, options.chatId, message);
+    return preview != null && !preview.hideAuthor ? ExportActions.previewText(preview) : "";
+  }
+
+  /**
+   * Shared contacts' vCards, before the page that links them, as Desktop writes them: contacts/contact_N.vcard, when
+   * Photos is checked (Desktop files them under that type) and within the size limit.
+   */
+  private void writeContacts (ExportZip zip, String root, List<Item> items, long reserveBytes, int reserveEntries) throws IOException {
+    for (Item item : items) {
+      if (item.message.content.getConstructor() != TdApi.MessageContact.CONSTRUCTOR) {
+        continue;
+      }
+      final TdApi.Contact contact = ((TdApi.MessageContact) item.message.content).contact;
+      if (contact == null || contact.vcard == null || contact.vcard.isEmpty()) {
+        continue;
+      }
+      checkCanceled();
+      final byte[] data = contact.vcard.getBytes(StandardCharsets.UTF_8);
+      if (!options.includes(ExportOptions.TYPE_PHOTOS)) {
+        item.vcardSkip = ExportMedia.SKIP_TYPE;
+      } else if (data.length > options.sizeLimitBytes) {
+        item.vcardSkip = ExportMedia.SKIP_SIZE;
+      } else if (!item.message.canBeSaved || !zip.canAddMedia(data.length, 0, reserveBytes, reserveEntries)) {
+        item.vcardSkip = ExportMedia.SKIP_UNAVAILABLE; // as the media of a message that can't be saved, or Android 6's zip limits
+        if (item.message.canBeSaved) {
+          onLegacyZipLimit();
+        }
+      } else {
+        final String path = zip.uniquePath(root + "contacts/contact_" + (++contactCount) + ".vcard");
+        zip.putBytesStored(path, data, item.message.date * 1000L);
+        item.vcardPath = path.substring(root.length());
       }
     }
-    return new Item(message, serverId, kind, text, fallback, hideAuthor, afterActor, plan != null ? new ExportMedia.Result(plan) : null);
   }
 
   private static void checkSpace (@Nullable File path, long needed) throws Failure {

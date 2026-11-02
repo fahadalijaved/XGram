@@ -16,10 +16,12 @@ import androidx.annotation.Nullable;
 import androidx.annotation.WorkerThread;
 
 import org.drinkless.tdlib.TdApi;
+import org.thunderdog.challegram.telegram.Tdlib;
 
 import java.io.IOException;
 import java.io.Writer;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
@@ -32,23 +34,32 @@ import tgx.td.MessageId;
  * The messages*.html pages in Telegram Desktop's markup (export_output_html.cpp), so Desktop's style.css and script.js
  * work on them unchanged: 1000 messages per page with Previous / Next links, a date line whenever the day changes (and
  * at the top of every page), messages from the same sender joined as Desktop joins them, replies linking to the page
- * that holds the message. Desktop's English page texts are kept as they are.
+ * that holds the message, formatted text ({@link ExportText}), Desktop's service sentences ({@link ExportActions}),
+ * forwards (a Saved Messages copy shows its original author, as Desktop does), polls, contacts, locations, venues,
+ * games, invoices, calls, to-do lists, giveaways, inline keyboards and reactions. In a whole-forum export a message
+ * says "In topic «Name»" when the topic changes. Desktop's English page texts are kept as they are.
  */
 final class ExportHtmlWriter {
   private static final int JOIN_WITHIN_SECONDS = 900; // kJoinWithinSeconds
   private static final int USERPIC_SIZE = 42; // kHistoryUserpicSize
   private static final int SERVICE_PHOTO_SIZE = 60; // kServiceMessagePhotoSize
+  private static final int REACTION_USERPIC_SIZE = 20;
   private static final char[] HEX = "0123456789ABCDEF".toCharArray();
 
   private final ExportZip zip;
   private final String root;
+  private final Tdlib tdlib;
   private final ExportPeers peers;
   private final ExportIndex index;
   private final ExportPeers.Dialog dialog;
   /** The page header: the chat's name, and the topic's for a topic export. */
   private final String headerName;
   private final long chatId;
+  /** A whole-chat export: messages of a forum say which topic they are in when it changes. */
+  private final boolean topicChips;
   private final long entryTimeMs;
+  /** The forum topic the last message on this page was in (its "In topic" line), 0 for none. */
+  private int pageTopicId;
 
   private final SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm", Locale.US);
   private final SimpleDateFormat dateTimeFormat = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.US);
@@ -61,14 +72,16 @@ final class ExportHtmlWriter {
   /** Desktop's _dateMessageId: date lines are "message-1", "message-2", … through the whole chat. */
   private int dateMessageId;
 
-  ExportHtmlWriter (ExportZip zip, String root, ExportPeers peers, ExportIndex index, ExportPeers.Dialog dialog, @NonNull String topicTitle, long chatId, long entryTimeMs) {
+  ExportHtmlWriter (ExportZip zip, String root, Tdlib tdlib, ExportPeers peers, ExportIndex index, ExportPeers.Dialog dialog, @NonNull String topicTitle, long chatId, boolean topicChips, long entryTimeMs) {
     this.zip = zip;
     this.root = root;
+    this.tdlib = tdlib;
     this.peers = peers;
     this.index = index;
     this.dialog = dialog;
     this.headerName = topicTitle.isEmpty() ? dialog.htmlName : dialog.htmlName + " · " + topicTitle;
     this.chatId = chatId;
+    this.topicChips = topicChips;
     this.entryTimeMs = entryTimeMs;
   }
 
@@ -114,6 +127,7 @@ final class ExportHtmlWriter {
   private void beginFile (int page) throws IOException {
     w = zip.beginText(root + messagesFile(page), entryTimeMs);
     depth = 0;
+    pageTopicId = 0; // every page says which topic its first message is in
     write("<!DOCTYPE html>\n");
     open("<html>");
     open("<head>");
@@ -154,27 +168,33 @@ final class ExportHtmlWriter {
     final boolean service;
     final long fromKey, viaBotId;
     final int date, dayKey;
-    final boolean forwarded, forwardedFromUser;
+    /** Desktop's showForwardedAsOriginal: a copy that shows its original author as the sender. */
+    final boolean forwarded, asOriginal, forwardedFromUser;
     final long forwardedKey;
     @NonNull
     final String forwardedName;
     final int forwardedDate;
+    /** The forum topic in a whole-forum export, 0 otherwise. */
+    final int topicId;
 
-    Info (boolean service, long fromKey, long viaBotId, int date, int dayKey, boolean forwarded, long forwardedKey, @NonNull String forwardedName, int forwardedDate, boolean forwardedFromUser) {
+    Info (boolean service, long fromKey, long viaBotId, int date, int dayKey, boolean forwarded, boolean asOriginal, long forwardedKey,
+          @NonNull String forwardedName, int forwardedDate, boolean forwardedFromUser, int topicId) {
       this.service = service;
       this.fromKey = fromKey;
       this.viaBotId = viaBotId;
       this.date = date;
       this.dayKey = dayKey;
       this.forwarded = forwarded;
+      this.asOriginal = asOriginal;
       this.forwardedKey = forwardedKey;
       this.forwardedName = forwardedName;
       this.forwardedDate = forwardedDate;
       this.forwardedFromUser = forwardedFromUser;
+      this.topicId = topicId;
     }
 
     static Info service (int date, int dayKey) {
-      return new Info(true, 0, 0, date, dayKey, false, 0, "", 0, false);
+      return new Info(true, 0, 0, date, dayKey, false, false, 0, "", 0, false, 0);
     }
   }
 
@@ -189,23 +209,38 @@ final class ExportHtmlWriter {
         writeService(String.valueOf(item.serverId), escape("This message is not supported by this version of XGram. Please update the application."));
         return Info.service(message.date, dayKey);
       case ExportJob.Item.KIND_SERVICE:
-        writeService(String.valueOf(item.serverId), escape(serviceText(item)), item.media);
+        if (ExportActions.isCall(message.content)) {
+          return writeMessage(item, previous, dayKey, page); // Desktop shows calls as messages with a call block
+        }
+        writeService(String.valueOf(item.serverId), serviceText(item, page), item.media);
         return Info.service(message.date, dayKey);
       default:
         return writeMessage(item, previous, dayKey, page);
     }
   }
 
+  private ExportActions.Context context (TdApi.Message message) {
+    return new ExportActions.Context(tdlib, peers, dialog, chatId, message);
+  }
+
   /**
-   * For now Telegram X's preview line after "actor: ", unless the line names the people itself (or it is a channel);
-   * Desktop's sentences built from real names follow the actor with a space ("Alice invited Bob").
+   * The line of a service message, as HTML: Desktop's sentence, or for what Desktop has no action for the line after
+   * "actor: " (a whole sentence stands alone; a channel names no actor).
    */
-  private String serviceText (ExportJob.Item item) {
-    final String text = item.fallback.isEmpty() ? "Service message" : item.fallback;
-    if (item.hideAuthor || item.fallback.isEmpty() || (dialog.isChannel && !item.afterActor)) {
-      return text;
+  private String serviceText (ExportJob.Item item, int page) {
+    if (ExportActions.hasAction(item.message.content)) {
+      final String html = ExportActions.html(context(item.message), (messageId, text) -> messageLink(messageId, MessageId.toServerMessageId(messageId), page, text));
+      if (!html.isEmpty()) {
+        return html;
+      }
     }
-    return peers.sender(item.message.senderId).displayName() + (item.afterActor ? " " : ": ") + text;
+    final String text = escape(item.fallback);
+    if (item.hideAuthor || dialog.isChannel) {
+      return text.isEmpty() ? "Service message" : text;
+    }
+    final String actor = peers.sender(item.message.senderId).name();
+    final String actorHtml = actor.isEmpty() ? "Deleted" : escape(actor); // Desktop's wrapPeerName
+    return text.isEmpty() ? actorHtml : actorHtml + ": " + text;
   }
 
   private void writeService (String id, String html) throws IOException {
@@ -259,59 +294,76 @@ final class ExportHtmlWriter {
     }
     // Desktop: forwarded = forwardedFromId || !forwardedFromName.isEmpty(), as the JSON writer has it
     final boolean forwarded = forward != null && (origin != null || !hiddenName.isEmpty());
-    final Info info = new Info(false, from.key, message.viaBotUserId, message.date, dayKey, forwarded,
-      origin != null ? origin.key : 0, hiddenName, forwarded ? forward.date : 0, origin != null && origin.isUser);
+    // Desktop's showForwardedAsOriginal: a copy in Saved Messages (or Replies, or a discussion group) shows its original
+    // author as the sender, with no forwarded block
+    final boolean asOriginal = forwarded && ExportJsonWriter.savedFromChatId(forward) != 0;
+    final int topicId = topicChips ? ExportJsonWriter.forumTopicId(message) : 0;
+    final Info info = new Info(false, from.key, message.viaBotUserId, message.date, dayKey, forwarded, asOriginal,
+      origin != null ? origin.key : 0, hiddenName, forwarded ? forward.date : 0, origin != null && origin.isUser, topicId);
     final boolean wrap = needsWrap(info, previous);
     final String via = message.viaBotUserId != 0 ? peers.user(message.viaBotUserId).username : "";
+
+    // The original sender of a forward: a known user or chat, or a hidden user (coloured by the message id, as Desktop)
+    String forwardedName = "", forwardedInitials = "";
+    int forwardedColor = 0;
+    if (forwarded) {
+      if (origin != null) {
+        forwardedName = origin.displayName();
+        forwardedColor = origin.colorClass();
+        forwardedInitials = origin.initials();
+      } else {
+        forwardedName = hiddenName;
+        forwardedColor = ExportPeers.colorClass(item.serverId);
+        forwardedInitials = initialsOf(hiddenName);
+      }
+    }
 
     open("<div class=\"message default clearfix" + (wrap ? "" : " joined") + "\" id=\"message" + item.serverId + "\">");
     if (wrap) {
       open("<div class=\"pull_left userpic_wrap\">");
-      userpic(from.colorClass(), from.initials());
+      if (asOriginal) {
+        userpic(forwardedColor, forwardedInitials, USERPIC_SIZE, null);
+      } else {
+        userpic(from.colorClass(), from.initials(), USERPIC_SIZE, null);
+      }
       close("div");
     }
     open("<div class=\"body\">");
     line("<div class=\"pull_right date details\" title=\"" + escape(dateTime(message.date, true)) + "\">" + timeFormat.format(new Date(message.date * 1000L)) + "</div>");
     if (wrap) {
-      line("<div class=\"from_name\">" + escape(from.displayName()) + (!via.isEmpty() && !forwarded ? " via @" + escape(via) : "") + "</div>");
+      line("<div class=\"from_name\">" + escape(asOriginal ? forwardedName : from.displayName()) +
+        (!via.isEmpty() && (!forwarded || asOriginal) ? " via @" + escape(via) : "") + "</div>");
     }
-    if (forwarded) {
+    final boolean forwardedBlock = forwarded && !asOriginal;
+    if (forwardedBlock) {
       final boolean forwardedWrap = wrap || forwardedNeedsWrap(info, previous);
       if (forwardedWrap) {
-        final String name;
-        final int color;
-        final String initials;
-        if (origin != null) {
-          name = origin.displayName();
-          color = origin.colorClass();
-          initials = origin.initials();
-        } else {
-          name = hiddenName.isEmpty() ? ExportPeers.DELETED_ACCOUNT : hiddenName;
-          color = ExportPeers.colorClass(item.serverId); // Desktop colours a hidden sender by the message id
-          initials = initialsOf(hiddenName);
-        }
         open("<div class=\"pull_left forwarded userpic_wrap\">");
-        userpic(color, initials);
+        userpic(forwardedColor, forwardedInitials, USERPIC_SIZE, null);
         close("div");
-        open("<div class=\"forwarded body\">");
-        line("<div class=\"from_name\">" + escape(name) + (!via.isEmpty() ? " via @" + escape(via) : "") +
+      }
+      open("<div class=\"forwarded body\">");
+      if (forwardedWrap) {
+        line("<div class=\"from_name\">" + escape(forwardedName) + (!via.isEmpty() ? " via @" + escape(via) : "") +
           "<span class=\"date details\" title=\"" + escape(dateTime(forward.date, true)) + "\"> " + escape(dateTime(forward.date, false)) + "</span></div>");
-      } else {
-        open("<div class=\"forwarded body\">");
       }
     }
+    writeTopic(topicId, page);
     writeReply(message, page);
     writeMedia(item.media);
-    final String text = !item.text.isEmpty() ? item.text : item.fallback;
+    writeContent(item, page);
+    final String text = !ExportText.isEmpty(item.text) ? ExportText.html(item.text) : escape(item.fallback);
     if (!text.isEmpty()) {
-      line("<div class=\"text\">" + escape(text) + "</div>");
+      line("<div class=\"text\">" + text + "</div>");
     }
+    writeButtons(message.replyMarkup);
     if (message.authorSignature != null && !message.authorSignature.isEmpty()) {
       line("<div class=\"signature details\">" + escape(message.authorSignature) + "</div>");
     }
-    if (forwarded) {
+    if (forwardedBlock) {
       close("div"); // forwarded body
     }
+    writeReactions(message);
     close("div"); // body
     close("div"); // message
     return info;
@@ -328,8 +380,12 @@ final class ExportHtmlWriter {
     if (info.viaBotId != previous.viaBotId || info.dayKey != previous.dayKey) {
       return true;
     }
-    if (info.forwarded != previous.forwarded || info.forwardedKey != previous.forwardedKey || !info.forwardedName.equals(previous.forwardedName)) {
+    if (info.forwarded != previous.forwarded || info.asOriginal != previous.asOriginal ||
+      info.forwardedKey != previous.forwardedKey || !info.forwardedName.equals(previous.forwardedName)) {
       return true;
+    }
+    if (info.topicId != previous.topicId) {
+      return true; // XGram: a message in another forum topic starts a new block with its "In topic" line
     }
     final boolean fromForward = info.forwardedKey != 0 || !info.forwardedName.isEmpty();
     return Math.abs(info.date - previous.date) > (fromForward ? 1 : JOIN_WITHIN_SECONDS);
@@ -343,11 +399,27 @@ final class ExportHtmlWriter {
     return Math.abs(info.forwardedDate - previous.forwardedDate) > JOIN_WITHIN_SECONDS;
   }
 
-  private void userpic (int colorClass, String initials) throws IOException {
-    final String size = USERPIC_SIZE + "px";
+  /** Desktop's pushUserpic without a photo: the coloured circle with the initials (and a tooltip, for reactions). */
+  private void userpic (int colorClass, String initials, int pixelSize, @Nullable String tooltip) throws IOException {
+    final String size = pixelSize + "px";
     open("<div class=\"userpic userpic" + colorClass + "\" style=\"width: " + size + "; height: " + size + "\">");
-    line("<div class=\"initials\" style=\"line-height: " + size + "\">" + escape(initials) + "</div>");
+    line("<div class=\"initials\" style=\"line-height: " + size + "\"" + (tooltip != null ? " title=\"" + escape(tooltip) + "\"" : "") + ">" + escape(initials) + "</div>");
     close("div");
+  }
+
+  /**
+   * XGram, in a whole-forum export: "In topic «Name»" when a message is in another topic than the message before it
+   * on the page, linking to the topic's first message (General has none).
+   */
+  private void writeTopic (int topicId, int page) throws IOException {
+    if (topicId == 0 || topicId == pageTopicId) {
+      return;
+    }
+    pageTopicId = topicId;
+    final String name = peers.topicName(chatId, topicId);
+    final boolean general = topicId == ExportJsonWriter.GENERAL_TOPIC_ID;
+    final String label = "&laquo;" + escape(!name.isEmpty() ? name : general ? "General" : "Deleted topic") + "&raquo;";
+    line("<div class=\"reply_to details\">In topic " + (general ? label : messageLink(MessageId.fromServerMessageId(topicId), topicId, page, label)) + "</div>");
   }
 
   /** Desktop's FillUserpicNames for a bare name: the first word and the first letter of the rest. */
@@ -510,9 +582,18 @@ final class ExportHtmlWriter {
 
   /** Desktop's pushGenericMedia: a link to the file when it is in the export, its thumbnail or the icon circle. */
   private void generic (String classes, @Nullable String link, @Nullable String thumb, String title, String description, String status) throws IOException {
+    block(classes, link != null ? url(link) : null, thumb, title, description, status);
+  }
+
+  /**
+   * Desktop's pushGenericMedia with {@code href} ready for the attribute (a file in the export through {@link #url},
+   * or an escaped web link such as a map).
+   */
+  private void block (String classes, @Nullable String href, @Nullable String thumb, String title, String description, String status) throws IOException {
+    final String link = href;
     open("<div class=\"media_wrap clearfix\">");
     if (link != null) {
-      open("<a class=\"media clearfix pull_left block_link " + classes + "\" href=\"" + url(link) + "\">");
+      open("<a class=\"media clearfix pull_left block_link " + classes + "\" href=\"" + link + "\">");
     } else {
       open("<div class=\"media clearfix pull_left " + classes + "\">");
     }
@@ -538,6 +619,427 @@ final class ExportHtmlWriter {
 
   private static String join (String first, String second) {
     return first.isEmpty() ? second : second.isEmpty() ? first : first + ", " + second;
+  }
+
+  // Contents that are not files (Desktop's prepareMediaData, pushPoll, pushTodoList, pushGiveaway)
+
+  /**
+   * The block of a content that is not a file: a call, contact, location, venue, game, invoice, paid media, poll, to-do
+   * list or giveaway as Desktop draws them; a dice, a story and an expired self-destructing file as XGram does
+   * (Desktop leaves them empty).
+   */
+  private void writeContent (ExportJob.Item item, int page) throws IOException {
+    final TdApi.Message message = item.message;
+    final TdApi.MessageContent content = message.content;
+    switch (content.getConstructor()) {
+      case TdApi.MessageCall.CONSTRUCTOR:
+      case TdApi.MessageGroupCall.CONSTRUCTOR: {
+        final String[] call = ExportActions.callBlock(context(message));
+        block(call[0], null, null, call[1], "", call[2]);
+        break;
+      }
+      case TdApi.MessageContact.CONSTRUCTOR: {
+        final TdApi.Contact contact = ((TdApi.MessageContact) content).contact;
+        if (contact == null) {
+          break;
+        }
+        final boolean vcard = contact.vcard != null && !contact.vcard.isEmpty();
+        final String title = (contact.firstName != null ? contact.firstName : "") + " " + (contact.lastName != null ? contact.lastName : "");
+        final String status = ExportJsonWriter.phone(contact.phoneNumber) + (vcard ? " - vCard" : "");
+        generic("media_contact", vcard ? item.vcardPath : null, null, title.trim(), "", status);
+        break;
+      }
+      case TdApi.MessageLocation.CONSTRUCTOR: {
+        final TdApi.Location location = ((TdApi.MessageLocation) content).location;
+        block("media_location", mapLink(location), null, "Location", "", coordinates(location));
+        break;
+      }
+      case TdApi.MessageLiveLocation.CONSTRUCTOR: {
+        final TdApi.LiveLocation live = ((TdApi.MessageLiveLocation) content).location;
+        final TdApi.Location location = live != null ? live.location : null;
+        block("media_live_location", mapLink(location), null, "Live location", "", coordinates(location));
+        break;
+      }
+      case TdApi.MessageVenue.CONSTRUCTOR: {
+        final TdApi.Venue venue = ((TdApi.MessageVenue) content).venue;
+        if (venue != null) {
+          block("media_venue", mapLink(venue.location), null, nonNull(venue.title), nonNull(venue.address), "");
+        }
+        break;
+      }
+      case TdApi.MessageGame.CONSTRUCTOR: {
+        final TdApi.Game game = ((TdApi.MessageGame) content).game;
+        if (game != null) {
+          final String link = ExportJsonWriter.gameLink(peers, message, game);
+          block("media_game", link.isEmpty() ? null : escape(link), null, nonNull(game.title), nonNull(game.description), link);
+        }
+        break;
+      }
+      case TdApi.MessageInvoice.CONSTRUCTOR: {
+        final TdApi.MessageInvoice invoice = (TdApi.MessageInvoice) content;
+        block("media_invoice", null, null, invoice.productInfo != null ? nonNull(invoice.productInfo.title) : "",
+          invoice.productInfo != null ? ExportText.plain(invoice.productInfo.description) : "", ExportActions.money(invoice.currency, invoice.totalAmount));
+        break;
+      }
+      case TdApi.MessagePaidMedia.CONSTRUCTOR:
+        block("media_invoice", null, null, "", "", ExportActions.money("XTR", ((TdApi.MessagePaidMedia) content).starCount));
+        break;
+      case TdApi.MessagePoll.CONSTRUCTOR: {
+        final TdApi.Poll poll = ((TdApi.MessagePoll) content).poll;
+        if (poll != null) {
+          writePoll(poll);
+        }
+        break;
+      }
+      case TdApi.MessageChecklist.CONSTRUCTOR: {
+        final TdApi.Checklist list = ((TdApi.MessageChecklist) content).list;
+        if (list != null) {
+          writeTodoList(list);
+        }
+        break;
+      }
+      case TdApi.MessageGiveaway.CONSTRUCTOR:
+        writeGiveaway((TdApi.MessageGiveaway) content);
+        break;
+      case TdApi.MessageGiveawayWinners.CONSTRUCTOR:
+        writeGiveawayWinners((TdApi.MessageGiveawayWinners) content, page);
+        break;
+      case TdApi.MessageDice.CONSTRUCTOR: {
+        final TdApi.MessageDice dice = (TdApi.MessageDice) content;
+        line("<div class=\"text\">" + escape(nonNull(dice.emoji) + " " + dice.value) + "</div>");
+        break;
+      }
+      case TdApi.MessageStakeDice.CONSTRUCTOR:
+        line("<div class=\"text\">" + escape(ExportJsonWriter.DICE + " " + ((TdApi.MessageStakeDice) content).value) + "</div>");
+        break;
+      case TdApi.MessageStory.CONSTRUCTOR: {
+        final TdApi.MessageStory story = (TdApi.MessageStory) content;
+        block("media_photo", null, null, "Story", "", story.storyPosterChatId != 0 ? peers.chat(story.storyPosterChatId).displayName() : "");
+        break;
+      }
+      case TdApi.MessageExpiredPhoto.CONSTRUCTOR:
+        block("media_photo", null, null, "Self-destructing photo", "", "Expired");
+        break;
+      case TdApi.MessageExpiredVideo.CONSTRUCTOR:
+      case TdApi.MessageExpiredVideoNote.CONSTRUCTOR:
+        block("media_video", null, null, "Self-destructing video", "", "Expired");
+        break;
+      case TdApi.MessageExpiredVoiceNote.CONSTRUCTOR:
+        block("media_voice_message", null, null, "Self-destructing voice message", "", "Expired");
+        break;
+      default:
+        break;
+    }
+  }
+
+  @NonNull
+  private static String nonNull (@Nullable String value) {
+    return value != null ? value : "";
+  }
+
+  /** "lat, lon" with Desktop's 6 decimals, "" for a point that is not valid. */
+  private static String coordinates (@Nullable TdApi.Location location) {
+    if (!ExportJsonWriter.isValid(location)) {
+      return "";
+    }
+    return ExportJsonWriter.coordinate(location.latitude) + ", " + ExportJsonWriter.coordinate(location.longitude);
+  }
+
+  /** Desktop's map link, escaped for the attribute: https://maps.google.com/maps?q=lat,lon&ll=lat,lon&z=16. */
+  @Nullable
+  private static String mapLink (@Nullable TdApi.Location location) {
+    if (!ExportJsonWriter.isValid(location)) {
+      return null;
+    }
+    final String coords = ExportJsonWriter.coordinate(location.latitude) + "," + ExportJsonWriter.coordinate(location.longitude);
+    return escape("https://maps.google.com/maps?q=" + coords + "&ll=" + coords + "&z=16");
+  }
+
+  /** Desktop's vote counts: "No votes", "1 vote", "N votes". */
+  private static String votes (int count) {
+    return count > 1 ? count + " votes" : count > 0 ? count + " vote" : "No votes";
+  }
+
+  /** Desktop's pushPoll; the kind of poll is named as it is (Desktop says "Anonymous poll" for every open poll). */
+  private void writePoll (TdApi.Poll poll) throws IOException {
+    open("<div class=\"media_wrap clearfix\">");
+    open("<div class=\"media_poll\">");
+    line("<div class=\"question bold\">" + ExportText.html(poll.question) + "</div>");
+    final boolean quiz = poll.type instanceof TdApi.PollTypeQuiz;
+    final String kind = poll.isClosed ? "Final results" :
+      poll.isAnonymous ? (quiz ? "Anonymous quiz" : "Anonymous poll") : (quiz ? "Quiz" : "Public poll");
+    line("<div class=\"details\">" + kind + "</div>");
+    if (poll.options != null) {
+      for (TdApi.PollOption option : poll.options) {
+        final String details = option.voterCount == 0 ? "" :
+          " <span class=\"details\">" + votes(option.voterCount) + (option.isChosen ? ", chosen vote" : "") + "</span>";
+        line("<div class=\"answer\">- " + ExportText.html(option.text) + details + "</div>");
+      }
+    }
+    line("<div class=\"total details\">" + votes(poll.totalVoterCount) + "</div>");
+    close("div");
+    close("div");
+  }
+
+  /** Desktop's pushTodoList, with "done" after the tasks that are (Desktop leaves that to do). */
+  private void writeTodoList (TdApi.Checklist list) throws IOException {
+    open("<div class=\"media_wrap clearfix\">");
+    open("<div class=\"media_poll\">");
+    line("<div class=\"question bold\">" + ExportText.html(list.title) + "</div>");
+    line("<div class=\"details\">To-do List</div>");
+    if (list.tasks != null) {
+      for (TdApi.ChecklistTask task : list.tasks) {
+        line("<div class=\"answer\">- " + ExportText.html(task.text) + (task.completionDate != 0 ? " <span class=\"details\">done</span>" : "") + "</div>");
+      }
+    }
+    close("div");
+    close("div");
+  }
+
+  private void section (String title, String bodyHtml) throws IOException {
+    if (!title.isEmpty()) {
+      line("<div class=\"section_title bold\">" + escape(title) + "</div>");
+    }
+    line("<div class=\"section_body\">" + bodyHtml + "</div>");
+  }
+
+  /** Desktop's pushGiveaway for a giveaway that was started. */
+  private void writeGiveaway (TdApi.MessageGiveaway giveaway) throws IOException {
+    final TdApi.GiveawayParameters parameters = giveaway.parameters;
+    final int quantity = giveaway.winnerCount;
+    final long stars = giveaway.prize instanceof TdApi.GiveawayPrizeStars ? ((TdApi.GiveawayPrizeStars) giveaway.prize).starCount : 0;
+    final int months = giveaway.prize instanceof TdApi.GiveawayPrizePremium ? ((TdApi.GiveawayPrizePremium) giveaway.prize).monthCount : 0;
+    open("<div class=\"media_wrap clearfix\">");
+    open("<div class=\"media_giveaway\">");
+    line("<div class=\"section_title bold\">" + (quantity > 1 ? "Giveaway Prizes" : "Giveaway Prize") + "</div>");
+    final String extra = parameters != null ? nonNull(parameters.prizeDescription) : "";
+    // Only with an additional prize, as Telegram shows it: Desktop's export writes these two lines always (a bare { }
+    // block), which gives a lone "<b>N</b>" and "with" for most giveaways (a deliberate difference)
+    if (!extra.isEmpty()) {
+      line("<div class=\"section_body\"><b>" + quantity + "</b> " + escape(extra) + "</div>");
+      line("<div class=\"section_title bold\">with</div>");
+    }
+    if (stars > 0) {
+      line("<div class=\"section_body\"><b>" + stars + (stars == 1 ? " Star" : " Stars") + "</b> will be distributed " +
+        (quantity == 1 ? "to <b>1</b> winner." : "among <b>" + quantity + "</b> winners.") + "</div>");
+    } else {
+      line("<div class=\"section_body\"><b>" + quantity + "</b> " + (quantity > 1 ? "Telegram Premium Subscriptions" : "Telegram Premium Subscription") +
+        " for <b>" + months + "</b> " + (months > 1 ? "months." : "month.") + "</div>");
+    }
+    // Participants: the chats' real names (Desktop builds this list and then drops it by mistake)
+    final List<String> channels = new ArrayList<>();
+    boolean anyChannel = false, anyGroup = false;
+    if (parameters != null) {
+      final List<Long> ids = new ArrayList<>();
+      if (parameters.boostedChatId != 0) {
+        ids.add(parameters.boostedChatId);
+      }
+      if (parameters.additionalChatIds != null) {
+        for (long id : parameters.additionalChatIds) {
+          ids.add(id);
+        }
+      }
+      for (long id : ids) {
+        final ExportPeers.Peer chat = peers.chat(id);
+        if (chat.isBroadcast) {
+          anyChannel = true;
+        } else {
+          anyGroup = true;
+        }
+        channels.add("<b>" + peerHtml(chat) + "</b>");
+      }
+    }
+    final boolean all = parameters == null || !parameters.onlyNewMembers;
+    final boolean many = channels.size() > 1;
+    final String who;
+    if (anyGroup && anyChannel) {
+      who = many ? "groups and channels" : "group";
+    } else if (anyGroup) {
+      who = many ? "groups" : "group";
+    } else {
+      who = many ? "channels" : "channel";
+    }
+    final String participants = all ?
+      (anyChannel && !anyGroup ? "All subscribers of the " + who + ":" : "All members of the " + who + ":") :
+      "All users who joined the " + who + " below after this date:";
+    line("<div class=\"section_title bold\">Participants</div>");
+    line("<div class=\"section_body\">" + escape(participants) + " " + joinList(channels) + "</div>");
+    if (parameters != null && parameters.countryCodes != null && parameters.countryCodes.length > 0) {
+      String united = "";
+      for (int i = 0; i < parameters.countryCodes.length; i++) {
+        final String country = country(parameters.countryCodes[i]);
+        united = i == 0 ? country : united + (i + 1 == parameters.countryCodes.length ? " and " : ", ") + country;
+      }
+      line("<div class=\"section_body\">" + escape("from " + united) + "</div>");
+    }
+    line("<div class=\"section_title bold\">Winners Selection Date</div>");
+    line("<div class=\"section_body\">" + (parameters != null ? escape(dateTime(parameters.winnersSelectionDate, false)) : "") + "</div>");
+    close("div");
+    close("div");
+  }
+
+  /** Desktop's pushGiveaway for the results. */
+  private void writeGiveawayWinners (TdApi.MessageGiveawayWinners winners, int page) throws IOException {
+    final int count = winners.winnerCount;
+    final long stars = winners.prize instanceof TdApi.GiveawayPrizeStars ? ((TdApi.GiveawayPrizeStars) winners.prize).starCount : 0;
+    open("<div class=\"media_wrap clearfix\">");
+    open("<div class=\"media_giveaway\">");
+    line("<div class=\"section_title bold\">" + (count > 1 ? "Winners Selected!" : "Winner Selected!") + "</div>");
+    // The giveaway message is in the boosted chat: linked when that is this chat
+    final String giveaway = winners.giveawayMessageId != 0 && winners.boostedChatId == chatId && MessageId.toServerMessageId(winners.giveawayMessageId) != 0 ?
+      messageLink(winners.giveawayMessageId, MessageId.toServerMessageId(winners.giveawayMessageId), page, "Giveaway") : "Giveaway";
+    line("<div class=\"section_body\"><b>" + count + "</b> " + (count > 1 ? "winners" : "winner") + " of the " + giveaway + " was randomly selected by Telegram.</div>");
+    line("<div class=\"section_title bold\">" + (count > 1 ? "Winners" : "Winner") + "</div>");
+    final List<String> names = new ArrayList<>();
+    final int listed = winners.winnerUserIds != null ? winners.winnerUserIds.length : 0;
+    for (int i = 0; i < listed; i++) {
+      names.add("<b>" + peerHtml(peers.user(winners.winnerUserIds[i])) + "</b>");
+    }
+    line("<div class=\"section_body\">" + joinList(names) + (count > listed ? " and " + (count - listed) + " more!" : "") + "</div>");
+    final String prize;
+    if (stars > 0 && count == 1) {
+      prize = "The winner received <b>" + stars + "</b>" + (stars == 1 ? " Star." : " Stars.");
+    } else if (stars > 0 && count > 1) {
+      prize = "All winners received <b>" + stars + "</b>" + (stars == 1 ? " Star in total." : " Stars in total.");
+    } else if (winners.unclaimedPrizeCount != 0) {
+      prize = "Some winners couldn&apos;t be selected.";
+    } else if (count == 1) {
+      prize = "The winner received their gift link in a private message.";
+    } else if (count > 1) {
+      prize = "All winners received gift links in private messages.";
+    } else {
+      prize = "";
+    }
+    line("<div class=\"section_body\">" + prize + "</div>");
+    close("div");
+    close("div");
+  }
+
+  /** Desktop's PeersMap::wrapPeerName: the escaped name, "Deleted" for none. */
+  private static String peerHtml (ExportPeers.Peer peer) {
+    final String name = peer.name();
+    return name.isEmpty() ? "Deleted" : escape(name);
+  }
+
+  private static String joinList (List<String> values) {
+    final StringBuilder b = new StringBuilder();
+    for (int i = 0; i < values.size(); i++) {
+      if (i > 0) {
+        b.append(", ");
+      }
+      b.append(values.get(i));
+    }
+    return b.toString();
+  }
+
+  /** Desktop's country line: the flag, a no-break space and the English name ("🇩🇪 Germany"). */
+  private static String country (@Nullable String code) {
+    if (code == null || code.length() != 2) {
+      return code != null ? code : "";
+    }
+    final String upper = code.toUpperCase(Locale.ROOT);
+    final StringBuilder flag = new StringBuilder();
+    for (int i = 0; i < 2; i++) {
+      final char c = upper.charAt(i);
+      if (c < 'A' || c > 'Z') {
+        return upper;
+      }
+      flag.appendCodePoint(0x1F1E6 + (c - 'A'));
+    }
+    final String name = new Locale("", upper).getDisplayCountry(Locale.ENGLISH);
+    return flag + "\u00A0" + (name.isEmpty() ? upper : name);
+  }
+
+  // Inline keyboards and reactions
+
+  /**
+   * Desktop's bot_buttons_table: URL buttons link to their (safe) target; the others show what they hold through
+   * script.js's ShowTextCopied.
+   */
+  private void writeButtons (@Nullable TdApi.ReplyMarkup markup) throws IOException {
+    if (!(markup instanceof TdApi.ReplyMarkupInlineKeyboard)) {
+      return;
+    }
+    final TdApi.InlineKeyboardButton[][] rows = ((TdApi.ReplyMarkupInlineKeyboard) markup).rows;
+    boolean any = false;
+    if (rows != null) {
+      for (TdApi.InlineKeyboardButton[] row : rows) {
+        any |= row != null && row.length > 0;
+      }
+    }
+    if (!any) {
+      return;
+    }
+    open("<table class=\"bot_buttons_table\">");
+    open("<tbody>");
+    for (TdApi.InlineKeyboardButton[] row : rows) {
+      if (row == null || row.length == 0) {
+        continue;
+      }
+      open("<tr>");
+      open("<td class=\"bot_button_row\">");
+      for (int i = 0; i < row.length; i++) {
+        final ExportJsonWriter.Button button = ExportJsonWriter.Button.of(row[i]);
+        final String content = (!button.rawData.isEmpty() ? "Data: " + button.rawData + " | " : "") +
+          (!button.forwardText.isEmpty() ? "Forward text: " + button.forwardText + " | " : "") +
+          "Type: " + button.type;
+        final String href = button.type.equals("url") ? ExportText.safeHref(button.data) : null;
+        final String onclick = !button.type.equals("url") ?
+          "return ShowTextCopied('" + content.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "\\r") + "');" : null;
+        open("<div class=\"bot_button\">");
+        open("<a" + (href != null ? " href=\"" + escape(href) + "\"" : "") + (onclick != null ? " onclick=\"" + escape(onclick) + "\"" : "") + ">");
+        line("<div>" + escape(row[i].text) + "</div>");
+        close("a");
+        close("div");
+        if (i + 1 < row.length) {
+          line("<div class=\"bot_button_column_separator\"></div>");
+        }
+      }
+      close("td");
+      close("tr");
+    }
+    close("tbody");
+    close("table");
+  }
+
+  /**
+   * Desktop's reactions: the emoji (a custom emoji is Desktop's not-downloaded 👋, a paid reaction ⭐), the recent
+   * reactors' 20px userpics with their names as tooltips, and the count when not everyone is shown. "active" marks the
+   * account's own reaction.
+   */
+  private void writeReactions (TdApi.Message message) throws IOException {
+    final TdApi.MessageReaction[] reactions = ExportJsonWriter.reactionsOf(message);
+    if (reactions.length == 0) {
+      return;
+    }
+    open("<span class=\"reactions\">");
+    for (TdApi.MessageReaction reaction : reactions) {
+      final boolean paid = reaction.type instanceof TdApi.ReactionTypePaid;
+      open("<span class=\"reaction" + (reaction.isChosen ? " active" : "") + (paid ? " paid" : "") + "\">");
+      final String emoji;
+      if (reaction.type instanceof TdApi.ReactionTypeEmoji) {
+        emoji = escape(((TdApi.ReactionTypeEmoji) reaction.type).emoji);
+      } else if (reaction.type instanceof TdApi.ReactionTypeCustomEmoji) {
+        emoji = ExportText.NOT_LOADED_EMOJI + "\uD83D\uDC4B</a>";
+      } else {
+        emoji = "\u2B50";
+      }
+      line("<span class=\"emoji\">" + emoji + "</span>");
+      final int recent = reaction.recentSenderIds != null ? reaction.recentSenderIds.length : 0;
+      if (recent > 0) {
+        open("<span class=\"userpics\">");
+        for (TdApi.MessageSender sender : reaction.recentSenderIds) {
+          final ExportPeers.Peer peer = peers.sender(sender);
+          userpic(peer.colorClass(), peer.initials(), REACTION_USERPIC_SIZE, peer.displayName());
+        }
+        close("span");
+      }
+      if (recent == 0 || reaction.totalCount > recent) {
+        line("<span class=\"count\">" + reaction.totalCount + "</span>");
+      }
+      close("span");
+    }
+    close("span");
   }
 
   /**

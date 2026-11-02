@@ -21,6 +21,7 @@ import androidx.annotation.WorkerThread;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.U;
+import org.thunderdog.challegram.data.TD;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -47,7 +48,7 @@ final class ExportMedia {
   static final int KIND_VIDEO_NOTE = 6;
   static final int KIND_AUDIO = 7;
   static final int KIND_DOCUMENT = 8;
-  /** The photo of a "changed group photo" service message. */
+  /** The photo of a "changed group photo" or "suggests to use this photo" service message. */
   static final int KIND_CHAT_PHOTO = 9;
 
   // Desktop's Data::File::SkipReason
@@ -203,6 +204,158 @@ final class ExportMedia {
   }
 
   /**
+   * Whether {@code content} has a block of its own in the pages and keys in result.json (Desktop's polls, contacts,
+   * locations, venues, games, invoices, paid media, giveaways, to-do lists; XGram's dice and stories; expired
+   * self-destructing media), so it needs no text line when it has no text.
+   */
+  static boolean hasBlock (TdApi.MessageContent content) {
+    switch (content.getConstructor()) {
+      case TdApi.MessagePoll.CONSTRUCTOR:
+      case TdApi.MessageChecklist.CONSTRUCTOR:
+      case TdApi.MessageContact.CONSTRUCTOR:
+      case TdApi.MessageLocation.CONSTRUCTOR:
+      case TdApi.MessageLiveLocation.CONSTRUCTOR:
+      case TdApi.MessageVenue.CONSTRUCTOR:
+      case TdApi.MessageGame.CONSTRUCTOR:
+      case TdApi.MessageInvoice.CONSTRUCTOR:
+      case TdApi.MessagePaidMedia.CONSTRUCTOR:
+      case TdApi.MessageGiveaway.CONSTRUCTOR:
+      case TdApi.MessageGiveawayWinners.CONSTRUCTOR:
+      case TdApi.MessageDice.CONSTRUCTOR:
+      case TdApi.MessageStakeDice.CONSTRUCTOR:
+      case TdApi.MessageStory.CONSTRUCTOR:
+      case TdApi.MessageExpiredPhoto.CONSTRUCTOR:
+      case TdApi.MessageExpiredVideo.CONSTRUCTOR:
+      case TdApi.MessageExpiredVideoNote.CONSTRUCTOR:
+      case TdApi.MessageExpiredVoiceNote.CONSTRUCTOR:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * The text Desktop exports for {@code content}: the text or caption, also of paid media, a game (its text, usually
+   * the scores) and a poll (its description); an animated emoji is its emoji; a rich message its blocks' plain text.
+   * Empty when there is none.
+   */
+  @NonNull
+  static TdApi.FormattedText textOf (TdApi.MessageContent content) {
+    switch (content.getConstructor()) {
+      case TdApi.MessagePaidMedia.CONSTRUCTOR:
+        return ExportText.orEmpty(((TdApi.MessagePaidMedia) content).caption);
+      case TdApi.MessageGame.CONSTRUCTOR: {
+        final TdApi.Game game = ((TdApi.MessageGame) content).game;
+        return ExportText.orEmpty(game != null ? game.text : null);
+      }
+      case TdApi.MessagePoll.CONSTRUCTOR:
+        return ExportText.orEmpty(((TdApi.MessagePoll) content).description);
+      case TdApi.MessageRichMessage.CONSTRUCTOR: {
+        // Desktop renders the blocks (RenderRichMessage, "rich_message"); XGram writes their text, one block a line
+        final TdApi.RichMessage rich = ((TdApi.MessageRichMessage) content).message;
+        final StringBuilder b = new StringBuilder();
+        if (rich != null) {
+          appendRichBlocks(b, rich.blocks);
+        }
+        return b.length() > 0 ? new TdApi.FormattedText(b.toString(), new TdApi.TextEntity[0]) : ExportText.EMPTY;
+      }
+      default:
+        return ExportText.orEmpty(Td.textOrCaption(content));
+    }
+  }
+
+  /** The text of {@code blocks} for {@link #textOf}, a line for each block with text; quotes, lists and details opened. */
+  private static void appendRichBlocks (StringBuilder b, @Nullable TdApi.PageBlock[] blocks) {
+    if (blocks == null) {
+      return;
+    }
+    for (TdApi.PageBlock block : blocks) {
+      if (block == null) {
+        continue;
+      }
+      switch (block.getConstructor()) {
+        case TdApi.PageBlockBlockQuote.CONSTRUCTOR: {
+          final TdApi.PageBlockBlockQuote quote = (TdApi.PageBlockBlockQuote) block;
+          appendRichBlocks(b, quote.blocks);
+          appendRichLine(b, quote.credit);
+          break;
+        }
+        case TdApi.PageBlockList.CONSTRUCTOR: {
+          final TdApi.PageBlockListItem[] items = ((TdApi.PageBlockList) block).items;
+          if (items != null) {
+            for (TdApi.PageBlockListItem item : items) {
+              if (item != null) {
+                appendRichBlocks(b, item.blocks);
+              }
+            }
+          }
+          break;
+        }
+        case TdApi.PageBlockDetails.CONSTRUCTOR: {
+          final TdApi.PageBlockDetails details = (TdApi.PageBlockDetails) block;
+          appendRichLine(b, details.header);
+          appendRichBlocks(b, details.blocks);
+          break;
+        }
+        case TdApi.PageBlockExpandableBlockQuote.CONSTRUCTOR: {
+          final TdApi.PageBlockExpandableBlockQuote quote = (TdApi.PageBlockExpandableBlockQuote) block;
+          appendRichLine(b, quote.text);
+          appendRichLine(b, quote.credit);
+          break;
+        }
+        case TdApi.PageBlockPullQuote.CONSTRUCTOR: {
+          final TdApi.PageBlockPullQuote quote = (TdApi.PageBlockPullQuote) block;
+          appendRichLine(b, quote.text);
+          appendRichLine(b, quote.credit);
+          break;
+        }
+        case TdApi.PageBlockTitle.CONSTRUCTOR:
+          appendRichLine(b, ((TdApi.PageBlockTitle) block).title);
+          break;
+        case TdApi.PageBlockSubtitle.CONSTRUCTOR:
+          appendRichLine(b, ((TdApi.PageBlockSubtitle) block).subtitle);
+          break;
+        case TdApi.PageBlockHeader.CONSTRUCTOR:
+          appendRichLine(b, ((TdApi.PageBlockHeader) block).header);
+          break;
+        case TdApi.PageBlockSubheader.CONSTRUCTOR:
+          appendRichLine(b, ((TdApi.PageBlockSubheader) block).subheader);
+          break;
+        case TdApi.PageBlockSectionHeading.CONSTRUCTOR:
+          appendRichLine(b, ((TdApi.PageBlockSectionHeading) block).text);
+          break;
+        case TdApi.PageBlockKicker.CONSTRUCTOR:
+          appendRichLine(b, ((TdApi.PageBlockKicker) block).kicker);
+          break;
+        case TdApi.PageBlockParagraph.CONSTRUCTOR:
+          appendRichLine(b, ((TdApi.PageBlockParagraph) block).text);
+          break;
+        case TdApi.PageBlockPreformatted.CONSTRUCTOR:
+          appendRichLine(b, ((TdApi.PageBlockPreformatted) block).text);
+          break;
+        case TdApi.PageBlockThinking.CONSTRUCTOR:
+          appendRichLine(b, ((TdApi.PageBlockThinking) block).text);
+          break;
+        case TdApi.PageBlockFooter.CONSTRUCTOR:
+          appendRichLine(b, ((TdApi.PageBlockFooter) block).footer);
+          break;
+        default:
+          break;
+      }
+    }
+  }
+
+  private static void appendRichLine (StringBuilder b, @Nullable TdApi.RichText text) {
+    final String line = text != null ? TD.getText(text) : "";
+    if (!line.isEmpty()) {
+      if (b.length() > 0) {
+        b.append('\n');
+      }
+      b.append(line);
+    }
+  }
+
+  /**
    * The file of {@code message} and whether it goes into the .zip, or null when it has none. Desktop's order:
    * self-destructing media, then a type that is not checked, then the size limit (every type, photos too,
    * export_api_wrap.cpp), then content that can't be saved. A file of unknown size is planned in; the download stops it
@@ -288,8 +441,11 @@ final class ExportMedia {
         return make(message, options, KIND_DOCUMENT, ExportOptions.TYPE_FILES, document.document, 0, 0, 0,
           document.fileName, document.mimeType, null, null, null, jpeg(document.thumbnail), false, false, false, 0);
       }
-      case TdApi.MessageChatChangePhoto.CONSTRUCTOR: {
-        final TdApi.ChatPhoto photo = ((TdApi.MessageChatChangePhoto) content).photo;
+      case TdApi.MessageChatChangePhoto.CONSTRUCTOR:
+      case TdApi.MessageSuggestProfilePhoto.CONSTRUCTOR: {
+        // Desktop writes both photos the same way: "photo" keys after the action, a 60px picture after the line
+        final TdApi.ChatPhoto photo = content.getConstructor() == TdApi.MessageChatChangePhoto.CONSTRUCTOR ?
+          ((TdApi.MessageChatChangePhoto) content).photo : ((TdApi.MessageSuggestProfilePhoto) content).photo;
         final TdApi.PhotoSize biggest = photo != null && photo.sizes != null ? Td.findBiggest(photo.sizes) : null;
         if (biggest == null || biggest.photo == null) {
           return null;

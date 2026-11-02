@@ -19,6 +19,7 @@ import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.telegram.TdlibException;
 
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -32,6 +33,8 @@ import tgx.td.ChatId;
  */
 final class ExportPeers {
   static final String DELETED_ACCOUNT = "Deleted Account";
+  /** Telegram's "Verification Codes" account (Desktop's isVerifyCodes). */
+  private static final long VERIFICATION_CODES_USER_ID = 489000;
   private static final int CACHE_SIZE = 512;
   /** Desktop's PeerColorIndex map: userpic{1 + MAP[bareId % 7]}. */
   private static final int[] COLOR_MAP = {0, 7, 4, 1, 6, 3, 5};
@@ -50,8 +53,14 @@ final class ExportPeers {
     @NonNull
     final String username;
     final boolean isUser, isBot;
+    /** A channel (not a group): Desktop's giveaway block says "subscribers" for these. */
+    final boolean isBroadcast;
 
     Peer (long key, @NonNull String peerId, long bareId, @Nullable String firstName, @Nullable String lastName, @Nullable String username, boolean isUser, boolean isBot) {
+      this(key, peerId, bareId, firstName, lastName, username, isUser, isBot, false);
+    }
+
+    Peer (long key, @NonNull String peerId, long bareId, @Nullable String firstName, @Nullable String lastName, @Nullable String username, boolean isUser, boolean isBot, boolean isBroadcast) {
       this.key = key;
       this.peerId = peerId;
       this.bareId = bareId;
@@ -60,6 +69,7 @@ final class ExportPeers {
       this.username = username != null ? username : "";
       this.isUser = isUser;
       this.isBot = isBot;
+      this.isBroadcast = isBroadcast;
     }
 
     /** The full name, or "" for a deleted account (JSON writes null then). */
@@ -95,11 +105,11 @@ final class ExportPeers {
 
   /** The exported chat itself: Desktop's dialog type, bare id and name. */
   static final class Dialog {
-    /** saved_messages, replies, personal_chat, bot_chat, private_group, private/public_supergroup, private/public_channel. */
+    /** saved_messages, replies, verification_codes, personal_chat, bot_chat, private_group, private/public_supergroup, private/public_channel. */
     @NonNull
     final String type;
     final long bareId;
-    /** Desktop leaves "name" out for Saved Messages and Replies. */
+    /** Desktop leaves "name" out for Saved Messages, Replies and Verification Codes. */
     final boolean omitName;
     /** JSON "name": the first name of a user (as Desktop writes it) or the title; null for a deleted account. */
     @Nullable
@@ -125,6 +135,7 @@ final class ExportPeers {
 
   private final ExportTd td;
   private final Map<Long, Peer> users = lru(), chats = lru();
+  private final Map<Integer, String> topicNames = new HashMap<>();
 
   ExportPeers (ExportTd td) {
     this.td = td;
@@ -185,14 +196,41 @@ final class ExportPeers {
       return peer;
     }
     String title = null;
+    boolean broadcast = false;
     try {
-      title = td.call(new TdApi.GetChat(chatId)).title;
+      final TdApi.Chat chat = td.call(new TdApi.GetChat(chatId));
+      title = chat.title;
+      broadcast = chat.type instanceof TdApi.ChatTypeSupergroup && ((TdApi.ChatTypeSupergroup) chat.type).isChannel;
     } catch (TdlibException e) {
       // An unknown chat has no name
     }
-    peer = new Peer(chatId, peerIdOf(chatId), bareIdOf(chatId), title, null, null, false, false);
+    peer = new Peer(chatId, peerIdOf(chatId), bareIdOf(chatId), title, null, null, false, false, broadcast);
     chats.put(chatId, peer);
     return peer;
+  }
+
+  /**
+   * The name of a forum topic of {@code chatId} as Telegram has it, "" when it can't be read (a deleted topic). Kept
+   * for the whole export: there are only so many topics.
+   */
+  @NonNull
+  @WorkerThread
+  String topicName (long chatId, int forumTopicId) {
+    final String cached = topicNames.get(forumTopicId);
+    if (cached != null) {
+      return cached;
+    }
+    String name = "";
+    try {
+      final TdApi.ForumTopic topic = td.call(new TdApi.GetForumTopic(chatId, forumTopicId));
+      if (topic.info != null && topic.info.name != null) {
+        name = topic.info.name;
+      }
+    } catch (TdlibException e) {
+      // A deleted topic: no name
+    }
+    topicNames.put(forumTopicId, name);
+    return name;
   }
 
   /** The original sender of a forward, or null for a hidden user. */
@@ -267,6 +305,10 @@ final class ExportPeers {
         final Peer user = user(userId);
         if (tdlib.isRepliesChat(chatId)) {
           return new Dialog("replies", userId, true, null, "Replies", "Replies", false);
+        }
+        if (userId == VERIFICATION_CODES_USER_ID) {
+          // Desktop's VerifyCodes dialog: no "name" either
+          return new Dialog("verification_codes", userId, true, null, user.displayName(), user.displayName(), false);
         }
         final String jsonName = user.firstName.isEmpty() ? null : user.firstName;
         return new Dialog(user.isBot ? "bot_chat" : "personal_chat", userId, false, jsonName, user.displayName(), user.displayName(), false);
