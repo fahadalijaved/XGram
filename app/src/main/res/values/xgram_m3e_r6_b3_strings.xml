@@ -9,16 +9,6 @@
   <string name="XgramR6B3DownloadAgain">Download again</string>
   <string name="XgramR6B3FolderHidden">Hidden</string>
   <string name="XgramR6B3NewFolder">New folder</string>
-  <string name="XgramR6B3Export">Export</string>
-  <string name="XgramR6B3ExportHtml">Web page (HTML)</string>
-  <string name="XgramR6B3ExportHtmlInfo">Styled, opens in any browser</string>
-  <string name="XgramR6B3ExportTextInfo">Smallest file, opens anywhere</string>
-  <string name="XgramR6B3ExportPreparing">Exporting chat…</string>
-  <string name="XgramR6B3ExportProgress">Exporting · %1$s…</string>
-  <string name="XgramR6B3ExportFileName">File name</string>
-  <string name="XgramR6B3ExportMessages">Messages</string>
-  <string name="XgramR6B3ExportLocation">Saved in</string>
-  <string name="XgramR6B3ExportAppStorage">App storage</string>
   <string name="XgramR6B3BotButtonText">Button text</string>
   <string name="XgramR6B3BotCopyText">Text to copy</string>
   <string name="XgramR6B3BotCallback">Callback data</string>

@@ -635,6 +635,16 @@ public class TdlibFilesManager implements GlobalConnectionListener {
     }
   }
 
+  /** XGram: files a screen asked to download (a tap, automatic download): chat export keeps them in the cache. */
+  private final android.util.SparseBooleanArray xgramRequested = new android.util.SparseBooleanArray();
+
+  /** XGram: whether {@link #downloadFile(TdApi.File, int, Tdlib.ResultHandler)} was asked for the file in this session. */
+  public boolean xgramWasDownloadRequested (int fileId) {
+    synchronized (this) {
+      return xgramRequested.get(fileId);
+    }
+  }
+
   /** XGram: whether a screen still holds a shared download of the file (chat export keeps such files in the cache). */
   public boolean xgramHasCloudReference (int fileId) {
     synchronized (activeDownloadReferences) {
@@ -806,6 +816,7 @@ public class TdlibFilesManager implements GlobalConnectionListener {
       long offset = 0;
       long limit = LIMIT_MAX;
       manuallyCancelledFiles.remove(file.id);
+      xgramRequested.put(file.id, true); // XGram: chat export doesn't delete it from the cache after copying it
       if (!TD.isFileLoaded(file)) {
         downloadFileInternal(file.id, priority, offset, limit, handler);
       } else if (handler != null) {
@@ -829,6 +840,7 @@ public class TdlibFilesManager implements GlobalConnectionListener {
       if (pendingOperation != OPERATION_NONE) {
         if (byUserRequest) {
           manuallyCancelledFiles.add(fileId);
+          xgramRequested.delete(fileId); // XGram: no longer wanted, chat export may delete it again
         }
         cancelDownloadOrUploadFileInternal(fileId, pendingOperation, weak);
         tdlib.context().player().stopPlaybackIfPlaying(fileId);

@@ -501,7 +501,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         if (id == R.id.menu_btn_manage) {
           com.fahadali.xgram.topics.XgramForums.openTopicEditor(this, chat, xgramTopic);
         } else {
-          com.fahadali.xgram.topics.XgramForums.showTopicOptions(this, chat, xgramTopic);
+          com.fahadali.xgram.topics.XgramForums.showTopicOptions(this, chat, xgramTopic, true); // XGram: with Export chat for this topic
         }
       }
       return;
@@ -710,6 +710,11 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       strings.append(R.string.OpenCloudChat);
     }
 
+    if (mode == Mode.USER && com.fahadali.xgram.export.XgramExport.canOffer(tdlib, chat)) {
+      ids.append(R.id.btn_xgramExportChat); // XGram: chat export, like Telegram Desktop (not for secret chats)
+      strings.append(R.string.XgramExportChat);
+    }
+
     if (user != null && com.fahadali.xgram.chats.XgramHomeShortcut.isSupported(context)) {
       ids.append(R.id.btn_xgramAddToHomeScreen); // XGram: a launcher shortcut to this chat (Telegram's)
       strings.append(R.string.XgramHomeScreen);
@@ -759,6 +764,11 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       strings.append(com.fahadali.xgram.chats.XgramAutoTranslate.isEnabled(tdlib, getChatId()) ? R.string.XgramStopTranslating : R.string.XgramTranslateChat);
     }
 
+    if (com.fahadali.xgram.export.XgramExport.canOffer(tdlib, chat)) {
+      ids.append(R.id.btn_xgramExportChat); // XGram: chat export, like Telegram Desktop
+      strings.append(R.string.XgramExportChat);
+    }
+
     if (com.fahadali.xgram.chats.XgramHomeShortcut.isSupported(context)) {
       ids.append(R.id.btn_xgramAddToHomeScreen); // XGram: a launcher shortcut to this group or channel (Telegram's)
       strings.append(R.string.XgramHomeScreen);
@@ -780,10 +790,10 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   @Override
   public void onMoreItemPressed (int id) {
     if (id == R.id.btn_xgramExportChat) {
-      // XGram: chat export; your own profile stands for Saved Messages
+      // XGram: chat export; your own profile stands for Saved Messages, a topic's profile offers that topic alone
       final long exportChatId = user != null && user.id == tdlib.myUserId() ? tdlib.selfChatId() : getChatId();
       if (exportChatId != 0) {
-        com.fahadali.xgram.export.XgramExport.prompt(this, exportChatId, null);
+        com.fahadali.xgram.export.XgramExport.prompt(this, exportChatId, xgramTopicId != 0 ? new TdApi.MessageTopicForum(xgramTopicId) : null);
       }
       return;
     }

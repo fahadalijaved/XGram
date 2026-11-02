@@ -334,23 +334,13 @@
 
   <string name="XgramViewAsTopics">View as topics</string>
 
-  <!-- XGram: chat export -->
+  <!-- XGram: chat export (the rest is in xgram_export_strings.xml; XgramExportNoApp is also QR login's) -->
   <string name="XgramExportChat">Export chat</string>
-  <string name="XgramExportChatInfo">Save the whole conversation as a file you can keep, read in a browser or share.</string>
-  <string name="XgramExportHtml">Styled page (HTML)</string>
-  <string name="XgramExportText">Plain text</string>
   <string name="XgramExportStarted">Exporting… this can take a moment for long chats</string>
-  <string name="XgramExportFailed">Couldn’t export this chat</string>
+  <string name="XgramExportFailed">Couldn\'t export this chat</string>
   <string name="XgramExportDone">Chat exported</string>
-  <string name="XgramExportDoneInfo">Exported %1$d messages to %2$s</string>
   <string name="XgramExportSavedDownloads">Saved in Download/XGram</string>
-  <string name="XgramExportOpen">Open</string>
   <string name="XgramExportNoApp">No app can open this file</string>
-  <string name="XgramExportHeader">%1$d messages · exported %2$s</string>
-  <string name="XgramExportFooter">Exported with XGram</string>
-  <string name="XgramExportForwarded">forwarded</string>
-  <string name="XgramExportReply">reply</string>
-  <string name="XgramExportEdited">edited</string>
 
   <!-- XGram: hub and what's new -->
   <string name="XgramHub">XGram</string>

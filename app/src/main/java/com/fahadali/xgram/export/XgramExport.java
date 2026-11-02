@@ -11,11 +11,14 @@
  */
 package com.fahadali.xgram.export;
 
+import android.Manifest;
 import android.content.ClipData;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.widget.Toast;
@@ -24,6 +27,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.UiThread;
 import androidx.core.app.NotificationManagerCompat;
+import androidx.core.content.ContextCompat;
 import androidx.core.view.ViewCompat;
 
 import com.fahadali.xgram.appearance.XgramExpressive;
@@ -31,6 +35,7 @@ import com.fahadali.xgram.appearance.XgramR5SheetsInfo;
 import com.fahadali.xgram.appearance.XgramR6B3Shell;
 
 import org.drinkless.tdlib.TdApi;
+import org.thunderdog.challegram.Log;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.core.Background;
 import org.thunderdog.challegram.core.Lang;
@@ -41,6 +46,12 @@ import org.thunderdog.challegram.ui.MessagesController;
 import org.thunderdog.challegram.unsorted.AppContext;
 import org.thunderdog.challegram.util.Permissions;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
@@ -127,6 +138,10 @@ public final class XgramExport {
       job.onForegroundChanged(ExportJob.FOREGROUND_REFUSED); // the tick tells the user to keep XGram open
     } else if (!XgramExpressive.isEnabled()) {
       UI.showToast(R.string.XgramExportStarted, Toast.LENGTH_SHORT); // no bar without Expressive design
+    } else if (chatOnScreen(job) == null) {
+      // Started from a profile, a topic's options or Saved Messages' topics: no bar here. Posted, so it shows once the
+      // options sheet has closed (a snackbar shown now would go with the sheet)
+      UI.post(() -> XgramR6B3Shell.snackbar(Lang.getString(R.string.XgramExportStarted), false));
     }
     track(job);
   }
@@ -159,7 +174,87 @@ public final class XgramExport {
       if (ExportJob.current() == null) {
         cleanupStale();
       }
+      deleteOldExports();
     }
+  }
+
+  /**
+   * The export this one replaced kept a copy of every exported chat in filesDir/xgram_exports and never deleted it
+   * (critique #22). Nothing writes or shares from there any more, so the folder goes on the first launch after the
+   * update; later launches only find it gone. Below Android 10 that copy was the only one (the old export saved to
+   * Download on 10+ only), so its files move out first, where a new export's .zip goes: Download/XGram with the
+   * storage permission, else the app's own Download/XGram. If one can't be moved the folder stays, for the next launch.
+   */
+  private static void deleteOldExports () {
+    final Context context = AppContext.get();
+    Background.instance().post(() -> {
+      final File dir = new File(context.getFilesDir(), "xgram_exports");
+      if (!dir.exists()) {
+        return;
+      }
+      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q && !moveOldExports(context, dir)) {
+        return;
+      }
+      ExportJob.deleteRecursively(dir);
+    });
+  }
+
+  /** Copies each old export out of {@code dir} (another volume: no rename) and deletes it once its copy is whole. */
+  @SuppressWarnings("deprecation")
+  private static boolean moveOldExports (Context context, File dir) {
+    final File[] files = dir.listFiles();
+    if (files == null || files.length == 0) {
+      return true;
+    }
+    File target = null;
+    if (ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+      final File downloads = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), ExportOutput.FOLDER);
+      if (downloads.isDirectory() || downloads.mkdirs()) {
+        target = downloads;
+      }
+    }
+    if (target == null) {
+      final File base = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+      final File own = base != null ? new File(base, ExportOutput.FOLDER) : null;
+      if (own == null || (!own.isDirectory() && !own.mkdirs())) {
+        return false; // no external storage now: kept
+      }
+      target = own;
+    }
+    for (File file : files) {
+      if (!file.isFile()) {
+        continue; // the old export wrote only files
+      }
+      if (!copyFile(file, ExportOutput.uniqueFile(target, file.getName()))) {
+        return false; // kept, with the rest
+      }
+      //noinspection ResultOfMethodCallIgnored
+      file.delete();
+    }
+    return true;
+  }
+
+  private static boolean copyFile (File from, File to) {
+    try (InputStream in = new FileInputStream(from); OutputStream out = new FileOutputStream(to)) {
+      final byte[] buffer = new byte[64 * 1024];
+      int read;
+      while ((read = in.read(buffer)) != -1) {
+        out.write(buffer, 0, read);
+      }
+    } catch (IOException e) {
+      Log.w("XGram export: cannot move an old export", e);
+      //noinspection ResultOfMethodCallIgnored
+      to.delete();
+      return false;
+    }
+    if (to.length() != from.length()) {
+      //noinspection ResultOfMethodCallIgnored
+      to.delete();
+      return false;
+    }
+    //noinspection ResultOfMethodCallIgnored
+    to.setLastModified(from.lastModified());
+    return true;
   }
 
   // The status sheet
@@ -394,8 +489,8 @@ public final class XgramExport {
   };
 
   // A result no one saw: XGram was not in front when the export ended and its notification can't show (notifications
-  // are off, which the export allows). It shows as a snackbar when XGram comes back, so hours of work don't end in
-  // silence with the .zip sitting unnoticed in Download/XGram.
+  // are off, which the export allows), or the share sheet covered XGram when it ended. It shows as a snackbar when
+  // XGram comes back, so hours of work don't end in silence with the .zip sitting unnoticed in Download/XGram.
 
   @Nullable
   private static ExportJob unseenResult;
@@ -407,9 +502,13 @@ public final class XgramExport {
   };
 
   private static void keepIfUnseen (Context context, ExportJob job) {
-    if (ExportNotifications.canShowResult(context)) {
-      return;
+    if (!ExportNotifications.canShowResult(context)) {
+      showOnResume(job);
     }
+  }
+
+  /** {@code job}'s result as a snackbar the next time XGram comes to the front. */
+  private static void showOnResume (ExportJob job) {
     unseenResult = job;
     if (!resumeListenerAdded) {
       resumeListenerAdded = true;
@@ -441,15 +540,19 @@ public final class XgramExport {
       Lang.getString(R.string.XgramExportSavedIn, location);
   }
 
-  /** Where it was saved, and the share sheet (XGram is in front: an activity can't be started from the background). */
+  /**
+   * The share sheet (XGram is in front: an activity can't be started from the background), then where it was saved.
+   * Without a share sheet (no uri, or no app to take it) where it was saved shows at once.
+   */
   private static void onDone (ExportJob job) {
-    final String saved = savedText(job);
     final Uri uri = job.resultUri();
-    if (uri != null && !share(uri, job.realTitle())) {
-      XgramR6B3Shell.snackbar(Lang.getString(R.string.XgramExportNoApp), false);
+    if (uri != null && share(uri, job.realTitle())) {
+      // The share sheet covers XGram now and a snackbar's time runs out under it: where the .zip is (and what it
+      // lacks) shows once XGram is back, with Share again
+      showOnResume(job);
       return;
     }
-    XgramR6B3Shell.snackbar(withNote(Lang.getString(R.string.XgramExportDone) + " · " + saved, job), true);
+    XgramR6B3Shell.snackbar(withNote(Lang.getString(R.string.XgramExportDone) + " · " + savedText(job), job), true);
   }
 
   /** {@code text} and what the .zip lacks (media left out for space, Android 6's zip limits, failed downloads). */

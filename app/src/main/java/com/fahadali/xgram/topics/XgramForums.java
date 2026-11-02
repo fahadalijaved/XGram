@@ -893,6 +893,14 @@ public final class XgramForums {
 
   /** Long-press menu of a topic, shared by the topic list and the tabs. */
   public static void showTopicOptions (ViewController<?> context, TdApi.Chat chat, TdApi.ForumTopic topic) {
+    showTopicOptions(context, chat, topic, false);
+  }
+
+  /**
+   * {@code offerExport}: the topic's profile ⋮ also offers Export chat, with "Only this topic" (the list and the tabs
+   * don't: the topic's own chat ⋮ has it).
+   */
+  public static void showTopicOptions (ViewController<?> context, TdApi.Chat chat, TdApi.ForumTopic topic, boolean offerExport) {
     final Tdlib tdlib = context.tdlib();
     final int forumTopicId = topic.info.forumTopicId;
     final boolean canManageTopics = canManageTopics(tdlib, chat.id);
@@ -943,6 +951,12 @@ public final class XgramForums {
     titles.append(R.string.CopyLink);
     colors.append(ViewController.OptionColor.NORMAL);
     icons.append(R.drawable.baseline_link_24);
+    if (offerExport && com.fahadali.xgram.export.XgramExport.canOffer(tdlib, chat)) {
+      ids.append(R.id.btn_xgramExportChat);
+      titles.append(R.string.XgramExportChat);
+      colors.append(ViewController.OptionColor.NORMAL);
+      icons.append(R.drawable.baseline_file_download_24);
+    }
     if (canDelete) {
       ids.append(R.id.btn_xgramTopicDelete);
       titles.append(R.string.XgramDeleteTopic);
@@ -975,6 +989,8 @@ public final class XgramForums {
             UI.showError(error);
           }
         }));
+      } else if (id == R.id.btn_xgramExportChat) {
+        com.fahadali.xgram.export.XgramExport.prompt(context, chat.id, new TdApi.MessageTopicForum(forumTopicId));
       } else if (id == R.id.btn_xgramTopicDelete) {
         confirmDeleteTopic(context, chat, topic);
       }

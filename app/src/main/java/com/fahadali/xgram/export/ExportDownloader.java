@@ -536,9 +536,10 @@ final class ExportDownloader implements Closeable {
       files.removeCloudReference(download.latest(), download);
       tdlib.listeners().removeFileListener(download.id, download);
     }
-    // Not hasPendingOperation: the export's own download sets it, and the cancel above clears it only later.
+    // Not hasPendingOperation: the export's own download sets it, and the cancel above clears it only later. A tap on
+    // the file's download button (or automatic download) is downloadFile, not a cloud reference: that file stays too.
     // DeleteFile also stops a download that is still running and removes its part.
-    if (cleanUp && download.ours && !files.xgramHasCloudReference(download.id)) {
+    if (cleanUp && download.ours && !files.xgramHasCloudReference(download.id) && !files.xgramWasDownloadRequested(download.id)) {
       tdlib.client().send(new TdApi.DeleteFile(download.id), tdlib.silentHandler());
     }
   }

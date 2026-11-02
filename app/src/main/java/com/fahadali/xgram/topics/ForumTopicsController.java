@@ -887,6 +887,10 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
       ids.append(R.id.btn_xgramOpenCommunity);
       titles.append(R.string.XgramOpenCommunity);
     }
+    if (com.fahadali.xgram.export.XgramExport.canOffer(tdlib, chat)) {
+      ids.append(R.id.btn_xgramExportChat); // the whole forum, like Telegram Desktop's export (a topic's ⋮ offers it alone)
+      titles.append(R.string.XgramExportChat);
+    }
     ids.append(R.id.btn_xgramTopicsLayout); // XGram: Tabs or List for this user (as the group profile's Topics row)
     titles.append(R.string.XgramTopicsLayoutMenu);
     ids.append(R.id.btn_xgramViewAsMessages);
@@ -908,6 +912,8 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
         org.thunderdog.challegram.tool.UI.showToast(R.string.XgramReorderTopicsHint, android.widget.Toast.LENGTH_LONG);
       }
       xgramUpdateReorderChrome(true); // XGram M3E
+    } else if (id == R.id.btn_xgramExportChat) {
+      com.fahadali.xgram.export.XgramExport.prompt(this, chat.id, null);
     } else if (id == R.id.btn_xgramTopicsLayout) {
       XgramForums.promptTopicsView(this, chat, this::xgramReplaceWithTabs); // Tabs: the tabs take this list's place now
     } else if (id == R.id.btn_xgramViewAsMessages) {

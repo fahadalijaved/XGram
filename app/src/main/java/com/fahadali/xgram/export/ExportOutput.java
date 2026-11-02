@@ -158,6 +158,7 @@ final class ExportOutput {
     final ContentValues values = new ContentValues();
     values.put(MediaStore.MediaColumns.IS_PENDING, 0);
     resolver.update(uri, values, null, null);
+    clearPending(jobId); // published: a process killed from here on must not let cleanupStale delete it
     // MediaStore renames on a clash ("name (1).zip"): show the name it really has
     try (Cursor cursor = resolver.query(uri, new String[] {MediaStore.MediaColumns.DISPLAY_NAME}, null, null, null)) {
       if (cursor != null && cursor.moveToFirst()) {
@@ -237,8 +238,8 @@ final class ExportOutput {
     return PUBLIC_LABEL;
   }
 
-  /** {@code name}, or Desktop's "name (k).ext" when it is taken. */
-  private static File uniqueFile (File dir, String name) {
+  /** {@code name}, or Desktop's "name (k).ext" when it is taken; also for the old export's files ({@link XgramExport}). */
+  static File uniqueFile (File dir, String name) {
     File file = new File(dir, name);
     if (!file.exists()) {
       return file;

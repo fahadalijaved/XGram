@@ -180,7 +180,7 @@ final class ExportOptionsSheet {
     final long min = from ? telegramStart : (range.fromDayMs != 0 ? range.fromDayMs : telegramStart);
     final long max = from ? (range.tillDayMs != 0 ? range.tillDayMs : today) : today;
     final long current = from ? range.fromDayMs : range.tillDayMs;
-    final long initial = current != 0 ? current : (from ? min : max);
+    final long initial = current != 0 ? current : max; // an unset From opens at To (or today), as Desktop's calendar
     final int rowId = from ? R.id.btn_xgramExportFrom : R.id.btn_xgramExportTill;
     final String neutral = Lang.getString(from ? R.string.Beginning : R.string.Today);
     final Runnable onNeutral = () -> {

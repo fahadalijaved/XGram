@@ -196,10 +196,6 @@
   <item type="id" name="btn_xgramWhatsNewItem" />
   <item type="id" name="btn_xgramExportChat" />
   <item type="id" name="btn_xgramViewAsTopics" />
-  <item type="id" name="btn_xgramExportHtml" />
-  <item type="id" name="btn_xgramExportText" />
-  <item type="id" name="btn_xgramExportShare" />
-  <item type="id" name="btn_xgramExportOpen" />
   <item type="id" name="controller_xgramSavedTopics" />
   <item type="id" name="btn_xgramSavedTopic" />
   <item type="id" name="btn_xgramSavedByChat" />

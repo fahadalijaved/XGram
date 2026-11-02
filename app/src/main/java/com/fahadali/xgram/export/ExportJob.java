@@ -213,6 +213,8 @@ public final class ExportJob {
   private volatile long lastPublishMs, lastNotifyMs;
   /** Desktop's counter of contact_N.vcard files. Worker only. */
   private int contactCount;
+  /** The basic group the chat was upgraded from, when its history is in the index (negative ids). Worker only. */
+  private long migratedChatId;
 
   // Android's time limit: the service's state, the soft deadline's start, the stop it asked for
   private volatile int foregroundState = FOREGROUND_PENDING;
@@ -545,7 +547,7 @@ public final class ExportJob {
       setPhase(PHASE_INDEXING);
       index = new ExportIndex(new File(dir, "ids.bin"));
       stoppable = true;
-      ExportSource.index(td, options, index, this);
+      migratedChatId = ExportSource.index(td, options, index, this); // an upgraded group's old history first, as Desktop
       stoppable = false;
       index.finishWriting();
       total = index.count();
@@ -685,22 +687,39 @@ public final class ExportJob {
     }
   }
 
-  /** The messages of one page, oldest first; ones deleted since pass 1 are left out. */
+  /**
+   * The messages of one page, oldest first; ones deleted since pass 1 are left out. An upgraded group's old messages
+   * (negative ids, so first) come from the old group under their own ids and are then shifted back
+   * ({@link ExportSource#adoptMigrated}).
+   */
   private List<Item> fetch (ExportTd td, long[] ids) {
     final List<Item> items = new ArrayList<>(ids.length);
     for (int from = 0; from < ids.length; from += FETCH_BATCH) {
       final long[] batch = Arrays.copyOfRange(ids, from, Math.min(ids.length, from + FETCH_BATCH));
-      final TdApi.Messages messages = td.call(new TdApi.GetMessages(options.chatId, batch));
-      if (messages.messages != null) {
-        for (TdApi.Message message : messages.messages) {
-          if (message != null && message.content != null) {
-            items.add(item(message));
-          }
-        }
+      final int migrated = migratedChatId != 0 ? ExportSource.migratedCount(batch) : 0;
+      if (migrated > 0) {
+        addItems(items, td.call(new TdApi.GetMessages(migratedChatId, ExportSource.migratedIds(batch, migrated))), true);
+      }
+      if (migrated < batch.length) {
+        addItems(items, td.call(new TdApi.GetMessages(options.chatId, migrated == 0 ? batch : Arrays.copyOfRange(batch, migrated, batch.length))), false);
       }
       checkCanceled();
     }
     return items;
+  }
+
+  private void addItems (List<Item> items, TdApi.Messages messages, boolean migrated) {
+    if (messages.messages == null) {
+      return;
+    }
+    for (TdApi.Message message : messages.messages) {
+      if (message != null && message.content != null) {
+        if (migrated) {
+          ExportSource.adoptMigrated(message, options.chatId, migratedChatId);
+        }
+        items.add(item(message));
+      }
+    }
   }
 
   private Item item (TdApi.Message message) {
