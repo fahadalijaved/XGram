@@ -674,6 +674,9 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
 
     contentView.addView(passwordView);
 
+    if (waitsForBiometrics()) {
+      return;
+    }
     if (inGlobalUnlockMode()) {
       UI.showKeyboardDelayed(passwordView);
     } else if (!isNavigationAnimating()) {
@@ -1453,7 +1456,7 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
     if (xgramLock != null && xgramLock.getFilled() >= Passcode.PINCODE_SIZE) {
       xgramLock.setFilled(0, false); // back from the passcode settings: an empty PIN again
     }
-    if (mode == Passcode.MODE_PASSWORD) {
+    if (mode == Passcode.MODE_PASSWORD && !waitsForBiometrics()) {
       UI.showKeyboardDelayed(passwordView);
     }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -1498,6 +1501,9 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
     } else {
       UI.showToast(error, Toast.LENGTH_SHORT);
       tooltipInfo = null;
+    }
+    if (mode == Passcode.MODE_PASSWORD && isFocused()) {
+      UI.showKeyboardDelayed(passwordView);
     }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
       if (swirlView != null) {
@@ -1622,12 +1628,22 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
         boolean isStrong = needStrongBiometrics();
         String title = Passcode.getActionName(Passcode.MODE_BIOMETRICS, passcodeView.getState(), false, BitwiseUtils.optional(Passcode.BIOMETRICS_OPTION_ONLY_STRONG, isStrong));
         String cancel = Lang.getString(R.string.CancelBiometrics);
+        if (mode == Passcode.MODE_PASSWORD) {
+          // The prompt takes the input of the window, and the system shows a keyboard left under
+          // it again when the window gets it back
+          Keyboard.hide(passwordView);
+        }
         BiometricAuthentication.authenticate(context, title, cancel, isStrong, this);
       } else {
         BiometricAuthentication.cancelAuthentication();
       }
       isBiometricAuthenticationActive = needBiometricsAuthentication;
     }
+  }
+
+  private boolean waitsForBiometrics () {
+    return Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !inSetupMode() &&
+      mode != Passcode.MODE_BIOMETRICS && !biometricsScanCompleted && needUnlockWithBiometrics();
   }
 
   @Override
