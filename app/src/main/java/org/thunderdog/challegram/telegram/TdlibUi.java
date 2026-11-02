@@ -2453,7 +2453,12 @@ public class TdlibUi extends Handler {
       // one from a notification is not: the chat list goes under it, as over any other screen.
       navigation.setControllerAnimated(controller, true, true);
     } else {
-      navigation.navigateTo(controller);
+      // XGram: pushed over other screens: a forum topic (or tabs) then takes the place of its forum's topics under it
+      // once it has focus, so visiting topics never stacks them (XgramForums.replaceTopicScreensBelow).
+      controller.xgramReplaceTopicsBelowOnFocus(true);
+      if (!navigation.navigateTo(controller)) {
+        controller.xgramReplaceTopicsBelowOnFocus(false);
+      }
     }
     if (params != null) {
       params.onDone();

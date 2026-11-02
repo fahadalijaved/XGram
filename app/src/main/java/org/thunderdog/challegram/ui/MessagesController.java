@@ -4694,6 +4694,12 @@ public class MessagesController extends ViewController<MessagesController.Argume
         destroyStackItemAt(stackSize() - 2);
       }
     }
+    if (xgramReplaceTopicsBelow) {
+      // XGram: a topic pushed over topics of the same forum takes their place (after its editor above went): Back goes
+      // to the topic list it came from or to the chat list, not through every topic visited.
+      xgramReplaceTopicsBelow = false;
+      com.fahadali.xgram.topics.XgramForums.replaceTopicScreensBelow(this);
+    }
     resetOnFocus();
     if (openKeyboard) {
       openKeyboard = false;
@@ -13531,7 +13537,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (next == null) {
       return;
     }
-    xgramNextChatId = next.id;
+    // XGram: the next topic takes this topic's place on its focus (XgramForums.replaceTopicScreensBelow); only a next
+    // channel needs this screen removed once covered.
+    xgramNextChatId = target.topic != null ? 0 : next.id;
     if (target.topic != null) {
       com.fahadali.xgram.topics.XgramForums.openTopic(this, next, target.topic);
     } else {
@@ -13563,6 +13571,23 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   private boolean xgramInForumTopic () {
     return chat != null && messageThread == null && messageTopicId instanceof TdApi.MessageTopicForum;
+  }
+
+  /**
+   * XGram: a forum topic, or the forum's tabs view (any tab, All included), on its own screen: another topic of this
+   * forum opened over it takes its place (XgramForums#replaceTopicScreensBelow). Not the merged history of a forum
+   * shown as a list ("View as messages"), a thread or scheduled messages.
+   */
+  public boolean xgramIsForumTopicScreen () {
+    return chat != null && !inPreviewMode && !isInForceTouchMode() && messageThread == null && !areScheduled &&
+      (xgramInForumTopic() || xgramTabsMode());
+  }
+
+  /** XGram: set by TdlibUi.openChat when it pushes this screen over others (see onFocus). */
+  private boolean xgramReplaceTopicsBelow;
+
+  public void xgramReplaceTopicsBelowOnFocus (boolean replace) {
+    xgramReplaceTopicsBelow = replace;
   }
 
   /**

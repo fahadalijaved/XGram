@@ -184,6 +184,52 @@ public final class XgramForums {
     });
   }
 
+  /**
+   * Topics of one forum never stack: a forum topic (or the forum's tabs) that TdlibUi.openChat pushed takes the place
+   * of that forum's screens right under it, on its first focus (after the slide): other topics and tabs views, topic
+   * profiles and any second topic list (one opened from a topic profile's Group row). The lowest topic list of that
+   * run stays, so Back goes to the topic list the user came from, else to what was under the forum (the chat list).
+   * The run ends at the first screen of anything else: another chat or account, the forum's merged history ("View as
+   * messages", where Back from "View in topic" still returns), a thread, scheduled messages, the group's own profile...
+   * That screen and everything under it stay.
+   */
+  public static void replaceTopicScreensBelow (MessagesController opened) {
+    NavigationController navigation = opened.navigationController();
+    long chatId = opened.getChatId();
+    if (navigation == null || opened.isDestroyed() || chatId == 0 || !opened.xgramIsForumTopicScreen()) {
+      return;
+    }
+    org.thunderdog.challegram.navigation.NavigationStack stack = navigation.getStack();
+    int top = stack.indexOf(opened);
+    if (top <= 0) {
+      return;
+    }
+    int lowestList = -1, from = top;
+    for (int i = top - 1; i >= 0; i--) {
+      ViewController<?> c = stack.get(i);
+      if (c == null || c.getChatId() != chatId || c.tdlib() != opened.tdlib()) {
+        break;
+      }
+      if (c instanceof ForumTopicsController) {
+        lowestList = i;
+      } else if (c instanceof MessagesController) {
+        MessagesController m = (MessagesController) c;
+        if (!m.xgramIsForumTopicScreen() || m.hasEditedChanges() || m.hasAttachedFiles()) {
+          break; // an unsaved edit or picked files: Back would have asked first
+        }
+      } else if (lowestList == -1 || !(c instanceof org.thunderdog.challegram.ui.ProfileController && ((org.thunderdog.challegram.ui.ProfileController) c).getTopicId() instanceof TdApi.MessageTopicForum)) {
+        break; // a topic profile goes only from under a topic list opened from it (its Group row), not the one the user came from
+      }
+      from = i;
+    }
+    // From the top down: a removal only shifts the indexes above it, which were already handled.
+    for (int i = top - 1; i >= from; i--) {
+      if (i != lowestList) {
+        stack.destroy(i);
+      }
+    }
+  }
+
   /** Opens the topic at its first unread message, else where it was left, else at the bottom. */
   public static void openTopic (ViewController<?> context, TdApi.Chat chat, TdApi.ForumTopic topic) {
     openTopic(context, chat, topic, null);
