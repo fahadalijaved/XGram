@@ -16,7 +16,7 @@ import androidx.annotation.NonNull;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.core.Lang;
 
-/** One immutable look at a running export, posted to the main thread for the progress bar (and later the notification). */
+/** One immutable look at a running export: the progress bar's (posted to the main thread) and the notification's. */
 public final class ExportProgress {
   public final int phase;
   /** Messages found while reading the history (pass 1). */
@@ -47,7 +47,7 @@ public final class ExportProgress {
     this.title = title;
   }
 
-  /** The one line the progress bar shows: a wait first, then what the job is doing. */
+  /** The one line the progress bar, the notification and the status sheet show: a wait first, then what the job is doing. */
   @NonNull
   public String text () {
     if (waitSeconds > 0) {

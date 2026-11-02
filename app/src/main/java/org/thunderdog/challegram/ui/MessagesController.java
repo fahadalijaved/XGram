@@ -8107,7 +8107,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   private float getButtonsOffset () {
-    return getReplyOffset() + getAttachedFilesOffset() + xgramUndoBarOffset() /* XGram: the Undo send bar */ + getSearchControlsOffset() + getKeyboardOffset() + (bottomWrap.getVisibility() == View.VISIBLE ? 0 : extraBottomInsetWithoutIme);
+    return getReplyOffset() + getAttachedFilesOffset() + xgramUndoBarOffset() /* XGram: the Undo send bar */ + xgramBottomOverlayRoom /* XGram: the chat export's bar */ + getSearchControlsOffset() + getKeyboardOffset() + (bottomWrap.getVisibility() == View.VISIBLE ? 0 : extraBottomInsetWithoutIme);
   }
 
   // XGram: Undo send. The bar of waiting messages sits right above the reply bar (and below the files to send and the
@@ -11208,6 +11208,40 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
     final int px = isFocused() && bottomWrap.getVisibility() == View.VISIBLE ? getInputOffset(false) + Screen.dp(8f) : 0;
     com.fahadali.xgram.appearance.XgramSnackbar.setBottomObstruction(bottomWrap, px, true);
+  }
+
+  // XGram: the top, in window coordinates, of what sits at the bottom of this chat: the message box with the reply,
+  // Undo send and file bars over it, or the Join / Mute bar where it rests (not where it folds into a FAB); -1 when
+  // neither shows. The chat export's progress bar floats above it, so it never covers the message box.
+  private final int[] xgramBottomLocation = new int[2];
+
+  // XGram: the room the chat export's progress bar takes above the message box: the scroll, mention and reaction
+  // buttons, the folded Join / Mute button and the selection toolbar go above it (its Cancel would sit on the scroll
+  // button). No loop: the bar follows xgramBottomControlsTop, the resting places, which don't use getButtonsOffset.
+  private int xgramBottomOverlayRoom;
+
+  public void xgramSetBottomOverlayRoom (int px) {
+    if (xgramBottomOverlayRoom != px) {
+      xgramBottomOverlayRoom = px;
+      if (!isDestroyed() && bottomWrap != null) {
+        checkScrollButtonOffsets();
+      }
+    }
+  }
+
+  public int xgramBottomControlsTop () {
+    if (isDestroyed() || bottomWrap == null) {
+      return -1;
+    }
+    if (bottomWrap.getVisibility() == View.VISIBLE && bottomWrap.getWindowToken() != null) {
+      bottomWrap.getLocationInWindow(xgramBottomLocation);
+      return xgramBottomLocation[1] - (int) (getReplyOffset() + getAttachedFilesOffset() + xgramUndoBarOffset());
+    }
+    if (bottomBar != null && bottomBar.getVisibility() == View.VISIBLE && bottomBar.getWindowToken() != null) {
+      bottomBar.getLocationInWindow(xgramBottomLocation);
+      return xgramBottomLocation[1] - (int) bottomBar.getTranslationY();
+    }
+    return -1;
   }
 
   // Stickers

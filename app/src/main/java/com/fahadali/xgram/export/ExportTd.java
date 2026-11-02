@@ -52,14 +52,15 @@ final class ExportTd {
 
   /**
    * The result, or a {@link TdlibException} for a TDLib error that is not a flood wait (and for a request that got no
-   * reply in {@link #STALL_MS} of connected time). Throws {@link ExportJob.Canceled} once the job is canceled.
+   * reply in {@link #STALL_MS} of connected time). Throws {@link ExportJob.Canceled} once the job is canceled, and
+   * {@link ExportJob.Stopped} where the job allows a stop for Android's time limit.
    */
   @NonNull
   @WorkerThread
   @SuppressWarnings("unchecked")
   <T extends TdApi.Object> T call (TdApi.Function<T> function) {
     while (true) {
-      job.checkCanceled();
+      job.checkInterrupted();
       TdApi.Object result = await(function);
       if (result.getConstructor() == TdApi.Error.CONSTRUCTOR) {
         TdApi.Error error = (TdApi.Error) result;
@@ -85,7 +86,7 @@ final class ExportTd {
     long connectedWaitMs = 0;
     try {
       while (!latch.await(SLICE_MS, TimeUnit.MILLISECONDS)) {
-        job.checkCanceled(); // a late reply goes to the handler above and is dropped
+        job.checkInterrupted(); // a late reply goes to the handler above and is dropped
         if (tdlib.isConnected()) {
           job.setWaitingForNetwork(false);
           connectedWaitMs += SLICE_MS;
@@ -99,8 +100,9 @@ final class ExportTd {
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new ExportJob.Canceled();
+    } finally {
+      job.setWaitingForNetwork(false); // also when a stop or cancel ends the wait: the finalization shows its own text
     }
-    job.setWaitingForNetwork(false);
     return response.get();
   }
 
@@ -111,7 +113,7 @@ final class ExportTd {
     long left = Math.max(retryAfterSeconds + 1, backoff);
     try {
       while (left > 0) {
-        job.checkCanceled();
+        job.checkInterrupted();
         job.setWaitSeconds((int) Math.min(Integer.MAX_VALUE, left));
         Thread.sleep(1000);
         left--;

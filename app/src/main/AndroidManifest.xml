@@ -128,6 +128,15 @@
       <action android:name="android.intent.action.VIEW" />
       <data android:scheme="tg" />
     </intent>
+    <!-- XGram: an app that opens a chat export's .zip, else the Downloads app (the done notification's tap). The
+         content scheme the intent carries: with none, apps whose filters list schemes (most zip apps) stay hidden -->
+    <intent>
+      <action android:name="android.intent.action.VIEW" />
+      <data android:scheme="content" android:mimeType="application/zip" />
+    </intent>
+    <intent>
+      <action android:name="android.intent.action.VIEW_DOWNLOADS" />
+    </intent>
   </queries>
 
   <application
@@ -388,6 +397,14 @@
         <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
       </intent-filter>
     </receiver>
+
+    <!-- XGram chat export: the foreground service of a running export (progress notification and its Cancel); the
+         FOREGROUND_SERVICE_DATA_SYNC, WAKE_LOCK and POST_NOTIFICATIONS permissions are declared above -->
+    <service
+      android:name="com.fahadali.xgram.export.XgramChatExportService"
+      android:exported="false"
+      android:foregroundServiceType="dataSync"
+      android:stopWithTask="false" />
 
 
     <activity

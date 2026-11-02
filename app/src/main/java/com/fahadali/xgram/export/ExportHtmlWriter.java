@@ -96,6 +96,17 @@ final class ExportHtmlWriter {
     endFile();
   }
 
+  /**
+   * A partial export (Android's time limit for background work): page {@code page}, which the previous page's "Next
+   * messages" links to, holds only a line saying where the export stopped, and links back.
+   */
+  @WorkerThread
+  void writeStopped (int page) throws IOException {
+    beginFile(page);
+    writeService("-" + (++dateMessageId), escape("The export stopped here: Android's time limit for background work ended it. Later messages were not exported."));
+    endFile();
+  }
+
   // Page frame (composeStart, writeDialogOpening, Wrap::close)
 
   private void beginFile (int page) throws IOException {

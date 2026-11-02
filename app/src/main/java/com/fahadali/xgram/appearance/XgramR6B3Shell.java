@@ -23,6 +23,8 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
+import android.view.ViewTreeObserver;
 import android.view.WindowInsets;
 import android.widget.FrameLayout;
 import android.widget.Toast;
@@ -37,6 +39,8 @@ import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.theme.ThemeDelegate;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.UI;
+
+import java.lang.ref.WeakReference;
 
 /**
  * XGram M3E round 6, batch 3 (the dialog, sheet, menu and tooltip shell): colors of a menu or tooltip over media
@@ -117,6 +121,24 @@ public final class XgramR6B3Shell {
     /** The action as an accessibility action (TalkBack cannot tap the drawn pill), View.NO_ID with no action. */
     private int a11yActionId = View.NO_ID;
     private boolean actionPressed, dismissing;
+    // XGram: what the bar stays above besides the navigation bar and the keyboard (a chat's message box), followed
+    // before every frame
+    private static final float ANCHOR_GAP = 8f;
+    private @Nullable BottomAnchor bottomAnchor;
+    private final int[] contentLocation = new int[2];
+    // XGram: the pane the bar is centred in (the chat's pane on an unfolded Fold, not the whole window)
+    private @Nullable WeakReference<View> horizontalAnchor;
+    private final int[] paneLocation = new int[2];
+    private final ViewTreeObserver.OnPreDrawListener anchorTracker = () -> {
+      updateBottomMargin();
+      return true;
+    };
+
+    /** The top of what a bar must float above, as {@link #setBottomAnchor} asks it. */
+    public interface BottomAnchor {
+      /** In window coordinates; -1 when nothing is there now. */
+      int bottomAnchorTop ();
+    }
 
     private ProgressBar (Context context) {
       super(context);
@@ -159,6 +181,85 @@ public final class XgramR6B3Shell {
       bar.setVisibility(View.VISIBLE); // TalkBack reads the live region as it appears
       bar.motion.show(true);
       return bar;
+    }
+
+    /**
+     * Keeps the bar {@link #ANCHOR_GAP}dp above {@code anchor} (a chat's message box, so the bar never covers it), as it
+     * moves with the keyboard or a reply bar; null: the snackbar's gap above the navigation bar and keyboard only.
+     */
+    public void setBottomAnchor (@Nullable BottomAnchor anchor) {
+      this.bottomAnchor = anchor;
+      updateBottomMargin();
+    }
+
+    /**
+     * Centres the bar in {@code pane} (a chat's view: its pane on an unfolded Fold, so the bar never covers the chat
+     * list or the rail), followed before every frame; null: centred in the window.
+     */
+    public void setHorizontalAnchor (@Nullable View pane) {
+      this.horizontalAnchor = pane != null ? new WeakReference<>(pane) : null;
+      updateBottomMargin();
+    }
+
+    /** The bar's height and its gap above the anchor: the room a chat keeps for it above the message box. */
+    public static int anchoredRoom () {
+      return Screen.dp(PADDING_TOP + TEXT_GAP + BAR_AREA + PADDING_BOTTOM + ANCHOR_GAP) + Screen.sp(LINE_HEIGHT);
+    }
+
+    private void updateBottomMargin () {
+      final ViewParent parent = getParent();
+      if (!(parent instanceof View) || !(getLayoutParams() instanceof FrameLayout.LayoutParams)) {
+        return;
+      }
+      final View content = (View) parent;
+      final int inset = bottomInset(content);
+      int margin = Screen.dp(XgramSnackbar.BOTTOM_GAP_DP) + inset;
+      final BottomAnchor anchor = bottomAnchor;
+      final int top = anchor != null ? anchor.bottomAnchorTop() : -1;
+      if (top >= 0) {
+        content.getLocationInWindow(contentLocation);
+        margin = Math.max(margin, contentLocation[1] + content.getHeight() - top + Screen.dp(ANCHOR_GAP));
+      }
+      // In a pane: placed from the left edge, as CENTER_HORIZONTAL shifts a child by the difference of unequal margins
+      int left = Screen.dp(XgramSnackbar.SIDE_GAP_DP), right = left;
+      int gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+      final View pane = horizontalAnchor != null ? horizontalAnchor.get() : null;
+      if (pane != null && pane.getWindowToken() != null && pane.getWidth() > 0) {
+        content.getLocationInWindow(contentLocation);
+        pane.getLocationInWindow(paneLocation);
+        final int paneLeft = Math.max(0, paneLocation[0] - contentLocation[0]);
+        final int paneRight = Math.min(content.getWidth(), paneLocation[0] - contentLocation[0] + pane.getWidth());
+        final int available = Math.max(0, paneRight - paneLeft - 2 * left);
+        final int width = Math.min(available, Screen.dp(XgramSnackbar.MAX_WIDTH_DP));
+        left = paneLeft + left + (available - width) / 2;
+        right = Math.max(0, content.getWidth() - left - width);
+        gravity = Gravity.BOTTOM | Gravity.LEFT;
+      }
+      final FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) getLayoutParams();
+      if (params.bottomMargin != margin || params.leftMargin != left || params.rightMargin != right || params.gravity != gravity) {
+        params.bottomMargin = margin;
+        params.leftMargin = left;
+        params.rightMargin = right;
+        params.gravity = gravity;
+        setLayoutParams(params);
+      }
+      // Snackbars float above the bar, not on it (in a chat they take the same spot over the message box); a leaving
+      // bar hands the spot back at once, to the result's snackbar
+      final int height = getHeight() > 0 ? getHeight() : anchoredRoom() - Screen.dp(ANCHOR_GAP);
+      XgramSnackbar.setBottomObstruction(this, dismissing ? 0 : Math.max(0, margin - inset) + height + Screen.dp(ANCHOR_GAP), true);
+    }
+
+    @Override
+    protected void onAttachedToWindow () {
+      super.onAttachedToWindow();
+      getViewTreeObserver().addOnPreDrawListener(anchorTracker);
+    }
+
+    @Override
+    protected void onDetachedFromWindow () {
+      getViewTreeObserver().removeOnPreDrawListener(anchorTracker);
+      XgramSnackbar.setBottomObstruction(this, 0);
+      super.onDetachedFromWindow();
     }
 
     /** The navigation bar or keyboard under {@code content}, less what the content already ends above. */
@@ -232,6 +333,7 @@ public final class XgramR6B3Shell {
         return;
       }
       dismissing = true;
+      XgramSnackbar.setBottomObstruction(this, 0); // a snackbar shown now (the result) takes the usual spot
       if (!motion.hide(true, this::removeNow)) {
         removeNow();
       }

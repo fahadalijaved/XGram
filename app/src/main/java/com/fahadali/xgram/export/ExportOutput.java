@@ -272,39 +272,39 @@ final class ExportOutput {
   }
 
   /**
-   * Removes the .zip and the temporary folders an export left when its process was killed. Never touches the running
-   * job's: the saved key (and the folder list) is read before the running job, and a job is current before its worker
-   * saves anything, so a key or folder of a live job always matches {@link ExportJob#current()}. Off the main thread.
+   * Removes the .zip and the temporary folders an export left when its process was killed. Never touches a live
+   * export's: the saved key and the running job are read together under the key's lock, and a job clears its key
+   * (under that lock, on commit or abort) before it stops being {@link ExportJob#current()}, while it is current
+   * before its worker saves anything. So a key that doesn't match the running job (or with none running) belongs to
+   * a dead process; it is dropped under the lock and its file deleted after. Off the main thread.
    */
   @WorkerThread
   static void cleanupStale (Context context) {
-    final String value;
+    String target = null;
     synchronized (PENDING_LOCK) {
-      value = Settings.instance().pmc().getString(KEY_PENDING, null);
+      final String value = Settings.instance().pmc().getString(KEY_PENDING, null);
+      if (value != null) {
+        final int split = value.indexOf('\n');
+        final String jobId = split >= 0 ? value.substring(0, split) : "";
+        final ExportJob running = ExportJob.current();
+        if (running == null || !running.id.equals(jobId)) {
+          target = split >= 0 ? value.substring(split + 1) : value;
+          Settings.instance().pmc().remove(KEY_PENDING);
+        }
+      }
     }
-    if (value != null) {
-      final int split = value.indexOf('\n');
-      final String jobId = split >= 0 ? value.substring(0, split) : "";
-      final String target = split >= 0 ? value.substring(split + 1) : value;
-      final ExportJob running = ExportJob.current();
-      if (running == null || !running.id.equals(jobId)) {
-        try {
-          if (target.startsWith("content:")) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-              context.getContentResolver().delete(Uri.parse(target), null, null);
-            }
-          } else if (!target.isEmpty()) {
-            //noinspection ResultOfMethodCallIgnored
-            new File(target).delete();
+    if (target != null) {
+      try {
+        if (target.startsWith("content:")) {
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            context.getContentResolver().delete(Uri.parse(target), null, null);
           }
-        } catch (Throwable t) {
-          Log.w("XGram export: cannot remove a stale .zip", t);
+        } else if (!target.isEmpty()) {
+          //noinspection ResultOfMethodCallIgnored
+          new File(target).delete();
         }
-        synchronized (PENDING_LOCK) {
-          if (value.equals(Settings.instance().pmc().getString(KEY_PENDING, null))) {
-            Settings.instance().pmc().remove(KEY_PENDING);
-          }
-        }
+      } catch (Throwable t) {
+        Log.w("XGram export: cannot remove a stale .zip", t);
       }
     }
     final File[] dirs = ExportJob.tempRoot(context).listFiles();

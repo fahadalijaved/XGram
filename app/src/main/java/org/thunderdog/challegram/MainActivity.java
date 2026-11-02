@@ -135,6 +135,7 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
     TdlibManager.instance().global().addCountersListener(this);
     TdlibManager.instance().global().addResolvableProblemAvailabilityListener(this);
     reloadTdlib();
+    com.fahadali.xgram.export.XgramExport.onAppLaunch(); // XGram: chat export, what an export killed with the app left
 
     tempSavedInstanceState = savedInstanceState;
 

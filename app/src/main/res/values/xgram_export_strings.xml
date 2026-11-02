@@ -18,4 +18,17 @@
   <string name="XgramExportKeepGoing">Keep exporting</string>
   <string name="XgramExportSavedIn">Saved in %1$s</string>
   <string name="XgramExportShareSubject">%1$s · chat export</string>
+  <!-- Running in the background: the foreground service, its notifications and the status sheet -->
+  <string name="XgramExportRunning">Exporting %1$s</string>
+  <string name="XgramExportChannelProgress">Chat export</string>
+  <string name="XgramExportChannelDone">Finished chat exports</string>
+  <string name="XgramExportStatusInfo">It keeps going when you leave the chat or XGram. The notification shows how far it is.</string>
+  <string name="XgramExportOneAtATime">One chat is exported at a time. Cancel this export to start another.</string>
+  <string name="XgramExportHideProgress">Hide progress</string>
+  <string name="XgramExportShowProgress">Show progress</string>
+  <string name="XgramExportKeepOpen">Keep XGram open until the export finishes: Android didn\'t let it run in the background.</string>
+  <string name="XgramExportPartialTitle">Chat partly exported</string>
+  <string name="XgramExportPartial">Android\'s time limit for background work stopped the export. What was exported so far is saved.</string>
+  <string name="XgramExportFailedNamed">Couldn\'t export %1$s</string>
+  <string name="XgramExportStoppedEarly">Android\'s time limit for background work stopped the export before anything was written. Open XGram and try again.</string>
 </resources>

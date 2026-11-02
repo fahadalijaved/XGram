@@ -53,7 +53,7 @@ final class ExportSource {
     long lastMin = Long.MAX_VALUE; // the oldest id seen: the index stays strictly newest first
     int idlePages = 0;
     while (true) {
-      job.checkCanceled();
+      job.checkInterrupted();
       final TdApi.Messages page = td.call(new TdApi.GetChatHistory(chatId, from, 0, LIMIT, false));
       if (page.messages == null || page.messages.length == 0) {
         break;

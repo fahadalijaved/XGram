@@ -60,7 +60,9 @@ import tgx.td.Td;
  * </ol>
  * Memory does not grow with the chat. The job holds a TDLib reference and a partial wake lock while it runs (TDLib
  * pauses 5 s after the UI is gone otherwise), and only this thread touches the output: a cancel just sets a flag, and
- * the worker deletes the unfinished .zip itself.
+ * the worker deletes the unfinished .zip itself. {@link XgramChatExportService} keeps XGram in the foreground
+ * meanwhile; the progress notification follows the job. Android 15's dataSync time limit (or a soft deadline before
+ * it) stops the job between pages, and what was written is saved as a partial .zip ({@link #PHASE_PARTIAL}).
  */
 public final class ExportJob {
   public static final int PHASE_INDEXING = 0;
@@ -70,10 +72,22 @@ public final class ExportJob {
   public static final int PHASE_DONE = 4;
   public static final int PHASE_FAILED = 5;
   public static final int PHASE_CANCELED = 6;
+  /** Android's time limit stopped it: what was written is saved, with a last page saying where it stopped. */
+  public static final int PHASE_PARTIAL = 7;
+
+  /** Where the foreground service is: not started yet, holding the job, refused by Android, or gone (time limit). */
+  static final int FOREGROUND_PENDING = 0, FOREGROUND_ON = 1, FOREGROUND_REFUSED = 2, FOREGROUND_ENDED = 3;
 
   private static final String JOB_REFERENCE = "xgramExport";
   private static final long WAKE_LOCK_TIMEOUT_MS = 6L * 60L * 60L * 1000L;
   private static final long PUBLISH_INTERVAL_MS = 250;
+  private static final long NOTIFY_INTERVAL_MS = 1000;
+  /**
+   * Android 15+ gives dataSync services 6 hours a day (reset when XGram comes to the front): the job finishes a partial
+   * .zip after 5.5 hours in the background, while the service is still in the foreground, instead of waiting for
+   * onTimeout. That limit is shared with the contacts sync, so onTimeout can still come first.
+   */
+  private static final long TIME_LIMIT_SOFT_MS = 330L * 60L * 1000L;
   private static final int FETCH_BATCH = 100;
   /** Room left free on top of the export's own estimate. */
   private static final long SPACE_MARGIN = 200L * 1024L * 1024L;
@@ -93,6 +107,13 @@ public final class ExportJob {
   static final class Canceled extends RuntimeException {
     Canceled () {
       super("Export canceled");
+    }
+  }
+
+  /** Thrown on the worker where it can stop safely (reading the history, fetching a page) once Android's time limit is near. */
+  static final class Stopped extends RuntimeException {
+    Stopped () {
+      super("Export stopped by the time limit");
     }
   }
 
@@ -162,6 +183,8 @@ public final class ExportJob {
   }
 
   public final String id;
+  /** The job's notification id and PendingIntent request code (its start second): unique per export. */
+  public final int number;
   public final int accountId;
   public final long chatId;
   private final Tdlib tdlib;
@@ -177,7 +200,17 @@ public final class ExportJob {
   private volatile int waitSeconds;
   private volatile boolean waitingForNetwork;
   private volatile long newestServerId, oldestServerId;
-  private long lastPublishMs;
+  private volatile long lastPublishMs, lastNotifyMs;
+
+  // Android's time limit: the service's state, the soft deadline's start, the stop it asked for
+  private volatile int foregroundState = FOREGROUND_PENDING;
+  private volatile long backgroundSinceMs;
+  private volatile boolean stopRequested, softStopReached;
+  /** The worker is where a time-limit stop is safe (nothing half written). Worker only. */
+  private boolean stoppable;
+  /** The worker ended: no progress notification after this (it would outlive the service's removal). */
+  private final Object notifyLock = new Object();
+  private boolean notificationsClosed;
 
   @Nullable
   private volatile Uri resultUri;
@@ -185,7 +218,9 @@ public final class ExportJob {
   private volatile String resultName, resultLocation, errorText, realTitle;
 
   private ExportJob (Tdlib tdlib, ExportOptions options, boolean publicDownloads, @NonNull String title, Listener listener) {
-    this.id = Long.toString(System.currentTimeMillis(), 36);
+    final long now = System.currentTimeMillis();
+    this.id = Long.toString(now, 36);
+    this.number = (int) (now / 1000L);
     this.accountId = options.accountId;
     this.chatId = options.chatId;
     this.tdlib = tdlib;
@@ -247,7 +282,59 @@ public final class ExportJob {
 
   /** Asks the worker to stop; it deletes the unfinished .zip. Any thread. */
   public void cancel () {
-    canceled.set(true);
+    if (!canceled.getAndSet(true)) {
+      publish(true); // the notification drops its Cancel at once
+    }
+  }
+
+  // The foreground service (main thread) and Android's time limit
+
+  /** The service holds the job in the foreground: the notification is ongoing and the soft deadline runs. */
+  public boolean isForeground () {
+    return foregroundState == FOREGROUND_ON;
+  }
+
+  /** Android refused the service: the export only goes on while XGram's process is not frozen. */
+  public boolean isBackgroundRefused () {
+    return foregroundState == FOREGROUND_REFUSED;
+  }
+
+  @UiThread
+  void onForegroundChanged (int state) {
+    if (foregroundState == state) {
+      return;
+    }
+    foregroundState = state;
+    if (state == FOREGROUND_ON && backgroundSinceMs == 0) {
+      backgroundSinceMs = SystemClock.elapsedRealtime();
+    }
+    publish(true);
+  }
+
+  /** onTimeout: stop at the next safe point and save what was written as a partial .zip, quickly. Any thread. */
+  void stopForTimeLimit () {
+    stopRequested = true;
+  }
+
+  /**
+   * Whether the job should stop and save what it has: onTimeout asked, or the soft deadline passed. The deadline counts
+   * foreground-service time since XGram was last in front (Android resets its limit then), on Android 15+ only.
+   */
+  boolean shouldStop () {
+    if (stopRequested || softStopReached) {
+      return true;
+    }
+    if (Build.VERSION.SDK_INT < 35 || foregroundState != FOREGROUND_ON) {
+      return false;
+    }
+    final long now = SystemClock.elapsedRealtime();
+    if (UI.isResumed()) {
+      backgroundSinceMs = now;
+    } else if (backgroundSinceMs != 0 && now - backgroundSinceMs >= TIME_LIMIT_SOFT_MS) {
+      softStopReached = true;
+      Log.w("XGram export %s: near Android's dataSync time limit, saving what was exported", id);
+    }
+    return softStopReached;
   }
 
   // Worker callbacks
@@ -255,6 +342,14 @@ public final class ExportJob {
   void checkCanceled () {
     if (canceled.get()) {
       throw new Canceled();
+    }
+  }
+
+  /** {@link #checkCanceled()}, and a time-limit stop where one is safe. TDLib waits call it every quarter second. */
+  void checkInterrupted () {
+    checkCanceled();
+    if (stoppable && shouldStop()) {
+      throw new Stopped();
     }
   }
 
@@ -312,6 +407,33 @@ public final class ExportJob {
     lastPublishMs = now;
     final ExportProgress progress = progress();
     UI.post(() -> listener.onProgress(this, progress));
+    // The notification at most once a second (Android drops more than a few updates a second), and on every change of
+    // phase or wait (forced), so a phase never shows the previous one's text
+    if (force || now - lastNotifyMs >= NOTIFY_INTERVAL_MS) {
+      lastNotifyMs = now;
+      notifyProgress();
+    }
+  }
+
+  /**
+   * Once the service has started (or was refused), the progress notification follows the job; after the worker ended
+   * nothing is posted any more, so the service's removal of it is final. Any thread.
+   */
+  private void notifyProgress () {
+    if (foregroundState == FOREGROUND_PENDING) {
+      return; // the service's startForeground posts the first one
+    }
+    synchronized (notifyLock) {
+      if (!notificationsClosed) {
+        ExportNotifications.showProgress(AppContext.get(), this);
+      }
+    }
+  }
+
+  private void closeNotifications () {
+    synchronized (notifyLock) {
+      notificationsClosed = true;
+    }
   }
 
   private void setPhase (int phase) {
@@ -343,10 +465,12 @@ public final class ExportJob {
       final ExportPeers.Dialog dialog = peers.dialog(options.chatId);
       realTitle = dialog.title;
 
-      // Pass 1: the ids, newest first
+      // Pass 1: the ids, newest first. A time-limit stop here leaves nothing worth saving (Stopped, below)
       setPhase(PHASE_INDEXING);
       index = new ExportIndex(new File(dir, "ids.bin"));
+      stoppable = true;
       ExportSource.index(td, options, index, this);
+      stoppable = false;
       index.finishWriting();
       total = index.count();
       checkCanceled();
@@ -369,25 +493,53 @@ public final class ExportJob {
       json.begin(dialog);
       final ExportHtmlWriter html = new ExportHtmlWriter(zip, root, peers, index, dialog, options.chatId, now);
       final int pages = index.pageCount();
+      // Android's time limit stops it between pages, or while a page is fetched (nothing of it is written yet); a page
+      // that is being written is finished first
+      int stoppedAt = -1;
       for (int page = 0; page < pages; page++) {
+        // A big export can outrun the lock's 6 h (no time limit before Android 15, or visits reset it): not reference
+        // counted, so acquiring it again just re-arms the timeout
+        if (wakeLock != null) {
+          try {
+            wakeLock.acquire(WAKE_LOCK_TIMEOUT_MS);
+          } catch (Throwable ignored) { }
+        }
         checkCanceled();
+        if (shouldStop()) {
+          stoppedAt = page;
+          break;
+        }
         final long[] ids = index.readPage(page);
-        final List<Item> items = fetch(td, peers, ids);
+        final List<Item> items;
+        stoppable = true;
+        try {
+          items = fetch(td, peers, ids);
+        } catch (Stopped e) {
+          stoppedAt = page;
+          break;
+        } finally {
+          stoppable = false;
+        }
         html.writePage(page, pages, items);
         json.writeItems(items);
         written += ids.length;
         publish(false);
       }
-      if (pages == 0) {
+      if (stoppedAt == 0) {
+        throw new Stopped(); // not one page written
+      }
+      if (stoppedAt > 0) {
+        html.writeStopped(stoppedAt); // the page the last "Next messages" links to
+      } else if (pages == 0) {
         html.writeEmpty();
       }
 
-      // result.json last, then the .zip is published
+      // result.json last, then the .zip is published. After onTimeout every second counts: stored, not deflated
       setPhase(PHASE_FINALIZING);
       json.finish();
       json = null;
       checkCanceled();
-      zip.putFile(root + "result.json", spool, now, true);
+      zip.putFile(root + "result.json", spool, now, !stopRequested);
       zip.finish();
       zip.close();
       zip = null;
@@ -397,9 +549,12 @@ public final class ExportJob {
       resultUri = output.shareUri();
       resultName = output.displayName();
       resultLocation = output.locationLabel();
-      result = PHASE_DONE;
+      result = stoppedAt > 0 ? PHASE_PARTIAL : PHASE_DONE;
     } catch (Canceled e) {
       result = PHASE_CANCELED;
+    } catch (Stopped e) {
+      errorText = Lang.getString(R.string.XgramExportStoppedEarly);
+      result = PHASE_FAILED;
     } catch (Failure e) {
       errorText = e.getMessage();
       result = PHASE_FAILED;
@@ -430,6 +585,7 @@ public final class ExportJob {
         } catch (Throwable ignored) { }
       }
       phase = result;
+      closeNotifications(); // before the service removes the progress notification on onFinished
       synchronized (LOCK) {
         if (current == this) {
           current = null;
