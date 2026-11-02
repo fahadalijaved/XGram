@@ -69,8 +69,8 @@ public final class XgramExport {
 
   /**
    * The menu action. While an export runs (this chat's or another's: one at a time) it shows how far it is, with
-   * Cancel export. Otherwise a confirm, then the export. {@code topic}: the topic the chat is open in; for now the
-   * whole chat is exported.
+   * Cancel export. Otherwise Desktop's options (media, size limit, dates), then the export. {@code topic}: the topic
+   * the chat is open in (a forum, Saved Messages or direct messages topic), which the options offer to export alone.
    */
   @UiThread
   public static void prompt (ViewController<?> c, long chatId, @Nullable TdApi.MessageTopic topic) {
@@ -91,21 +91,7 @@ public final class XgramExport {
     }
     cleanupStale();
     final String title = tdlib.chatTitle(chatId);
-    String info = Lang.getString(R.string.XgramExportOptionsInfo);
-    if (topic != null) {
-      info = info + "\n\n" + Lang.getString(R.string.XgramExportWholeChat);
-    }
-    c.xgramShowConfirm(info, Lang.getString(R.string.XgramExportChat), null,
-      new int[] {R.id.btn_done, R.id.btn_cancel},
-      new String[] {Lang.getString(R.string.XgramExportStart), Lang.getString(R.string.Cancel)},
-      new int[] {ViewController.OptionColor.NORMAL, ViewController.OptionColor.NORMAL},
-      new int[] {R.drawable.baseline_file_download_24, R.drawable.baseline_cancel_24},
-      (itemView, id) -> {
-        if (id == R.id.btn_done) {
-          start(c, chatId, title);
-        }
-        return true;
-      });
+    ExportOptionsSheet.show(c, chatId, topic, options -> start(c, options, title));
   }
 
   /**
@@ -113,24 +99,24 @@ public final class XgramExport {
    * folder). Android 13+ asks for notifications first: progress and result are notifications, and the export runs
    * without them too. The helpers call back only when they ask: granted already (or not needed) goes on at once.
    */
-  private static void start (ViewController<?> c, long chatId, String title) {
+  private static void start (ViewController<?> c, ExportOptions options, String title) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-      if (!c.context().permissions().requestWriteExternalStorage(Permissions.WriteType.DOWNLOADS, granted -> begin(c, chatId, title, granted))) {
-        begin(c, chatId, title, true);
+      if (!c.context().permissions().requestWriteExternalStorage(Permissions.WriteType.DOWNLOADS, granted -> begin(c, options, title, granted))) {
+        begin(c, options, title, true);
       }
       return;
     }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !NotificationManagerCompat.from(c.context()).areNotificationsEnabled()) {
-      if (c.context().permissions().requestPostNotifications(granted -> begin(c, chatId, title, true))) {
+      if (c.context().permissions().requestPostNotifications(granted -> begin(c, options, title, true))) {
         return;
       }
     }
-    begin(c, chatId, title, true);
+    begin(c, options, title, true);
   }
 
-  private static void begin (ViewController<?> c, long chatId, String title, boolean publicDownloads) {
+  private static void begin (ViewController<?> c, ExportOptions options, String title, boolean publicDownloads) {
     final Tdlib tdlib = c.tdlib();
-    final ExportJob job = ExportJob.start(tdlib, ExportOptions.textOnly(tdlib.id(), chatId), publicDownloads, title, LISTENER);
+    final ExportJob job = ExportJob.start(tdlib, options, publicDownloads, title, LISTENER);
     if (job == null) {
       XgramR6B3Shell.snackbar(Lang.getString(R.string.XgramExportBusy), false);
       return;
@@ -444,7 +430,7 @@ public final class XgramExport {
     }
     final Uri uri = job.resultUri();
     final String text = job.phase() == ExportJob.PHASE_PARTIAL ? Lang.getString(R.string.XgramExportPartial) :
-      Lang.getString(R.string.XgramExportDone) + " · " + savedText(job);
+      withNote(Lang.getString(R.string.XgramExportDone) + " · " + savedText(job), job);
     XgramR6B3Shell.snackbar(text, true, uri != null ? Lang.getString(R.string.Share) : null, uri != null ? () -> share(uri, job.realTitle()) : null);
   }
 
@@ -463,7 +449,13 @@ public final class XgramExport {
       XgramR6B3Shell.snackbar(Lang.getString(R.string.XgramExportNoApp), false);
       return;
     }
-    XgramR6B3Shell.snackbar(Lang.getString(R.string.XgramExportDone) + " · " + saved, true);
+    XgramR6B3Shell.snackbar(withNote(Lang.getString(R.string.XgramExportDone) + " · " + saved, job), true);
+  }
+
+  /** {@code text} and what the .zip lacks (media left out for space, Android 6's zip limits, failed downloads). */
+  private static String withNote (String text, ExportJob job) {
+    final String note = job.resultNote();
+    return note != null ? text + " · " + note : text;
   }
 
   /** The share sheet for the .zip, with read access granted to the app that is picked; also the done notification's Share. */

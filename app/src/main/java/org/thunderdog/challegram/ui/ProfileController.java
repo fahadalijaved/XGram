@@ -617,7 +617,8 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     final long myUserId = tdlib.myUserId();
 
     if (!isBot && user.id == myUserId && user.id != 0) {
-      showMore(new int[]{R.id.more_btn_edit}, new String[]{Lang.getString(R.string.EditName)}, 0);
+      // XGram: Saved Messages has no ⋮ of its own, so its export starts here (chat export, like Telegram Desktop)
+      showMore(new int[]{R.id.more_btn_edit, R.id.btn_xgramExportChat}, new String[]{Lang.getString(R.string.EditName), Lang.getString(R.string.XgramExportChat)}, 0);
       return;
     }
 
@@ -778,6 +779,14 @@ public class ProfileController extends ViewController<ProfileController.Args> im
 
   @Override
   public void onMoreItemPressed (int id) {
+    if (id == R.id.btn_xgramExportChat) {
+      // XGram: chat export; your own profile stands for Saved Messages
+      final long exportChatId = user != null && user.id == tdlib.myUserId() ? tdlib.selfChatId() : getChatId();
+      if (exportChatId != 0) {
+        com.fahadali.xgram.export.XgramExport.prompt(this, exportChatId, null);
+      }
+      return;
+    }
     if (id == R.id.btn_xgramAddToHomeScreen) {
       // XGram: a launcher shortcut to this chat (a user's private chat is made first when there is none)
       if (user != null && mode == Mode.USER) {

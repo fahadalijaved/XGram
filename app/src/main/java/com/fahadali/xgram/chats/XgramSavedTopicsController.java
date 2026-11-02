@@ -32,8 +32,11 @@ import org.thunderdog.challegram.v.CustomRecyclerView;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Saved Messages → ⋮ → By chat: Saved Messages grouped by the chat they were saved from (official Telegram). */
-public final class XgramSavedTopicsController extends RecyclerViewController<Void> implements View.OnClickListener, XgramSavedTopics.Listener {
+/**
+ * Saved Messages → ⋮ → By chat: Saved Messages grouped by the chat they were saved from (official Telegram). A long
+ * press offers to export that topic (chat export, Only this topic).
+ */
+public final class XgramSavedTopicsController extends RecyclerViewController<Void> implements View.OnClickListener, View.OnLongClickListener, XgramSavedTopics.Listener {
   private SettingsAdapter adapter;
   private boolean loading = true;
 
@@ -144,6 +147,25 @@ public final class XgramSavedTopicsController extends RecyclerViewController<Voi
     MessagesController c = new MessagesController(context, tdlib);
     c.setArguments(new MessagesController.Arguments(null, selfChat, new TdApi.MessageTopicSavedMessages(savedMessagesTopicId)));
     navigateTo(c);
+  }
+
+  /** The topic's own view has no ⋮ (a search preview), so its export starts here. */
+  @Override
+  public boolean onLongClick (View v) {
+    Object tag = v.getTag();
+    if (!(tag instanceof ListItem) || ((ListItem) tag).getId() != R.id.btn_xgramSavedTopic) {
+      return false;
+    }
+    final long savedMessagesTopicId = ((ListItem) tag).getLongId();
+    final long selfChatId = tdlib.selfChatId();
+    showOptions(null, new int[] {R.id.btn_xgramExportChat}, new String[] {Lang.getString(R.string.XgramExportChat)}, null,
+      new int[] {R.drawable.baseline_file_download_24}, (itemView, id) -> {
+        if (id == R.id.btn_xgramExportChat) {
+          com.fahadali.xgram.export.XgramExport.prompt(this, selfChatId, new TdApi.MessageTopicSavedMessages(savedMessagesTopicId));
+        }
+        return true;
+      });
+    return true;
   }
 
   @Override

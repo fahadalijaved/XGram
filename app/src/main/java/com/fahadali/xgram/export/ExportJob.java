@@ -31,6 +31,7 @@ import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.data.ContentPreview;
 import org.thunderdog.challegram.telegram.Tdlib;
+import org.thunderdog.challegram.telegram.TdlibManager;
 import org.thunderdog.challegram.tool.Strings;
 import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.unsorted.AppContext;
@@ -54,8 +55,8 @@ import tgx.td.Td;
  * <ol>
  *   <li>pass 1 reads the history newest → oldest and keeps only the message ids, on disk;</li>
  *   <li>a free space check;</li>
- *   <li>pass 2 reads the ids oldest → newest, 1000 at a time, fetches those messages and writes messagesN.html into
- *   the .zip and the JSON into a spool file;</li>
+ *   <li>pass 2 reads the ids oldest → newest, 1000 at a time, fetches those messages, puts their media into the .zip
+ *   ({@link ExportDownloader}), then writes messagesN.html into the .zip and the JSON into a spool file;</li>
  *   <li>result.json goes in last, the .zip is published.</li>
  * </ol>
  * Memory does not grow with the chat. The job holds a TDLib reference and a partial wake lock while it runs (TDLib
@@ -146,8 +147,11 @@ public final class ExportJob {
     final boolean hideAuthor;
     /** The line is Desktop's sentence that follows the actor's name ("invited Bob"). */
     final boolean afterActor;
+    /** The message's file and what became of it (filled in before the page is written), null when it has none. */
+    @Nullable
+    final ExportMedia.Result media;
 
-    Item (TdApi.Message message, long serverId, int kind, @NonNull String text, @NonNull String fallback, boolean hideAuthor, boolean afterActor) {
+    Item (TdApi.Message message, long serverId, int kind, @NonNull String text, @NonNull String fallback, boolean hideAuthor, boolean afterActor, @Nullable ExportMedia.Result media) {
       this.message = message;
       this.serverId = serverId;
       this.kind = kind;
@@ -155,6 +159,7 @@ public final class ExportJob {
       this.fallback = fallback;
       this.hideAuthor = hideAuthor;
       this.afterActor = afterActor;
+      this.media = media;
     }
   }
 
@@ -197,6 +202,11 @@ public final class ExportJob {
 
   private volatile int phase = PHASE_INDEXING;
   private volatile int indexed, written, total;
+  // Media: counted in pass 1 (the files the options include), done in pass 2 (copied, shared or left out)
+  private volatile int mediaTotal, mediaDone, mediaUnavailable;
+  private volatile long mediaBytesTotal, mediaBytesDone, mediaFileBytes;
+  /** Media were left out: the storage got nearly full, or the .zip reached Android 6's limits. */
+  private volatile boolean lowSpace, legacyZipLimit;
   private volatile int waitSeconds;
   private volatile boolean waitingForNetwork;
   private volatile long newestServerId, oldestServerId;
@@ -277,7 +287,25 @@ public final class ExportJob {
 
   @NonNull
   public ExportProgress progress () {
-    return new ExportProgress(phase, indexed, written, total, 0, 0, 0, waitSeconds, waitingForNetwork, fraction(), title);
+    return new ExportProgress(phase, indexed, written, total, mediaDone, mediaTotal, mediaBytesDone + mediaFileBytes, waitSeconds, waitingForNetwork, fraction(), title);
+  }
+
+  /**
+   * What the result should add about media that are missing from a finished .zip (the storage got nearly full, the
+   * .zip reached Android 6's limits, some files couldn't be downloaded), or null.
+   */
+  @Nullable
+  public String resultNote () {
+    if (lowSpace) {
+      return Lang.getString(R.string.XgramExportLowSpace);
+    }
+    if (legacyZipLimit) {
+      return Lang.getString(R.string.XgramExportLegacyLimit);
+    }
+    if (mediaUnavailable > 0) {
+      return Lang.getString(R.string.XgramExportMediaUnavailable);
+    }
+    return null;
   }
 
   /** Asks the worker to stop; it deletes the unfinished .zip. Any thread. */
@@ -377,9 +405,43 @@ public final class ExportJob {
     }
   }
 
+  /** Pass 1: a message whose file the options include ({@code size} 0 when unknown). */
+  void onMediaPlanned (long size) {
+    mediaTotal++;
+    mediaBytesTotal += Math.max(0, size);
+  }
+
+  /** Pass 2: a planned file is in the .zip, shared with an earlier message, or left out. */
+  void onMediaDone (long plannedSize) {
+    mediaDone++;
+    mediaBytesDone += Math.max(0, plannedSize);
+    publish(false);
+  }
+
+  /** How much of the file being downloaded is there, for the bar (0 between files). */
+  void setMediaFileBytes (long bytes) {
+    if (mediaFileBytes != bytes) {
+      mediaFileBytes = bytes;
+      publish(false);
+    }
+  }
+
+  void onMediaUnavailable () {
+    mediaUnavailable++;
+  }
+
+  void onLowSpace () {
+    lowSpace = true;
+  }
+
+  void onLegacyZipLimit () {
+    legacyZipLimit = true;
+  }
+
   /**
    * Reading the history is the first fifth of the bar, estimated from server ids (consecutive in groups and channels,
-   * still growing elsewhere); writing is the rest, exact.
+   * still growing elsewhere); writing is the rest: the messages, and with media mostly their bytes (a page waits for
+   * its files before it is written).
    */
   private float fraction () {
     switch (phase) {
@@ -392,8 +454,18 @@ public final class ExportJob {
         final float read = Math.max(0f, Math.min(1f, (float) (newest - oldest) / (float) (newest - 1)));
         return 0.2f * read;
       }
-      case PHASE_WRITING:
-        return total > 0 ? 0.2f + 0.8f * Math.min(1f, (float) written / (float) total) : 0.2f;
+      case PHASE_WRITING: {
+        if (total <= 0) {
+          return 0.2f;
+        }
+        final float messages = Math.min(1f, (float) written / (float) total);
+        final long bytesTotal = mediaBytesTotal;
+        if (bytesTotal <= 0) {
+          return 0.2f + 0.8f * messages;
+        }
+        final float media = Math.min(1f, (float) (mediaBytesDone + mediaFileBytes) / (float) bytesTotal);
+        return 0.2f + 0.8f * (0.2f * messages + 0.8f * media);
+      }
       default:
         return 1f;
     }
@@ -454,6 +526,7 @@ public final class ExportJob {
     ExportZip zip = null;
     ExportJsonWriter json = null;
     ExportOutput output = null;
+    ExportDownloader downloader = null;
     boolean committed = false;
     int result = PHASE_FAILED;
     try {
@@ -463,7 +536,8 @@ public final class ExportJob {
       final ExportTd td = new ExportTd(tdlib, this);
       final ExportPeers peers = new ExportPeers(td);
       final ExportPeers.Dialog dialog = peers.dialog(options.chatId);
-      realTitle = dialog.title;
+      final String topicTitle = options.isTopic() ? ExportSource.topicTitle(td, peers, options) : "";
+      realTitle = topicTitle.isEmpty() ? dialog.title : dialog.title + " · " + topicTitle;
 
       // Pass 1: the ids, newest first. A time-limit stop here leaves nothing worth saving (Stopped, below)
       setPhase(PHASE_INDEXING);
@@ -475,24 +549,32 @@ public final class ExportJob {
       total = index.count();
       checkCanceled();
 
-      // Room for the .zip and the JSON spool before anything is written: app storage and Download share one partition
-      // on almost every device, and both are full size when result.json goes into the .zip
+      // Room for the .zip (with the media the options include) and the JSON spool before anything is written: app
+      // storage and Download share one partition on almost every device, and both are full size when result.json goes
+      // into the .zip. Each file is checked again before its download
       setPhase(PHASE_CHECKING_SPACE);
       final long now = System.currentTimeMillis();
-      output = new ExportOutput(context, id, zipName(dialog.title, now), publicDownloads);
-      checkSpace(output.volume(), 2L * total * BYTES_PER_MESSAGE + SPACE_MARGIN);
+      output = new ExportOutput(context, id, zipName(realTitle(), now), publicDownloads);
+      checkSpace(output.volume(), mediaBytesTotal + 2L * total * BYTES_PER_MESSAGE + SPACE_MARGIN);
       checkSpace(dir, (long) total * BYTES_PER_MESSAGE); // the spool, when app storage is elsewhere
 
-      // Pass 2: pages oldest first
+      // Pass 2: pages oldest first, each page's media before the page
       setPhase(PHASE_WRITING);
       final String root = "ChatExport_" + new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date(now)) + "/";
       zip = new ExportZip(output.open(), this);
       ExportAssets.write(zip, root, now);
       final File spool = new File(dir, "result.json.part");
       json = new ExportJsonWriter(spool, peers, options.chatId);
-      json.begin(dialog);
-      final ExportHtmlWriter html = new ExportHtmlWriter(zip, root, peers, index, dialog, options.chatId, now);
+      json.begin(dialog, options.isTopic() ? options.topicId : 0, topicTitle);
+      final ExportHtmlWriter html = new ExportHtmlWriter(zip, root, peers, index, dialog, topicTitle, options.chatId, now);
       final int pages = index.pageCount();
+      for (int page = 0; page <= pages; page++) {
+        zip.reservePath(root + ExportHtmlWriter.messagesFile(page)); // a file named messages2.html stays a file
+      }
+      zip.reservePath(root + "result.json");
+      downloader = new ExportDownloader(tdlib, this, zip, root, options.sizeLimitBytes, output.volume(), tdlibFilesDir(dir));
+      // What the pages and result.json still need in the .zip, for Android 6's limits on media
+      final long reserveBytes = 2L * total * BYTES_PER_MESSAGE + 16L * 1024L * 1024L;
       // Android's time limit stops it between pages, or while a page is fetched (nothing of it is written yet); a page
       // that is being written is finished first
       int stoppedAt = -1;
@@ -520,6 +602,8 @@ public final class ExportJob {
         } finally {
           stoppable = false;
         }
+        // The page's files go in first (entries can't interleave); a time-limit stop leaves the rest of them out
+        downloader.writePage(items, reserveBytes, pages - page + 2);
         html.writePage(page, pages, items);
         json.writeItems(items);
         written += ids.length;
@@ -574,6 +658,9 @@ public final class ExportJob {
       if (output != null && !committed) {
         output.abort();
       }
+      if (downloader != null) {
+        downloader.close(); // downloads still running stop, and what the export started of them is deleted
+      }
       if (index != null) {
         index.close();
       }
@@ -626,10 +713,11 @@ public final class ExportJob {
         text = formatted.text;
       }
     }
+    final ExportMedia.Plan plan = kind != Item.KIND_UNSUPPORTED ? ExportMedia.plan(message, options) : null;
     String fallback = "";
     boolean hideAuthor = false, afterActor = false;
     final boolean needsLine = kind == Item.KIND_SERVICE ||
-      (kind == Item.KIND_MESSAGE && text.isEmpty() && constructor != TdApi.MessageText.CONSTRUCTOR && ExportHtmlWriter.placeholderOf(message.content) == null);
+      (kind == Item.KIND_MESSAGE && text.isEmpty() && constructor != TdApi.MessageText.CONSTRUCTOR && !ExportMedia.hasFile(message.content));
     if (needsLine) {
       // A preview that names people would carry XGram's local renames: those lines are built from the real names
       final ExportActions.Line line = ExportActions.namedLine(tdlib, peers, message);
@@ -643,7 +731,7 @@ public final class ExportJob {
         hideAuthor = preview != null && preview.hideAuthor;
       }
     }
-    return new Item(message, serverId, kind, text, fallback, hideAuthor, afterActor);
+    return new Item(message, serverId, kind, text, fallback, hideAuthor, afterActor, plan != null ? new ExportMedia.Result(plan) : null);
   }
 
   private static void checkSpace (@Nullable File path, long needed) throws Failure {
@@ -651,6 +739,17 @@ public final class ExportJob {
     if (free >= 0 && free < needed) {
       throw new Failure(Lang.getString(R.string.XgramExportNoSpace, Strings.buildSize(needed), Strings.buildSize(free)));
     }
+  }
+
+  /** Where TDLib keeps this account's files (the downloads' volume), else {@code fallback}. */
+  private File tdlibFilesDir (File fallback) {
+    try {
+      final String path = TdlibManager.getTdlibDirectory(accountId, true, false);
+      if (path != null && !path.isEmpty()) {
+        return new File(path);
+      }
+    } catch (Throwable ignored) { }
+    return fallback;
   }
 
   /** Free bytes on {@code path}'s volume, -1 when unknown. */

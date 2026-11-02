@@ -23,7 +23,9 @@ public final class ExportProgress {
   public final int indexed;
   /** Messages written so far, and how many there are (pass 2). */
   public final int written, total;
+  /** Files the options include: handled so far (copied, shared or left out), and how many pass 1 counted. */
   public final int mediaDone, mediaTotal;
+  /** Bytes of those files so far, with what is downloaded of the current one. */
   public final long bytesWritten;
   /** Seconds left of a flood wait Telegram asked for, 0 when there is none. */
   public final int waitSeconds;
@@ -60,8 +62,15 @@ public final class ExportProgress {
       case ExportJob.PHASE_INDEXING:
       case ExportJob.PHASE_CHECKING_SPACE:
         return Lang.getString(R.string.XgramExportIndexing, Lang.plural(R.string.xMessages, indexed));
-      case ExportJob.PHASE_WRITING:
-        return Lang.getString(R.string.XgramExportWriting, Lang.formatNumber(written), Lang.formatNumber(total));
+      case ExportJob.PHASE_WRITING: {
+        final String messages = Lang.getString(R.string.XgramExportWriting, Lang.formatNumber(written), Lang.formatNumber(total));
+        if (mediaTotal <= 0) {
+          return messages;
+        }
+        // Pass 1 counted the files; deleted messages or shared files can make pass 2 differ a little
+        final int media = Math.min(mediaDone, mediaTotal);
+        return messages + " · " + Lang.getString(R.string.XgramExportMediaProgress, Lang.formatNumber(media), Lang.formatNumber(mediaTotal));
+      }
       default:
         return Lang.getString(R.string.XgramExportFinishing);
     }

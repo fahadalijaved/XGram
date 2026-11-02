@@ -2,8 +2,17 @@
 <!-- XGram chat export like Telegram Desktop (com.fahadali.xgram.export): HTML and JSON in one .zip in Download/XGram, from Chat ⋮ → Export chat -->
 <resources>
   <string name="XgramExportOptionsInfo">Messages as HTML and JSON, like Telegram Desktop, in one .zip in Download/XGram</string>
-  <string name="XgramExportWholeChat">The whole chat is exported, with all of its topics.</string>
   <string name="XgramExportStart">Export</string>
+  <!-- The options sheet, like Desktop's: media types, size limit, date range, topic -->
+  <string name="XgramExportMediaInfo">The checked media are downloaded even when Data Saver or automatic download is off. Files over the size limit are left out.</string>
+  <string name="XgramExportSizeLimit">Size limit</string>
+  <string name="XgramExportFrom">From</string>
+  <string name="XgramExportTill">To</string>
+  <string name="XgramExportOnlyTopic">Only this topic</string>
+  <string name="XgramExportMediaProgress">media %1$s of %2$s</string>
+  <string name="XgramExportLowSpace">Some media were left out: storage is almost full.</string>
+  <string name="XgramExportLegacyLimit">Some media were left out: the .zip reached this Android version\'s limit.</string>
+  <string name="XgramExportMediaUnavailable">Some media couldn\'t be downloaded.</string>
   <string name="XgramExportProtected">This chat doesn\'t allow saving content, so it can\'t be exported</string>
   <string name="XgramExportBusy">Another chat is being exported</string>
   <string name="XgramExportIndexing">Reading history · %1$s</string>

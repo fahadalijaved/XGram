@@ -179,6 +179,25 @@ object XgramR5ChatPickers {
     onPick: DateCallback,
     onBeginning: Runnable?
   ): Boolean {
+    return showDatePicker(context, initialMillis, minMillis, maxMillis, onPick,
+      Lang.getString(R.string.Beginning), onBeginning, Lang.getString(R.string.XgramR5ChatGo))
+  }
+
+  /**
+   * The same date picker with its own texts: [neutralLabel] for the start button (shown when [onNeutral] is set) and
+   * [confirmLabel] for the confirm button (chat export's From / To: "Beginning" or "Today", and "OK").
+   */
+  @JvmStatic
+  fun showDatePicker(
+    context: Context,
+    initialMillis: Long,
+    minMillis: Long,
+    maxMillis: Long,
+    onPick: DateCallback,
+    neutralLabel: String,
+    onNeutral: Runnable?,
+    confirmLabel: String
+  ): Boolean {
     if (!XgramExpressive.isEnabled()) {
       return false
     }
@@ -187,13 +206,13 @@ object XgramR5ChatPickers {
     val initialDay = utcDay(Math.max(minMillis, Math.min(maxMillis, initialMillis))).coerceIn(minDay, maxDay)
     val years = yearOf(Math.min(minMillis, maxMillis))..yearOf(maxMillis)
     return show(context) { dismiss ->
-      DatePickerContent(initialDay, minDay, maxDay, years, onBeginning != null, dismiss,
+      DatePickerContent(initialDay, minDay, maxDay, years, if (onNeutral != null) neutralLabel else null, confirmLabel, dismiss,
         onGo = { utcMillis ->
           val utc = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
           utc.timeInMillis = utcMillis
           onPick.onDatePicked(utc.get(Calendar.YEAR), utc.get(Calendar.MONTH), utc.get(Calendar.DAY_OF_MONTH))
         },
-        onBeginning = { onBeginning?.run() })
+        onBeginning = { onNeutral?.run() })
     }
   }
 
@@ -302,7 +321,8 @@ object XgramR5ChatPickers {
     minDay: Long,
     maxDay: Long,
     years: IntRange,
-    hasBeginning: Boolean,
+    neutralLabel: String?,
+    confirmLabel: String,
     dismiss: () -> Unit,
     onGo: (Long) -> Unit,
     onBeginning: () -> Unit
@@ -343,13 +363,13 @@ object XgramR5ChatPickers {
             showModeToggle = true
           )
           DialogButtons(
-            neutral = if (hasBeginning) {
+            neutral = if (neutralLabel != null) {
               {
                 TextButton(onClick = {
                   dismiss()
                   onBeginning()
                 }) {
-                  Text(Lang.getString(R.string.Beginning))
+                  Text(neutralLabel)
                 }
               }
             } else null
@@ -367,7 +387,7 @@ object XgramR5ChatPickers {
               },
               enabled = state.selectedDateMillis != null
             ) {
-              Text(Lang.getString(R.string.XgramR5ChatGo))
+              Text(confirmLabel)
             }
           }
         }

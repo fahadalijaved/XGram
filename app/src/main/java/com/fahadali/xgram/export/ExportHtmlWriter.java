@@ -27,7 +27,6 @@ import java.util.Locale;
 import java.util.TimeZone;
 
 import tgx.td.MessageId;
-import tgx.td.Td;
 
 /**
  * The messages*.html pages in Telegram Desktop's markup (export_output_html.cpp), so Desktop's style.css and script.js
@@ -38,7 +37,7 @@ import tgx.td.Td;
 final class ExportHtmlWriter {
   private static final int JOIN_WITHIN_SECONDS = 900; // kJoinWithinSeconds
   private static final int USERPIC_SIZE = 42; // kHistoryUserpicSize
-  private static final String NOT_INCLUDED = "Not included, change data exporting settings to download.";
+  private static final int SERVICE_PHOTO_SIZE = 60; // kServiceMessagePhotoSize
   private static final char[] HEX = "0123456789ABCDEF".toCharArray();
 
   private final ExportZip zip;
@@ -46,6 +45,8 @@ final class ExportHtmlWriter {
   private final ExportPeers peers;
   private final ExportIndex index;
   private final ExportPeers.Dialog dialog;
+  /** The page header: the chat's name, and the topic's for a topic export. */
+  private final String headerName;
   private final long chatId;
   private final long entryTimeMs;
 
@@ -60,12 +61,13 @@ final class ExportHtmlWriter {
   /** Desktop's _dateMessageId: date lines are "message-1", "message-2", … through the whole chat. */
   private int dateMessageId;
 
-  ExportHtmlWriter (ExportZip zip, String root, ExportPeers peers, ExportIndex index, ExportPeers.Dialog dialog, long chatId, long entryTimeMs) {
+  ExportHtmlWriter (ExportZip zip, String root, ExportPeers peers, ExportIndex index, ExportPeers.Dialog dialog, @NonNull String topicTitle, long chatId, long entryTimeMs) {
     this.zip = zip;
     this.root = root;
     this.peers = peers;
     this.index = index;
     this.dialog = dialog;
+    this.headerName = topicTitle.isEmpty() ? dialog.htmlName : dialog.htmlName + " · " + topicTitle;
     this.chatId = chatId;
     this.entryTimeMs = entryTimeMs;
   }
@@ -125,7 +127,7 @@ final class ExportHtmlWriter {
     open("<div class=\"page_wrap\">");
     open("<div class=\"page_header\">");
     open("<div class=\"content\">");
-    line("<div class=\"text bold\">" + escape(dialog.htmlName) + "</div>");
+    line("<div class=\"text bold\">" + escape(headerName) + "</div>");
     close("div");
     close("div");
     open("<div class=\"page_body chat_page\">");
@@ -187,7 +189,7 @@ final class ExportHtmlWriter {
         writeService(String.valueOf(item.serverId), escape("This message is not supported by this version of XGram. Please update the application."));
         return Info.service(message.date, dayKey);
       case ExportJob.Item.KIND_SERVICE:
-        writeService(String.valueOf(item.serverId), escape(serviceText(item)));
+        writeService(String.valueOf(item.serverId), escape(serviceText(item)), item.media);
         return Info.service(message.date, dayKey);
       default:
         return writeMessage(item, previous, dayKey, page);
@@ -207,8 +209,36 @@ final class ExportHtmlWriter {
   }
 
   private void writeService (String id, String html) throws IOException {
+    writeService(id, html, null);
+  }
+
+  /**
+   * Desktop's pushServiceMessage. A changed chat photo follows the line as a 60px picture linking to the photo; when it
+   * was not exported, the chat's coloured circle with its initials.
+   */
+  private void writeService (String id, String html, @Nullable ExportMedia.Result photo) throws IOException {
     open("<div class=\"message service\" id=\"message" + id + "\">");
     line("<div class=\"body details\">" + html + "</div>");
+    if (photo != null && photo.plan.kind == ExportMedia.KIND_CHAT_PHOTO) {
+      final String size = SERVICE_PHOTO_SIZE + "px";
+      open("<div class=\"userpic_wrap\">");
+      if (photo.path != null) {
+        open("<a class=\"userpic_link\" href=\"" + url(photo.path) + "\">");
+      }
+      if (photo.imagePath != null) {
+        line("<img class=\"userpic\" src=\"" + url(photo.imagePath) + "\" style=\"width: " + size + "; height: " + size + "\"/>");
+      } else {
+        open("<div class=\"userpic userpic" + ExportPeers.colorClass(dialog.bareId) + "\" style=\"width: " + size + "; height: " + size + "\">");
+        final String name = dialog.htmlName.trim(); // a chat's name has no last name: one letter, as Desktop
+        final String initial = name.isEmpty() ? "" : new String(Character.toChars(name.codePointAt(0)));
+        line("<div class=\"initials\" style=\"line-height: " + size + "\">" + escape(initial) + "</div>");
+        close("div");
+      }
+      if (photo.path != null) {
+        close("a");
+      }
+      close("div");
+    }
     close("div");
   }
 
@@ -271,7 +301,7 @@ final class ExportHtmlWriter {
       }
     }
     writeReply(message, page);
-    writePlaceholder(message.content);
+    writeMedia(item.media);
     final String text = !item.text.isEmpty() ? item.text : item.fallback;
     if (!text.isEmpty()) {
       line("<div class=\"text\">" + escape(text) + "</div>");
@@ -369,64 +399,179 @@ final class ExportHtmlWriter {
     return "<a href=\"" + messagesFile(target) + "#go_to_message" + serverId + "\">" + html + "</a>";
   }
 
-  /**
-   * Media are not exported yet: files show Desktop's generic block for a type that is not included (what Desktop
-   * writes with every media type unchecked): class, title and the status line ("1280×720, 1.2 MB", "00:42, 310.5 KB").
-   * Null when {@code content} has no file.
-   */
-  @Nullable
-  static String[] placeholderOf (TdApi.MessageContent content) {
-    switch (content.getConstructor()) {
-      case TdApi.MessagePhoto.CONSTRUCTOR: {
-        final TdApi.Photo photo = ((TdApi.MessagePhoto) content).photo;
-        final TdApi.PhotoSize biggest = photo != null && photo.sizes != null ? Td.findBiggest(photo.sizes) : null;
-        return new String[] {"media_photo", "Photo", biggest != null ? biggest.width + "×" + biggest.height + ", " + size(biggest.photo) : ""};
-      }
-      case TdApi.MessageVideo.CONSTRUCTOR: {
-        final TdApi.Video video = ((TdApi.MessageVideo) content).video;
-        return new String[] {"media_video", "Video file", video != null ? duration(video.duration) + ", " + size(video.video) : ""};
-      }
-      case TdApi.MessageAnimation.CONSTRUCTOR: {
-        final TdApi.Animation animation = ((TdApi.MessageAnimation) content).animation;
-        return new String[] {"media_video", "Animation", animation != null ? size(animation.animation) : ""};
-      }
-      case TdApi.MessageSticker.CONSTRUCTOR: {
-        final TdApi.Sticker sticker = ((TdApi.MessageSticker) content).sticker;
-        final String status = sticker == null ? "" : isEmpty(sticker.emoji) ? size(sticker.sticker) : sticker.emoji + ", " + size(sticker.sticker);
-        return new String[] {"media_photo", "Sticker", status};
-      }
-      case TdApi.MessageVideoNote.CONSTRUCTOR: {
-        final TdApi.VideoNote videoNote = ((TdApi.MessageVideoNote) content).videoNote;
-        return new String[] {"media_video", "Video message", videoNote != null ? duration(videoNote.duration) + ", " + size(videoNote.video) : ""};
-      }
-      case TdApi.MessageVoiceNote.CONSTRUCTOR: {
-        final TdApi.VoiceNote voiceNote = ((TdApi.MessageVoiceNote) content).voiceNote;
-        return new String[] {"media_voice_message", "Voice message", voiceNote != null ? duration(voiceNote.duration) + ", " + size(voiceNote.voice) : ""};
-      }
-      case TdApi.MessageAudio.CONSTRUCTOR: {
-        final TdApi.Audio audio = ((TdApi.MessageAudio) content).audio;
-        String title = "Audio file";
-        if (audio != null) {
-          if (!isEmpty(audio.performer) && !isEmpty(audio.title)) {
-            title = audio.performer + " – " + audio.title;
-          } else if (!isEmpty(audio.fileName)) {
-            title = audio.fileName;
-          }
-        }
-        return new String[] {"media_audio_file", title, audio != null ? duration(audio.duration) + ", " + size(audio.audio) : ""};
-      }
-      case TdApi.MessageDocument.CONSTRUCTOR: {
-        final TdApi.Document document = ((TdApi.MessageDocument) content).document;
-        return new String[] {"media_file", document != null && !isEmpty(document.fileName) ? document.fileName : "File", document != null ? size(document.document) : ""};
-      }
+  // Media (Desktop's pushMedia, prepareMediaData and the push*Media blocks)
+
+  /** Desktop's NoFileDescription. */
+  private static String noFileDescription (int skip) {
+    switch (skip) {
+      case ExportMedia.SKIP_TYPE:
+        return "Not included, change data exporting settings to download.";
+      case ExportMedia.SKIP_SIZE:
+        return "Exceeds maximum size, change data exporting settings to download.";
+      case ExportMedia.SKIP_UNAVAILABLE:
+        return "Unavailable, please try again later.";
       default:
-        return null;
+        return "";
     }
+  }
+
+  /**
+   * The message's file: the picture of an exported photo, sticker, video or GIF, else Desktop's generic block, which
+   * links to the file or says why it was left out. The size goes into the status line only for a file that is not in
+   * the export, as Desktop writes it.
+   */
+  private void writeMedia (@Nullable ExportMedia.Result media) throws IOException {
+    if (media == null || media.plan.kind == ExportMedia.KIND_CHAT_PHOTO) {
+      return;
+    }
+    final ExportMedia.Plan plan = media.plan;
+    if (plan.selfDestructing) {
+      final boolean photo = plan.kind == ExportMedia.KIND_PHOTO;
+      generic(photo ? "media_photo" : "media_video", null, null, photo ? "Self-destructing photo" : "Self-destructing video", "", "Please view it on your mobile");
+      return;
+    }
+    final String link = media.path;
+    final boolean hasFile = link != null;
+    final String description = hasFile ? "" : noFileDescription(media.skip);
+    final String sizeText = size(plan.size);
+    switch (plan.kind) {
+      case ExportMedia.KIND_PHOTO: {
+        if (hasFile && media.imagePath != null) {
+          picture("photo_wrap", "photo", link, media.imagePath, media.imageWidth, media.imageHeight);
+          return;
+        }
+        final String dimensions = plan.width > 0 && plan.height > 0 ? plan.width + "×" + plan.height : "";
+        generic("media_photo", link, null, "Photo", description, hasFile ? dimensions : join(dimensions, sizeText));
+        return;
+      }
+      case ExportMedia.KIND_STICKER: {
+        if (hasFile && media.imagePath != null) {
+          picture("sticker_wrap", "sticker", link, media.imagePath, media.imageWidth, media.imageHeight);
+          return;
+        }
+        generic("media_photo", link, null, "Sticker", description, hasFile ? plan.emoji : join(plan.emoji, sizeText));
+        return;
+      }
+      case ExportMedia.KIND_ANIMATION:
+      case ExportMedia.KIND_VIDEO: {
+        final boolean animation = plan.kind == ExportMedia.KIND_ANIMATION;
+        final int[] thumbSize = ExportMedia.thumbSize(plan.width, plan.height, ExportMedia.PHOTO_MAX, true);
+        if (hasFile && media.thumbPath != null && thumbSize != null) {
+          open("<div class=\"media_wrap clearfix\">");
+          open("<a class=\"" + (animation ? "animated_wrap" : "video_file_wrap") + " clearfix pull_left\" href=\"" + url(link) + "\">");
+          open("<div class=\"video_play_bg\">");
+          line(animation ? "<div class=\"gif_play\">GIF</div>" : "<div class=\"video_play\"></div>");
+          close("div");
+          if (!animation) {
+            line("<div class=\"video_duration\">" + escape(duration(plan.duration)) + "</div>");
+          }
+          line("<img class=\"" + (animation ? "animated" : "video_file") + "\" src=\"" + url(media.thumbPath) + "\" style=\"" + sizeStyle(thumbSize[0], thumbSize[1]) + "\"/>");
+          close("a");
+          close("div");
+          return;
+        }
+        if (animation) {
+          generic("media_video", link, null, "Animation", description, sizeText);
+        } else {
+          generic("media_video", link, null, "Video file", description, hasFile ? duration(plan.duration) : join(duration(plan.duration), sizeText));
+        }
+        return;
+      }
+      case ExportMedia.KIND_VIDEO_NOTE:
+        generic("media_video", link, media.thumbPath, "Video message", description, hasFile ? duration(plan.duration) : join(duration(plan.duration), sizeText));
+        return;
+      case ExportMedia.KIND_VOICE:
+        generic("media_voice_message", link, null, "Voice message", description, hasFile ? duration(plan.duration) : join(duration(plan.duration), sizeText));
+        return;
+      case ExportMedia.KIND_AUDIO: {
+        final String title = !plan.performer.isEmpty() && !plan.title.isEmpty() ? plan.performer + " – " + plan.title :
+          !plan.fileName.isEmpty() ? plan.fileName : "Audio file";
+        generic("media_audio_file", link, null, title, description, hasFile ? duration(plan.duration) : join(duration(plan.duration), sizeText));
+        return;
+      }
+      case ExportMedia.KIND_DOCUMENT:
+      default:
+        generic("media_file", link, null, plan.fileName.isEmpty() ? "File" : plan.fileName, description, sizeText);
+    }
+  }
+
+  /** Desktop's photo and sticker blocks: the picture at half its pixel size (it is made for 2x screens). */
+  private void picture (String wrapClass, String imageClass, String link, String image, int width, int height) throws IOException {
+    open("<div class=\"media_wrap clearfix\">");
+    open("<a class=\"" + wrapClass + " clearfix pull_left\" href=\"" + url(link) + "\">");
+    line("<img class=\"" + imageClass + "\" src=\"" + url(image) + "\" style=\"" + sizeStyle(width, height) + "\"/>");
+    close("a");
+    close("div");
+  }
+
+  private static String sizeStyle (int width, int height) {
+    return "width: " + (width / 2) + "px; height: " + (height / 2) + "px";
+  }
+
+  /** Desktop's pushGenericMedia: a link to the file when it is in the export, its thumbnail or the icon circle. */
+  private void generic (String classes, @Nullable String link, @Nullable String thumb, String title, String description, String status) throws IOException {
+    open("<div class=\"media_wrap clearfix\">");
+    if (link != null) {
+      open("<a class=\"media clearfix pull_left block_link " + classes + "\" href=\"" + url(link) + "\">");
+    } else {
+      open("<div class=\"media clearfix pull_left " + classes + "\">");
+    }
+    if (thumb != null) {
+      line("<img class=\"thumb pull_left\" src=\"" + url(thumb) + "\"/>");
+    } else {
+      line("<div class=\"fill pull_left\"></div>");
+    }
+    open("<div class=\"body\">");
+    if (!title.isEmpty()) {
+      line("<div class=\"title bold\">" + escape(title) + "</div>");
+    }
+    if (!description.isEmpty()) {
+      line("<div class=\"description\">" + escape(description) + "</div>");
+    }
+    if (!status.isEmpty()) {
+      line("<div class=\"status details\">" + escape(status) + "</div>");
+    }
+    close("div");
+    close(link != null ? "a" : "div");
+    close("div");
+  }
+
+  private static String join (String first, String second) {
+    return first.isEmpty() ? second : second.isEmpty() ? first : first + ", " + second;
+  }
+
+  /**
+   * A path in the export for href / src: "%", "#" and "?" (which a file name may hold) are escaped so the browser
+   * doesn't take them for an escape, a fragment or a query, then the attribute is HTML-escaped.
+   */
+  static String url (String path) {
+    final StringBuilder b = new StringBuilder(path.length() + 8);
+    for (int i = 0; i < path.length(); i++) {
+      final char c = path.charAt(i);
+      switch (c) {
+        case '%':
+          b.append("%25");
+          break;
+        case '#':
+          b.append("%23");
+          break;
+        case '?':
+          b.append("%3F");
+          break;
+        default:
+          b.append(c);
+          break;
+      }
+    }
+    return escape(b.toString());
   }
 
   /** Desktop's FormatSizeText (format_values.cpp): "512 B", "310.5 KB", "1.2 MB". */
   static String size (@Nullable TdApi.File file) {
-    final long size = file == null ? 0 : file.size != 0 ? file.size : file.expectedSize;
+    return size(file == null ? 0 : file.size != 0 ? file.size : file.expectedSize);
+  }
+
+  static String size (long size) {
     if (size >= 1024 * 1024) {
       final long tenths = size * 10 / (1024 * 1024);
       return (tenths / 10) + "." + (tenths % 10) + " MB";
@@ -442,26 +587,6 @@ final class ExportHtmlWriter {
   static String duration (int seconds) {
     final int hours = seconds / 3600, minutes = seconds % 3600 / 60, rest = seconds % 60;
     return (hours > 0 ? hours + ":" : "") + twoDigits(minutes) + ":" + twoDigits(rest);
-  }
-
-  /** Desktop's pushGenericMedia, without a link. */
-  private void writePlaceholder (TdApi.MessageContent content) throws IOException {
-    final String[] placeholder = placeholderOf(content);
-    if (placeholder == null) {
-      return;
-    }
-    open("<div class=\"media_wrap clearfix\">");
-    open("<div class=\"media clearfix pull_left " + placeholder[0] + "\">");
-    line("<div class=\"fill pull_left\"></div>");
-    open("<div class=\"body\">");
-    line("<div class=\"title bold\">" + escape(placeholder[1]) + "</div>");
-    line("<div class=\"description\">" + escape(NOT_INCLUDED) + "</div>");
-    if (!placeholder[2].isEmpty()) {
-      line("<div class=\"status details\">" + escape(placeholder[2]) + "</div>");
-    }
-    close("div");
-    close("div");
-    close("div");
   }
 
   // Dates, local time like Desktop's QDateTime
@@ -518,10 +643,6 @@ final class ExportHtmlWriter {
   private void close (String name) throws IOException {
     depth = Math.max(0, depth - 1);
     line("</" + name + ">");
-  }
-
-  private static boolean isEmpty (@Nullable String value) {
-    return value == null || value.isEmpty();
   }
 
   /** Desktop's SerializeString for HTML: line breaks become &lt;br&gt;, markup characters and control codes entities. */

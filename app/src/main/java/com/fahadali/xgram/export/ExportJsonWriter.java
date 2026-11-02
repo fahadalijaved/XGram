@@ -54,8 +54,11 @@ final class ExportJsonWriter implements Closeable {
     this.chatId = chatId;
   }
 
-  /** The chat's keys (writeDialogStart) and the start of "messages". */
-  void begin (ExportPeers.Dialog dialog) throws IOException {
+  /**
+   * The chat's keys (writeDialogStart) and the start of "messages". A topic export adds "topic_id" and "topic_title"
+   * (XGram's keys: Desktop's parsers skip keys they don't know).
+   */
+  void begin (ExportPeers.Dialog dialog, long topicId, String topicTitle) throws IOException {
     json.beginObject();
     if (!dialog.omitName) {
       json.name("name");
@@ -67,6 +70,12 @@ final class ExportJsonWriter implements Closeable {
     }
     json.name("type").value(dialog.type);
     json.name("id").value(dialog.bareId);
+    if (topicId != 0) {
+      json.name("topic_id").value(topicId);
+      if (!topicTitle.isEmpty()) {
+        json.name("topic_title").value(topicTitle);
+      }
+    }
     json.name("messages");
     json.beginArray();
   }
@@ -98,6 +107,7 @@ final class ExportJsonWriter implements Closeable {
     final ExportPeers.Peer from = peers.sender(message.senderId);
     if (service) {
       writePeer("actor", from);
+      writeMedia(item.media); // a changed chat photo
       if (!item.fallback.isEmpty()) {
         json.name("information_text").value(item.fallback);
       }
@@ -114,6 +124,7 @@ final class ExportJsonWriter implements Closeable {
           json.name("via_bot").value("@" + bot.username);
         }
       }
+      writeMedia(item.media);
     }
     // Rich entities come later: the text is one plain run for now
     json.name("text").value(item.text);
@@ -127,6 +138,99 @@ final class ExportJsonWriter implements Closeable {
     }
     json.endArray();
     json.endObject();
+  }
+
+  /**
+   * Desktop's media keys (SerializeMessage): the file's path in the export or why it is not there, the size (also of a
+   * file that was left out), and what it is. Photos: photo, photo_file_size, width, height. Documents: file,
+   * file_name, file_size, thumbnail, thumbnail_file_size, media_type (with sticker_emoji, or performer and title),
+   * mime_type, duration_seconds, width, height. Then media_spoiler and self_destruct_period_seconds.
+   */
+  private void writeMedia (@Nullable ExportMedia.Result media) throws IOException {
+    if (media == null) {
+      return;
+    }
+    final ExportMedia.Plan plan = media.plan;
+    if (plan.kind == ExportMedia.KIND_PHOTO || plan.kind == ExportMedia.KIND_CHAT_PHOTO) {
+      writePath("photo", media.path, media.skip);
+      json.name("photo_file_size").value(plan.selfDestructing ? 0 : plan.size); // Desktop clears self-destructing files
+      if (plan.width > 0 && plan.height > 0) {
+        json.name("width").value(plan.width);
+        json.name("height").value(plan.height);
+      }
+    } else {
+      writePath("file", media.path, media.skip);
+      if (!plan.fileName.isEmpty()) {
+        json.name("file_name").value(plan.fileName);
+      }
+      json.name("file_size").value(plan.selfDestructing ? 0 : plan.size);
+      if (media.hasThumbnail()) {
+        writePath("thumbnail", media.thumbPath, media.thumbSkip);
+        json.name("thumbnail_file_size").value(media.thumbnailSize());
+      }
+      switch (plan.kind) {
+        case ExportMedia.KIND_STICKER:
+          json.name("media_type").value("sticker");
+          if (!plan.emoji.isEmpty()) {
+            json.name("sticker_emoji").value(plan.emoji);
+          }
+          break;
+        case ExportMedia.KIND_VIDEO_NOTE:
+          json.name("media_type").value("video_message");
+          break;
+        case ExportMedia.KIND_VOICE:
+          json.name("media_type").value("voice_message");
+          break;
+        case ExportMedia.KIND_ANIMATION:
+          json.name("media_type").value("animation");
+          break;
+        case ExportMedia.KIND_VIDEO:
+          json.name("media_type").value("video_file");
+          break;
+        case ExportMedia.KIND_AUDIO:
+          json.name("media_type").value("audio_file");
+          if (!plan.performer.isEmpty()) {
+            json.name("performer").value(plan.performer);
+          }
+          if (!plan.title.isEmpty()) {
+            json.name("title").value(plan.title);
+          }
+          break;
+        default:
+          break; // a plain file has no media_type
+      }
+      if (!plan.mimeType.isEmpty()) {
+        json.name("mime_type").value(plan.mimeType);
+      }
+      if (plan.duration > 0) {
+        json.name("duration_seconds").value(plan.duration);
+      }
+      if (plan.width > 0 && plan.height > 0) {
+        json.name("width").value(plan.width);
+        json.name("height").value(plan.height);
+      }
+    }
+    if (plan.spoiler) {
+      json.name("media_spoiler").value(true);
+    }
+    if (plan.selfDestructSeconds > 0) {
+      json.name("self_destruct_period_seconds").value(plan.selfDestructSeconds);
+    }
+  }
+
+  /** The path in the export, or Desktop's text for a file that is not there. */
+  private void writePath (String key, @Nullable String path, int skip) throws IOException {
+    final String value;
+    if (path != null) {
+      value = path;
+    } else if (skip == ExportMedia.SKIP_TYPE) {
+      value = "(File not included. Change data exporting settings to download.)";
+    } else if (skip == ExportMedia.SKIP_SIZE) {
+      value = "(File exceeds maximum size. Change data exporting settings to download.)";
+    } else {
+      value = "(File unavailable, please try again later)";
+    }
+    json.name(key).value(value);
   }
 
   /** "from"/"actor" with its "_id": the name is null for a deleted account, as Desktop's StringAllowNull. */

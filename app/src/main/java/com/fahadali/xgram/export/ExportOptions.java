@@ -11,9 +11,12 @@
  */
 package com.fahadali.xgram.export;
 
+import org.thunderdog.challegram.unsorted.Settings;
+
 /**
- * What one chat export covers: the chat (and later a topic), which media types go into the .zip, their size limit and
- * the date range. Immutable; the options sheet builds it, the job only reads it.
+ * What one chat export covers: the chat or one of its topics, which media types go into the .zip, their size limit and
+ * the date range. Immutable; the options sheet builds it, the job only reads it. The media types and the size limit
+ * are remembered for the next export, as Desktop does (the dates are not).
  */
 public final class ExportOptions {
   // Scope: the whole chat, or one forum / Saved Messages / channel direct messages topic
@@ -30,9 +33,20 @@ public final class ExportOptions {
   public static final int TYPE_STICKERS = 1 << 4;
   public static final int TYPE_GIFS = 1 << 5;
   public static final int TYPE_FILES = 1 << 6;
+  public static final int TYPE_ALL = TYPE_PHOTOS | TYPE_VIDEOS | TYPE_VOICE | TYPE_VIDEO_NOTES | TYPE_STICKERS | TYPE_GIFS | TYPE_FILES;
 
-  /** Desktop's default size limit (8 MB). */
-  public static final long DEFAULT_SIZE_LIMIT = 8L * 1024L * 1024L;
+  private static final long MB = 1024L * 1024L;
+
+  /** The size limit slider, in MB: Desktop's range (1..4000 MB, export_settings.cpp SizeLimitByIndex) in 13 steps. */
+  public static final int[] SIZE_STEPS_MB = {1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4000};
+  /** Desktop's default size limit (8 MB, export_settings.h). */
+  public static final int DEFAULT_SIZE_MB = 8;
+  public static final long DEFAULT_SIZE_LIMIT = DEFAULT_SIZE_MB * MB;
+
+  // Exact keys, read and written as ints by settings backups (XgramBackup); the size is in MB, not a slider index,
+  // so a backup stays right if the steps change
+  public static final String KEY_TYPES = "xgram_export_types";
+  public static final String KEY_SIZE_MB = "xgram_export_size";
 
   public final int accountId;
   public final long chatId;
@@ -57,17 +71,51 @@ public final class ExportOptions {
     this.tillDate = tillDate;
   }
 
-  /** The whole history, text only, no date range: what the export does until the options sheet exists. */
-  public static ExportOptions textOnly (int accountId, long chatId) {
-    return new ExportOptions(accountId, chatId, SCOPE_WHOLE, 0, 0, DEFAULT_SIZE_LIMIT, 0, 0);
-  }
-
   public boolean includes (int type) {
     return (typesMask & type) != 0;
+  }
+
+  public boolean isTopic () {
+    return scope != SCOPE_WHOLE;
   }
 
   /** Desktop's date filter: {@code fromDate <= date < tillDate}, a 0 bound is open. */
   public boolean inRange (int date) {
     return (fromDate == 0 || date >= fromDate) && (tillDate == 0 || date < tillDate);
+  }
+
+  // The last choices (main thread)
+
+  /** The media types of the last export; Desktop starts with Photos only. */
+  public static int lastTypes () {
+    return Settings.instance().getInt(KEY_TYPES, TYPE_PHOTOS) & TYPE_ALL;
+  }
+
+  /** The slider step of the last size limit (the nearest one when a backup holds another value). */
+  public static int lastSizeIndex () {
+    return sizeIndexOf(Settings.instance().getInt(KEY_SIZE_MB, DEFAULT_SIZE_MB));
+  }
+
+  public static void saveLast (int typesMask, int sizeIndex) {
+    Settings.instance().putInt(KEY_TYPES, typesMask & TYPE_ALL);
+    Settings.instance().putInt(KEY_SIZE_MB, sizeMbAt(sizeIndex));
+  }
+
+  public static int sizeMbAt (int index) {
+    return SIZE_STEPS_MB[Math.max(0, Math.min(SIZE_STEPS_MB.length - 1, index))];
+  }
+
+  public static long sizeBytesAt (int index) {
+    return sizeMbAt(index) * MB;
+  }
+
+  static int sizeIndexOf (int mb) {
+    int best = 0;
+    for (int i = 0; i < SIZE_STEPS_MB.length; i++) {
+      if (Math.abs(SIZE_STEPS_MB[i] - mb) < Math.abs(SIZE_STEPS_MB[best] - mb)) {
+        best = i;
+      }
+    }
+    return best;
   }
 }

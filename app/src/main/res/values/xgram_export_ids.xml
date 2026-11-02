@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: chat export's options sheet, see com.fahadali.xgram.export.ExportOptionsSheet -->
+  <item type="id" name="btn_xgramExportOptions" />
+  <item type="id" name="btn_xgramExportFrom" />
+  <item type="id" name="btn_xgramExportTill" />
+  <item type="id" name="btn_xgramExportOnlyTopic" />
+</resources>

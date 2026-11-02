@@ -635,6 +635,13 @@ public class TdlibFilesManager implements GlobalConnectionListener {
     }
   }
 
+  /** XGram: whether a screen still holds a shared download of the file (chat export keeps such files in the cache). */
+  public boolean xgramHasCloudReference (int fileId) {
+    synchronized (activeDownloadReferences) {
+      return activeDownloadReferences.indexOfKey(fileId) >= 0;
+    }
+  }
+
   public void removeCloudReference (TdApi.File file, FileUpdateListener source) {
     synchronized (activeDownloadReferences) {
       int index = activeDownloadReferences.indexOfKey(file.id);

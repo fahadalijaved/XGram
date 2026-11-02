@@ -252,6 +252,10 @@ final class ExportNotifications {
           big.append(Lang.getString(R.string.XgramExportPartial)).append('\n');
         }
         big.append(name != null ? name : job.realTitle()).append('\n').append(saved);
+        final String note = job.resultNote();
+        if (note != null) {
+          big.append('\n').append(note); // media left out: low storage, Android 6's zip limits, failed downloads
+        }
         text = partial ? Lang.getString(R.string.XgramExportPartial) : job.title() + " · " + saved;
         b.setCategory(NotificationCompat.CATEGORY_STATUS);
         b.setStyle(new NotificationCompat.BigTextStyle().bigText(big));
