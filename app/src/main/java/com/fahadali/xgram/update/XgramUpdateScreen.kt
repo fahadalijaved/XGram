@@ -486,6 +486,11 @@ object XgramUpdateScreen {
     if (controller.isDestroyed) {
       return false
     }
+    if (com.fahadali.xgram.call.XgramCallOverLock.hidesApp(controller.context())) {
+      // The call screen over the lock screen (the prompt comes over the focused screen, so over it): the card would
+      // cover it there. The updater offers the update again at its next check
+      return false
+    }
     val current = showing?.get()
     val currentDialog = current?.dialog
     if (current != null && currentDialog != null && currentDialog.isShowing && current.activity === controller.context()) {
@@ -563,6 +568,8 @@ object XgramUpdateScreen {
       // RESUMED only while the activity is: opened in the background, the card waits for it (see ScreenState)
       owner.moveTo(if (context.activityState == UI.State.RESUMED) Lifecycle.State.RESUMED else Lifecycle.State.CREATED)
       dialog.show()
+      // One open before the call screen came over the lock screen hides there, as the AlertDialogs
+      BaseActivity.xgramTrackDialog(context, dialog)
       context.addActivityListener(screen)
       showing = WeakReference(screen)
       true

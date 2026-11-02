@@ -853,7 +853,8 @@ public class CallController extends ViewController<CallController.Arguments> imp
 
     @Override
     public void onMessageClick () {
-      tdlib.ui().openPrivateChat(CallController.this, call.userId, null);
+      // XGram: over the lock screen it asks to unlock first
+      context().xgramCallOverLock().leave(CallController.this, () -> tdlib.ui().openPrivateChat(CallController.this, call.userId, null));
     }
 
     @Override
@@ -863,12 +864,15 @@ public class CallController extends ViewController<CallController.Arguments> imp
 
     @Override
     public void onMinimize () {
-      // As the system back: the chats come back and the call goes on (the call bar reopens this screen)
-      if (navigationController != null && navigationController.getStackSize() > 1) {
-        navigateBack();
-      } else {
-        context().performBackPress(false);
-      }
+      // As the system back: the chats come back and the call goes on (the call bar reopens this screen). Over the lock
+      // screen it asks to unlock first (XgramCallOverLock)
+      context().xgramCallOverLock().leave(CallController.this, () -> {
+        if (navigationController != null && navigationController.getStackSize() > 1) {
+          navigateBack();
+        } else {
+          context().performBackPress(false);
+        }
+      });
     }
 
     @Override
@@ -1010,8 +1014,9 @@ public class CallController extends ViewController<CallController.Arguments> imp
 
   @Override
   public void onCallRestart (TdApi.Call call) {
-    // XGram: call again the way it was (video once it was a video call or used video)
-    tdlib.context().calls().makeVideoCall(this, call.userId, null, call.isVideo || xgramVideoUsed);
+    // XGram: call again the way it was (video once it was a video call or used video). Over the lock screen it asks to
+    // unlock first: a new call, and its alerts (Open chat), are not for the lock screen
+    context().xgramCallOverLock().leave(this, () -> tdlib.context().calls().makeVideoCall(this, call.userId, null, call.isVideo || xgramVideoUsed));
   }
 
   public boolean compareUserId (long userId) {
@@ -1197,7 +1202,8 @@ public class CallController extends ViewController<CallController.Arguments> imp
         callSettings.setMicMuted(((ButtonView) v).toggleActive());
       }
     } else if (viewId == R.id.btn_openChat) {
-      tdlib.ui().openPrivateChat(this, call.userId, null);
+      // XGram: over the lock screen it asks to unlock first
+      context().xgramCallOverLock().leave(this, () -> tdlib.ui().openPrivateChat(this, call.userId, null));
     } else if (viewId == R.id.btn_speaker) {
       if (xgramVideo != null && xgramVideo.isCameraOn()) {
         xgramVideo.flipCamera(); // XGram: the cell flips the camera while it is on
@@ -1231,7 +1237,8 @@ public class CallController extends ViewController<CallController.Arguments> imp
   private void closeCall () {
     isClosed = true;
     tdlib.cache().unsubscribeFromCallUpdates(call.id, this);
-    navigateBack();
+    // XGram: over the lock screen the lock screen comes back first and the screen closes behind it
+    context().xgramCallOverLock().closeBehindLock(this, this::navigateBack);
   }
 
   private TdApi.CallState previousCallState;
@@ -1365,6 +1372,7 @@ public class CallController extends ViewController<CallController.Arguments> imp
   protected void onFocusStateChanged () {
     updateFlashing();
     xgramUpdateVisible(); // XGram: the camera runs only while you can see this screen
+    context().xgramCallOverLock().onCallScreenFocus(this, isFocused()); // XGram: holds the place over the lock screen
   }
 
   private void updateControlsAlpha () {
@@ -1578,7 +1586,16 @@ public class CallController extends ViewController<CallController.Arguments> imp
       }
       return true;
     }
+    if (context().xgramCallOverLock().onCallScreenBack(this, commit)) {
+      return true; // XGram: over the lock screen Back lets the lock screen come back, this screen stays under it
+    }
     return super.performOnBackPressed(fromTop, commit);
+  }
+
+  @Override
+  protected boolean swipeNavigationEnabled () {
+    // XGram: over the lock screen no swipe may show the screen under this one
+    return super.swipeNavigationEnabled() && !context().xgramCallOverLock().blocksSwipeBack();
   }
 
   public void replaceCall (TdApi.Call call) {
@@ -1599,6 +1616,7 @@ public class CallController extends ViewController<CallController.Arguments> imp
   @Override
   public void destroy () {
     super.destroy();
+    context().xgramCallOverLock().onCallScreenDestroy(this); // XGram
     UI.removePendingRunnable(xgramReopenCamera);
     xgramUnbindVideo(); // XGram
     if (xgramAvatarFade != null) {

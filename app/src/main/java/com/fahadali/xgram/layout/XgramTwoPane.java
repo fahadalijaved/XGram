@@ -332,10 +332,13 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
   public void update () {
     MainController root = mainRoot();
     boolean isAllowed = root != null && XgramSettings.instance().twoPaneLayout() && !navigation.isDestroyed();
-    boolean needActive = isAllowed && isWideEnough(context, isActive);
+    // The call screen over the lock screen (XgramCallOverLock) takes the window alone: no chat list pane (kept for
+    // later, as when folded) and no rail
+    boolean overLock = com.fahadali.xgram.call.XgramCallOverLock.hidesApp(context);
+    boolean needActive = isAllowed && !overLock && isWideEnough(context, isActive);
     // The rail first: the chat list pane built below already knows it has no ☰ and no Chats / Calls tabs
     try {
-      setRailShown(needRail(root, needActive));
+      setRailShown(!overLock && needRail(root, needActive));
     } catch (Throwable t) {
       Log.e("XGram: navigation rail failed", t);
       android.util.Log.e("XGram", "navigation rail failed", t);

@@ -781,6 +781,9 @@ public class TGCallService extends Service implements
         needShowIncomingNotification = false;
         showIncomingNotification();
       } else if (newState == UI.State.RESUMED) {
+        if (com.fahadali.xgram.call.XgramCallOverLock.showsCallOverLock()) {
+          xgramShownCallId = call.id; // XGram: the app has shown this call over the lock screen (XgramCallOverLock)
+        }
         needShowIncomingNotification = true;
         cleanupChannels((NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE));
         U.stopForeground(this, true, TdlibNotificationManager.ID_FOREGROUND_INCOMING_CALL_NOTIFICATION);
@@ -1027,6 +1030,13 @@ public class TGCallService extends Service implements
   private Notification incomingNotification;
 
   private boolean needShowIncomingNotification;
+  /**
+   * XGram: the call the app has been on screen for over the lock screen while it rang. Its incoming notification, posted
+   * again when the app leaves (Back on the call screen over the lock screen, the screen turned off on it), has no
+   * full-screen intent while the phone is locked or asleep: it would turn the screen on and bring the call screen
+   * straight back (XgramCallOverLock).
+   */
+  private int xgramShownCallId;
 
   private boolean showIncomingNotification () {
     boolean needNotification = call != null && !call.isOutgoing && call.state.getConstructor() == TdApi.CallStatePending.CONSTRUCTOR;
@@ -1043,6 +1053,9 @@ public class TGCallService extends Service implements
 
     if (UI.getUiState() == UI.State.RESUMED) {
       needShowIncomingNotification = true;
+      if (call != null && com.fahadali.xgram.call.XgramCallOverLock.showsCallOverLock()) {
+        xgramShownCallId = call.id; // XGram: the app shows this call over the lock screen (see xgramShownCallId)
+      }
       Log.i("No need to show incoming notification right now, but may in future.");
       return true;
     }
@@ -1127,7 +1140,17 @@ public class TGCallService extends Service implements
       builder.setColor(tdlib.accountColor());
       builder.setVibrate(new long[0]);
       builder.setCategory(Notification.CATEGORY_CALL);
-      builder.setFullScreenIntent(PendingIntent.getActivity(this, PendingIntent.FLAG_ONE_SHOT, Intents.valueOfCall(), Intents.mutabilityFlags(false)), true);
+      // XGram: full screen until the app has shown this call over the lock screen (see xgramShownCallId). Unlocked with
+      // the screen on it launches nothing, it only keeps the heads-up on screen: it stays then
+      final boolean xgramLockedOrAsleep = com.fahadali.xgram.call.XgramCallOverLock.isLockedOrAsleep(this);
+      if (call.id != xgramShownCallId || !xgramLockedOrAsleep) {
+        builder.setFullScreenIntent(PendingIntent.getActivity(this, PendingIntent.FLAG_ONE_SHOT, Intents.valueOfCall(), Intents.mutabilityFlags(false)), true);
+        if (xgramLockedOrAsleep) {
+          // It launches the call screen now and turns the screen on: once per call. Without a keyguard (none, or the
+          // lock delay) the state ends at once (XgramCallOverLock.release), so showsCallOverLock alone never marks it
+          xgramShownCallId = call.id;
+        }
+      }
     }
     Bitmap bitmap = user != null ?
       TdlibNotificationUtils.buildLargeIcon(tdlib, ChatId.fromUserId(user.id),
@@ -1157,8 +1180,9 @@ public class TGCallService extends Service implements
     if (video == null) {
       return null;
     }
-    // Locked: no activity of the app shows over the lock screen, so the answer would wait for the unlock while the
-    // call keeps ringing. The broadcast answers there at once; the camera follows the Video toggle after the unlock
+    // Locked: a notification action can't open the app over the lock screen (only the full-screen intent shows the call
+    // screen there, XgramCallOverLock), so the answer would wait for the unlock while the call keeps ringing. The
+    // broadcast answers there at once; the camera follows the Video toggle after the unlock
     final android.app.KeyguardManager keyguard = (android.app.KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
     if (keyguard != null && (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1 ? keyguard.isDeviceLocked() : keyguard.isKeyguardLocked())) {
       return null;

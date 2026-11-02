@@ -286,6 +286,8 @@ object XgramR5ChatPickers {
       dialog.setOnDismissListener { owner.destroy() }
       owner.moveTo(Lifecycle.State.RESUMED)
       dialog.show()
+      // Hidden while the call screen shows over the lock screen, as the AlertDialogs (BaseActivity.modifyAlert)
+      org.thunderdog.challegram.BaseActivity.xgramTrackDialog(context, dialog)
       true
     } catch (t: Throwable) {
       android.util.Log.e("XGram", "Compose picker failed", t)

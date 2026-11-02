@@ -126,6 +126,9 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
   @Override
   public void onCreate (Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
+    // XGram: a call intent shows the call screen over the lock screen (and turns the screen on while it rings), before
+    // the activity resumes. Anything Android kept from an instance before (relaunch, restart) is cleared first
+    xgramCallOverLock().onCreate(getIntent());
 
     Log.i("MainActivity.onCreate");
 
@@ -877,11 +880,16 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
   @Override
   protected void onNewIntent (Intent intent) {
     super.onNewIntent(intent);
+    xgramCallOverLock().onIntent(intent); // XGram: the full-screen intent of a ringing call, over the lock screen
     String action = intent != null ? intent.getAction() : null;
     if (!StringUtils.isEmpty(action)) {
       handleIntent(action, intent, false);
     }
   }
+
+  // XGram: handleIntent runs for an intent the phone was unlocked for (XgramCallOverLock.afterUnlock): it doesn't wait
+  // again while the keyguard is still on its way out
+  private boolean xgramIntentUnlocked;
 
   private boolean handleIntent (String actionRaw, final Intent intent, boolean fromCreate) {
     final String action = Intents.getCleanAction(actionRaw);
@@ -890,10 +898,28 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
       return false;
     }
 
+    // XGram: over the lock screen only the call screen shows. Any other intent (a t.me share or invite link, a proxy
+    // link, ACTION_SEND from a watch, an NFC tag or another app) opens popups there that work without the unlock, so it
+    // waits for the phone to be unlocked. Here, not in onNewIntent: the cold start and the passcode's later runs come
+    // here too. False: a cold start goes on to the chat list meanwhile
+    if (!xgramIntentUnlocked && !Intents.ACTION_OPEN_CALL.equals(action) && xgramCallOverLock().afterUnlock(() -> {
+      xgramIntentUnlocked = true;
+      try {
+        handleIntent(actionRaw, intent, false);
+      } finally {
+        xgramIntentUnlocked = false;
+      }
+    })) {
+      return false;
+    }
+
     intent.setAction("");
     setIntent(intent);
 
-    if (isPasscodeShowing()) {
+    // XGram: over the lock screen the call screen opens under the passcode at once (the passcode still comes first),
+    // so the screen that was open before doesn't show over the lock screen as the passcode goes
+    final boolean xgramCallUnderPasscode = Intents.ACTION_OPEN_CALL.equals(action) && xgramCallOverLock().opensUnderPasscode();
+    if (isPasscodeShowing() && !xgramCallUnderPasscode) {
       addPasscodeListener(new PasscodeListener() {
         @Override
         public void onPasscodeShowing (BaseActivity context, boolean isShowing) {
@@ -1680,6 +1706,7 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
     Tdlib tdlib = TdlibManager.instance().calls().getCurrentCallTdlib();
 
     if (call == null) {
+      xgramCallOverLock().onCallGone(); // XGram: nothing to show over the lock screen (before the chat list comes)
       if (navigation.isEmpty()) {
         initDefault(currentTdlib().id(), false);
       }
@@ -1690,6 +1717,7 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
     ViewController<?> c = navigation.getCurrentStackItem();
     if (c != null && c.tdlibId() == tdlib.id() && c instanceof CallController && ((CallController) c).compareUserId(call.userId)) {
       ((CallController) c).replaceCall(call);
+      xgramCallOverLock().onCallScreenShown((CallController) c); // XGram: this one shows over the lock screen
       return;
     }
 

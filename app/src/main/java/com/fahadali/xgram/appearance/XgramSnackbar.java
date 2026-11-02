@@ -194,6 +194,17 @@ public final class XgramSnackbar extends FrameLayout implements RootFrameLayout.
     return show(text, duration, null, null);
   }
 
+  /**
+   * Main thread. The bar that shows goes at once, without its action: the call screen shows over the lock screen
+   * (BaseActivity.xgramSetWindowsHiddenForLock), and the bar sits over everything of the app there.
+   */
+  public static void removeCurrent () {
+    final XgramSnackbar bar = current != null ? current.get() : null;
+    if (bar != null) {
+      bar.removeNow();
+    }
+  }
+
   /** {@link #show(CharSequence, int, CharSequence, Runnable)} with an "Undo" action (and the undo arrow), shown for 5 seconds. */
   public static boolean showUndo (CharSequence text, @Nullable Runnable onUndo) {
     return show(text, Toast.LENGTH_LONG, onUndo != null ? Lang.getString(R.string.XgramR5SheetsUndo) : null, onUndo);

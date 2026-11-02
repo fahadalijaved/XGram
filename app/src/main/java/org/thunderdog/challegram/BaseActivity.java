@@ -752,6 +752,10 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
   }
 
   public static AlertDialog modifyAlert (Context context, AlertDialog dialog, ThemeDelegate theme) {
+    // XGram: every alert (showAlert, ViewController.openAlert, XgramR5Calls.showAlert) and both pickers come here once
+    // shown: kept, so they hide while the call screen shows over the lock screen
+    xgramTrackDialog(context, dialog);
+
     View view;
 
     if (theme == null)
@@ -1257,6 +1261,7 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
         getWindow().setFlags(0, WindowManager.LayoutParams.FLAG_SECURE);
       }
     }*/
+    xgramCallOverLock.onActivityResume(); // XGram: unlocked meanwhile, the call screen no longer shows over the lock screen
     appUpdater.checkForUpdates();
     runEmulatorChecks();
   }
@@ -1292,6 +1297,7 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
       throw t;
     }
     setOrientationLockFlags(0);
+    xgramCallOverLock.destroy(); // XGram
     if (xgramTwoPane != null) {
       xgramTwoPane.destroy(); // XGram
     }
@@ -1363,6 +1369,7 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
     if (xgramWindow != null) {
       xgramWindow.onStart();
     }
+    xgramCallOverLock.onActivityStart(); // XGram: back over the lock screen, only the call screen shows
   }
 
   @Override
@@ -1370,7 +1377,17 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
     if (xgramWindow != null) {
       xgramWindow.onStop();
     }
+    xgramCallOverLock.onActivityStop(); // XGram: left with the screen on, no more over the lock screen
     super.onStop();
+  }
+
+  // XGram: the screen is on once the window has focus: a call that turned it on must not turn it on again later
+  @Override
+  public void onWindowFocusChanged (boolean hasFocus) {
+    super.onWindowFocusChanged(hasFocus);
+    if (hasFocus) {
+      xgramCallOverLock.onWindowFocused();
+    }
   }
 
   private static final int SYSTEM_NIGHT_MODE_UNSPECIFIED = 0;
@@ -1879,8 +1896,9 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
       notifyBackPressAvailabilityChanged();
       if (isShowing) {
         removeAllWindows();
-      } else {
+      } else if (!xgramWindowsHiddenForLock) { // XGram: popups hidden for the call over the lock screen stay hidden
         restoreAllWindows();
+        xgramRestorePipsAfterLock();
       }
       setFullScreenFlag(FULLSCREEN_FLAG_PASSCODE, isShowing);
       if (isShowing) {
@@ -2289,6 +2307,230 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
   @Nullable
   public com.fahadali.xgram.layout.XgramTwoPane xgramTwoPane () {
     return xgramTwoPane;
+  }
+
+  // XGram: the call screen over the lock screen (an incoming call turns the screen on and shows there).
+  private final com.fahadali.xgram.call.XgramCallOverLock xgramCallOverLock = new com.fahadali.xgram.call.XgramCallOverLock(this);
+  private boolean xgramWindowsHiddenForLock;
+  @Nullable private ArrayList<PopupLayout> xgramPipsHiddenForLock;
+  @Nullable private View xgramRoundPipHiddenForLock; // the round video message PiP: its own view, kept after it closes
+  // XGram: a dialog is a window of its own over the activity's, so it shows over the lock screen with it, above the call
+  // screen and the cover. The ones shown (modifyAlert: every AlertDialog and picker; the Compose pickers, the update card)
+  private final ArrayList<java.lang.ref.WeakReference<android.app.Dialog>> xgramDialogs = new ArrayList<>();
+  // XGram: the rest xgramSetWindowsHiddenForLock hid: windows (their root views) and the bars over the root
+  @Nullable private ArrayList<View> xgramViewsHiddenForLock;
+
+  public com.fahadali.xgram.call.XgramCallOverLock xgramCallOverLock () {
+    return xgramCallOverLock;
+  }
+
+  /** XGram: {@code dialog} of the activity behind {@code context} was just shown (modifyAlert, the Compose dialogs). */
+  public static void xgramTrackDialog (@Nullable Context context, @Nullable android.app.Dialog dialog) {
+    final BaseActivity activity = context != null && dialog != null ? UI.getContext(context) : null;
+    if (activity != null) {
+      activity.xgramTrackDialog(dialog);
+    }
+  }
+
+  private void xgramTrackDialog (@NonNull android.app.Dialog dialog) {
+    for (int i = xgramDialogs.size() - 1; i >= 0; i--) {
+      android.app.Dialog d = xgramDialogs.get(i).get();
+      if (d == null || d == dialog || !xgramHasWindow(xgramDecorOf(d))) {
+        xgramDialogs.remove(i); // gone, or closed
+      }
+    }
+    xgramDialogs.add(new java.lang.ref.WeakReference<>(dialog));
+    if (xgramWindowsHiddenForLock && !xgramCallOverLock.showsCallScreen()) {
+      // Opened over the lock screen before the call screen shows (the cover is up, nothing the user does opens it): it
+      // waits with the rest. One the call screen opens (Accept with no connection) shows
+      xgramHideViewForLock(xgramDecorOf(dialog), View.GONE);
+    }
+  }
+
+  @Nullable
+  private static View xgramDecorOf (@NonNull android.app.Dialog dialog) {
+    final android.view.Window window = dialog.getWindow();
+    return window != null ? window.peekDecorView() : null;
+  }
+
+  /** XGram: the root view of a window still added (its parent is the window's ViewRootImpl, from addView to removal). */
+  private static boolean xgramHasWindow (@Nullable View root) {
+    return root != null && (root.getParent() != null || androidx.core.view.ViewCompat.isAttachedToWindow(root));
+  }
+
+  /**
+   * XGram: hides a window's root view as Dialog.hide does (GONE: the window stays, draws nothing and takes no touch),
+   * or a bar over the root (INVISIBLE), until xgramRestorePipsAfterLock.
+   */
+  private void xgramHideViewForLock (@Nullable View view, int visibility) {
+    if (view == null || view.getVisibility() != View.VISIBLE) {
+      return;
+    }
+    view.setVisibility(visibility);
+    if (xgramViewsHiddenForLock == null) {
+      xgramViewsHiddenForLock = new ArrayList<>();
+    }
+    xgramViewsHiddenForLock.add(view);
+  }
+
+  /**
+   * XGram, Android 10+: every other window over the activity's, whoever opened it: the dialogs, sheets and menus of
+   * the Compose pages (their own windows, which stay while a screen covers the page), the text selection toolbar, a
+   * dialog shown again without modifyAlert. A dialog's window is added with the activity's token, a panel's (a popup,
+   * a menu) with the token of the window under it, so the windows over those go too.
+   */
+  @androidx.annotation.RequiresApi(Build.VERSION_CODES.Q)
+  private void xgramHideOtherWindowsForLock () {
+    final View decor = getWindow().peekDecorView();
+    if (decor == null) {
+      return;
+    }
+    final java.util.HashSet<android.os.IBinder> owners = new java.util.HashSet<>();
+    final android.os.IBinder appToken = getWindow().getAttributes().token;
+    if (appToken != null) {
+      owners.add(appToken);
+    }
+    final android.os.IBinder windowToken = decor.getWindowToken();
+    if (windowToken != null) {
+      owners.add(windowToken);
+    }
+    if (owners.isEmpty()) {
+      return; // not shown yet: nothing can be over it
+    }
+    final List<View> roots;
+    try {
+      roots = com.fahadali.xgram.call.XgramCallOverLock.Api29.windowViews();
+    } catch (Throwable t) {
+      Log.e("XGram: windows over the call screen", t);
+      return;
+    }
+    boolean more = true;
+    while (more) {
+      more = false;
+      for (View root : roots) {
+        if (root == null || root == decor) {
+          continue;
+        }
+        final ViewGroup.LayoutParams params = root.getLayoutParams();
+        final android.os.IBinder token = params instanceof WindowManager.LayoutParams ? ((WindowManager.LayoutParams) params).token : null;
+        if (token == null || !owners.contains(token)) {
+          continue; // another activity's, a toast
+        }
+        xgramHideViewForLock(root, View.GONE);
+        final android.os.IBinder own = root.getWindowToken();
+        if (own != null && owners.add(own)) {
+          more = true; // the windows over this one (a menu in a dialog), on the next pass
+        }
+      }
+    }
+  }
+
+  /**
+   * XGram: what sits over the root, so over the cover and the call screen too: the snackbar goes (an Undo whose time
+   * stood still while the phone slept), the progress bars (XgramR6B3Shell: an export with the chat's name) hide.
+   */
+  private void xgramHideBarsForLock () {
+    com.fahadali.xgram.appearance.XgramSnackbar.removeCurrent();
+    final View content = findViewById(android.R.id.content);
+    if (content instanceof ViewGroup) {
+      final ViewGroup group = (ViewGroup) content;
+      for (int i = 0; i < group.getChildCount(); i++) {
+        final View child = group.getChildAt(i);
+        if (child != rootView) {
+          xgramHideViewForLock(child, View.INVISIBLE);
+        }
+      }
+    }
+  }
+
+  /**
+   * XGram: over the lock screen the popups that were open (and PiPs) hide as under the passcode, and so do the dialogs
+   * and every other window over the activity's, the bars over the root and the tooltips. They come back once neither
+   * the passcode nor the lock screen hides them.
+   */
+  public void xgramSetWindowsHiddenForLock (boolean hidden) {
+    if (xgramWindowsHiddenForLock == hidden && !hidden) {
+      return; // XGram: hiding runs again when asked (what opened since hides too, each step skips what is hidden)
+    }
+    xgramWindowsHiddenForLock = hidden;
+    if (hidden) {
+      removeAllWindows();
+      for (int i = 0; i < forgottenWindows.size(); i++) {
+        PopupLayout pip = forgottenWindows.valueAt(i);
+        if (pip != null) {
+          pip.hideTemporarily();
+          if (xgramPipsHiddenForLock == null) {
+            xgramPipsHiddenForLock = new ArrayList<>();
+          }
+          if (!xgramPipsHiddenForLock.contains(pip)) { // XGram: once, however many passes
+            xgramPipsHiddenForLock.add(pip);
+          }
+        }
+      }
+      // XGram: the round video message PiP is no popup: it shows a chat's video message and plays it on a tap
+      View roundPip = roundVideoController.getPipParentView();
+      if (roundPip != null && roundPip.getVisibility() == View.VISIBLE) {
+        roundPip.setVisibility(View.INVISIBLE);
+        xgramRoundPipHiddenForLock = roundPip;
+      }
+      // XGram: dialogs opened before (a bot's "Share your phone number?" stays open while the phone locks: OK would
+      // share it from the lock screen)
+      for (int i = xgramDialogs.size() - 1; i >= 0; i--) {
+        android.app.Dialog dialog = xgramDialogs.get(i).get();
+        View decor = dialog != null ? xgramDecorOf(dialog) : null;
+        if (xgramHasWindow(decor)) {
+          xgramHideViewForLock(decor, View.GONE);
+        } else {
+          xgramDialogs.remove(i);
+        }
+      }
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        xgramHideOtherWindowsForLock();
+      }
+      xgramHideBarsForLock();
+      if (tooltipOverlayView != null) {
+        tooltipOverlayView.hideAll(true); // over the cover too; hints only, they don't come back
+      }
+      // XGram: no text field under the cover keeps the focus: a hardware keyboard, or the on-screen one coming back
+      // with the window's focus, would type into the chat's message field below it (and Enter sends). Not under the app
+      // passcode: the focused view is its own field then (showPasscode takes the content away), which keeps the keyboard
+      final View focused = getCurrentFocus();
+      if (focused != null && focused != focusView && !isPasscodeShowing) {
+        Keyboard.hide(focused);
+        requestBlankFocus();
+        if (getCurrentFocus() == focused) {
+          focused.clearFocus();
+        }
+      }
+    } else if (!isPasscodeShowing) {
+      restoreAllWindows();
+      xgramRestorePipsAfterLock();
+    }
+  }
+
+  private void xgramRestorePipsAfterLock () {
+    if (xgramViewsHiddenForLock != null) {
+      // XGram: a window closed meanwhile has none any more: its view visible again shows nothing (and is right should
+      // that dialog be shown again)
+      for (View view : xgramViewsHiddenForLock) {
+        if (view.getVisibility() != View.VISIBLE) {
+          view.setVisibility(View.VISIBLE);
+        }
+      }
+      xgramViewsHiddenForLock = null;
+    }
+    if (xgramPipsHiddenForLock != null) {
+      for (PopupLayout pip : xgramPipsHiddenForLock) {
+        if (!pip.isDestroyed()) {
+          pip.restoreIfHidden();
+        }
+      }
+      xgramPipsHiddenForLock = null;
+    }
+    if (xgramRoundPipHiddenForLock != null) {
+      xgramRoundPipHiddenForLock.setVisibility(View.VISIBLE);
+      xgramRoundPipHiddenForLock = null;
+    }
   }
 
   // XGram: window size classes, fold posture and rotation for adaptive layouts.
