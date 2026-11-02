@@ -110,6 +110,7 @@ internal object XgramSearchIndex {
     return listOf(
       item("switch", R.id.btn_xgramBottomNav, R.string.XgramBottomNavOption, null),
       item("style", R.id.btn_xgramNavBarStyle, R.string.XgramNavBarStyle, null),
+      item("scroll", R.id.btn_xgramNavBarScroll, R.string.XgramNavBarScroll, null, intArrayOf(R.string.XgramSearchKwNavBar, R.string.XgramSearchKwNavScroll)),
       item("tabs", R.id.btn_xgramNavBarTab, R.string.XgramNavBarTabs, firstTab),
       item("profile", R.id.btn_xgramNavBarProfile, R.string.XgramNavBarProfile, null),
       item("accountSwipe", R.id.btn_xgramNavAccountSwipe, R.string.XgramAccountSwipe, null, intArrayOf(R.string.XgramSearchKwNavBar, R.string.XgramSearchKwAccounts)),

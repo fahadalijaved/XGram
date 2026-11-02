@@ -2024,6 +2024,31 @@ public final class XgramSettings {
     putInt(KEY_NAV_STYLE, style);
   }
 
+  // What scrolling down a list does to the toolbar (Navigation bar > While scrolling): it slides away (default),
+  // shrinks to its icons, or folds into the tab on screen. Read by the toolbar at every sync, so cached. The classic
+  // bar and the rail never read it.
+
+  public static final String KEY_NAV_SCROLL = "xgram_nav_scroll";
+  /** Hide: slides below the window (default). Shrink: its icons only, every tab still a tap away. Collapse: one tab. */
+  public static final int NAV_SCROLL_HIDE = 0, NAV_SCROLL_SHRINK = 1, NAV_SCROLL_COLLAPSE = 2;
+
+  private volatile Integer navScroll;
+
+  /** Missing or unknown: Hide, as before there was a choice. */
+  public int navScroll () {
+    Integer value = navScroll;
+    if (value == null) {
+      int stored = pmc().getInt(KEY_NAV_SCROLL, NAV_SCROLL_HIDE);
+      navScroll = value = stored == NAV_SCROLL_SHRINK || stored == NAV_SCROLL_COLLAPSE ? stored : NAV_SCROLL_HIDE;
+    }
+    return value;
+  }
+
+  public void setNavScroll (int mode) {
+    navScroll = mode;
+    putInt(KEY_NAV_SCROLL, mode);
+  }
+
   // With the floating navigation toolbar: where the chat list's compose button goes, and whether the side menu (its ☰
   // and edge swipe) stays. Both only apply while the toolbar is shown.
 
@@ -2085,20 +2110,22 @@ public final class XgramSettings {
   }
 
   /**
-   * XGram's layout: Chats, Activity, Settings and the profile as tabs in that order, Standard colours, the compose
-   * button at the side, the side menu and the swipe on the photo.
+   * XGram's layout: Chats, Activity, Settings and the profile as tabs in that order, Standard colours, hiding while
+   * scrolling, the compose button at the side, the side menu and the swipe on the photo.
    */
   public void resetNavBar () {
     XgramReorder.reset(XgramReorder.NAV_BAR);
     navTabs = NAV_TABS_DEFAULT;
     navProfile = NAV_PROFILE_TAB;
     navStyle = NAV_STYLE_STANDARD;
+    navScroll = NAV_SCROLL_HIDE;
     navFab = NAV_FAB_SIDE;
     navHideDrawer = false;
     navAccountSwipe = true;
     putInt(KEY_NAV_TABS, NAV_TABS_DEFAULT);
     putInt(KEY_NAV_PROFILE, NAV_PROFILE_TAB);
     putInt(KEY_NAV_STYLE, NAV_STYLE_STANDARD);
+    putInt(KEY_NAV_SCROLL, NAV_SCROLL_HIDE);
     putInt(KEY_NAV_FAB, NAV_FAB_SIDE);
     put(KEY_NAV_HIDE_DRAWER, false);
     put(KEY_NAV_ACCOUNT_SWIPE, true);

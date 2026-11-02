@@ -99,6 +99,7 @@
   <string name="XgramSearchKwAppIcon">launcher icon|app icon</string>
   <string name="XgramSearchKwTwoPane">tablet|foldable|fold|split|two panes|dual pane|rail</string>
   <string name="XgramSearchKwNavBar">tabs|bottom bar|navigation bar|toolbar|navigation</string>
+  <string name="XgramSearchKwNavScroll">scroll|scrolling|minimize|shrink|collapse|hide on scroll|compact</string>
   <string name="XgramSearchKwSpeed">speed|faster</string>
   <string name="XgramSearchKwDeleted">deleted messages|anti-recall|edited|history</string>
   <string name="XgramSearchKwAds">ads|sponsored|advertising</string>

@@ -5,6 +5,8 @@
   <string name="XgramNavProfileLabel">Profile</string>
   <string name="XgramNavProfileA11y">Profile, %1$s</string>
   <string name="XgramNavSwitchAccount">Switch account</string>
+  <!-- The bar folded into the tab you're on (While scrolling: Collapse): what a tap on it does, for TalkBack -->
+  <string name="XgramNavExpand">Expand navigation</string>
   <!-- The accounts' sheet: the side menu's drag to reorder and its Log out, for when the side menu is hidden -->
   <string name="XgramNavAccountsManage">Manage accounts</string>
 
@@ -13,6 +15,14 @@
   <string name="XgramNavBarStyle">Bar colors</string>
   <string name="XgramNavBarStyleStandard">Standard</string>
   <string name="XgramNavBarStyleVibrant">Vibrant</string>
+  <!-- What scrolling down a list does to the bar; one word each (a connected button group), the description follows the choice -->
+  <string name="XgramNavBarScroll">While scrolling</string>
+  <string name="XgramNavBarScrollHide">Hide</string>
+  <string name="XgramNavBarScrollShrink">Shrink</string>
+  <string name="XgramNavBarScrollCollapse">Collapse</string>
+  <string name="XgramNavBarScrollHideInfo">Scrolling down slides the bar away. Scrolling up brings it back.</string>
+  <string name="XgramNavBarScrollShrinkInfo">Scrolling down shrinks the bar to its icons, every tab still a tap away. Scrolling up brings the labels back.</string>
+  <string name="XgramNavBarScrollCollapseInfo">Scrolling down folds the bar into the tab you\'re on, at the edge of the screen. Tap it or scroll up to bring the bar back.</string>
   <string name="XgramNavBarTabs">Tabs</string>
   <string name="XgramNavBarMax">Up to 4 tabs</string>
   <string name="XgramNavBarMin">At least 2 tabs</string>
@@ -48,6 +58,7 @@
   <item type="id" name="btn_xgramNavBarTab" />
   <item type="id" name="btn_xgramNavBarProfile" />
   <item type="id" name="btn_xgramNavBarStyle" />
+  <item type="id" name="btn_xgramNavBarScroll" />
   <item type="id" name="btn_xgramNavBarReset" />
   <item type="id" name="btn_xgramNavBarFab" />
   <item type="id" name="btn_xgramNavBarHideDrawer" />

@@ -34,10 +34,11 @@ import org.thunderdog.challegram.tool.UI
 
 /**
  * Chat list > Navigation > Navigation bar (Expressive design): the floating navigation toolbar of narrow windows. A live
- * preview of it (the real pill and photo, a tap moves the selection), the switch and the colors, the tabs (up to 4,
- * Chats always, in the user's order), where the profile photo goes (and whether a swipe on it switches accounts,
- * XgramAccountSwipe), whether the side menu stays, and a reset to XGram's layout (XgramSettings.resetNavBar). Every
- * change reaches the toolbar at once. Where the New chat button goes is Chat list > Navigation's New chat button
+ * preview of it (the real pill and photo, a tap moves the selection), the switch and the colors, what scrolling down
+ * does (the bar slides away, shrinks to its icons or folds into the tab on screen, XgramSettings.navScroll), the tabs
+ * (up to 4, Chats always, in the user's order), where the profile photo goes (and whether a swipe on it switches
+ * accounts, XgramAccountSwipe), whether the side menu stays, and a reset to XGram's layout (XgramSettings.resetNavBar).
+ * Every change reaches the toolbar at once. Where the New chat button goes is Chat list > Navigation's New chat button
  * (XgramSettingDeps.newChatButton).
  */
 @Composable
@@ -74,6 +75,30 @@ fun NavBarPage() {
         updateToolbar(host)
       }
     }
+
+    // What scrolling down a list does to the bar: it slides away, shrinks to its icons, or folds into the tab on screen
+    val scrollMode = settings.navScroll()
+    group {
+      buttons(
+        R.id.btn_xgramNavBarScroll, s(R.string.XgramNavBarScroll),
+        listOf(
+          s(R.string.XgramNavBarScrollHide) to XgramSettings.NAV_SCROLL_HIDE,
+          s(R.string.XgramNavBarScrollShrink) to XgramSettings.NAV_SCROLL_SHRINK,
+          s(R.string.XgramNavBarScrollCollapse) to XgramSettings.NAV_SCROLL_COLLAPSE
+        ),
+        selected = scrollMode
+      ) {
+        settings.setNavScroll(it)
+        updateToolbar(host)
+      }
+    }
+    description(
+      when (scrollMode) {
+        XgramSettings.NAV_SCROLL_SHRINK -> R.string.XgramNavBarScrollShrinkInfo
+        XgramSettings.NAV_SCROLL_COLLAPSE -> R.string.XgramNavBarScrollCollapseInfo
+        else -> R.string.XgramNavBarScrollHideInfo
+      }
+    )
 
     header(R.string.XgramNavBarTabs)
     val profileMode = settings.navProfile()

@@ -108,6 +108,12 @@ import tgx.td.ChatId;
  *   activity's content layout, like the rail), stays on screen for a tab change, leaves with its tab screen when a
  *   screen is pushed (shared axis) and sits under a predictive back card like the live app bar.</li>
  *   <li>A page-colour band behind it fades the rows out under the bar; it takes the touches of its solid part.</li>
+ *   <li>Scrolling down slides it away, or (Navigation bar > While scrolling: Shrink) shrinks it to its icons on one
+ *   spring: 56dp tall with 40dp items, every tab 48dp wide, the selected label wiped out and its badge's count back,
+ *   the button scaled to 48dp, the band gone (the pill floats with its shadow). The lists keep the full bar's room.
+ *   Or (Collapse) it folds into the selected tab at the start edge: a 56dp pill with its icon and label, the other tabs
+ *   and the button fade out and shrink, a dot at its corner tells of a badge folded away; a tap on it (or a page drag)
+ *   only brings the bar back. The settings page's preview plays a new choice once (compact, held, back in full).</li>
  * </ul>
  * {@link XgramTwoPane} owns one per activity and decides when it shows (one pane, no rail, the setting on). Values are
  * the M3E floating toolbar tokens (FloatingToolbarTokens: 64dp, 8dp padding, 48dp items, ToolbarToFabGap 8dp,
@@ -118,7 +124,13 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
 
   /** From the pill to what is under it (the navigation bar), and the smallest margin from the window's sides. */
   private static final float SCREEN_OFFSET = 16f;
-  private static final float HEIGHT = 64f, PAD = 8f, ITEM_H = 48f;
+  /** The pill and its padding; its items are as tall as what the padding leaves (48dp), concentric with it. */
+  private static final float HEIGHT = 64f, PAD = 8f;
+  /**
+   * Shrunk to its icons while scrolling (Navigation bar > While scrolling): 56dp, the padding kept, so the items are
+   * 40dp (concentric), every tab at most U_COMPACT wide. Its bottom stays where it was.
+   */
+  private static final float HEIGHT_COMPACT = 56f;
   /** The width of an unselected tab, regular and compact. */
   private static final float U_REGULAR = 56f, U_COMPACT = 48f;
   /** The selected tab: lead, the 24dp icon, the gap, the label, trail. Dense: labelMedium, smaller gap and trail. */
@@ -126,6 +138,16 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
   /** Narrower labels than this are not worth showing: icons only. */
   private static final float MIN_LABEL = 24f, ICON_ONLY_S = 64f, ICON_ONLY_MIN_U = 44f;
   private static final float BUTTON = 56f, BUTTON_GAP = 8f, AVATAR = 40f, TAB_AVATAR = 24f, BUTTON_HIT_SLOP = 4f;
+  /** The profile button beside the shrunk bar: scaled to this (its photo with it, about 34dp). */
+  private static final float BUTTON_COMPACT = 48f;
+  /**
+   * Collapsed to one tab: what folds away (the other tabs, their badges, the button) fades out this many times faster
+   * than the bar folds (gone by about .29) and shrinks by FOLD_SCALE (the button to BUTTON_FOLDED); the dot for a badge
+   * folded away fades in from FOLDED_BADGE_FROM.
+   */
+  private static final float FOLD_FADE = 3.4f, FOLD_SCALE = .25f, BUTTON_FOLDED = .6f, FOLDED_BADGE_FROM = .6f;
+  /** The settings page's preview shows Shrink or Collapse once when chosen: compact for this long, then back in full. */
+  private static final long PREVIEW_DEMO_HOLD = 1200L;
   private static final float BUTTON_SELECTED_CORNER = XgramExpressive.CORNER_L, PRESSED_CORNER = XgramExpressive.CORNER_M;
   /** Above the pill: the band fades in over this much (and the level 3 shadow has room). */
   private static final float BAND_ABOVE = 16f;
@@ -154,7 +176,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
   public static final String[] DEFAULT_ORDER = {"chats", "activity", "calls", "contacts", "saved", "settings", "profile"};
   static final int MIN_TABS = 2, MAX_TABS = 4;
 
-  /** Why the toolbar steps aside (a bit each); scrolling down hides it too. */
+  /** Why the toolbar steps aside (a bit each); scrolling down hides it too (or shrinks it: it steps aside shrunk). */
   public static final int FORCE_SEARCH = 1, FORCE_SELECT = 2, FORCE_FOLDER_MENU = 4, FORCE_FAB_MENU = 8, FORCE_IME = 16, FORCE_TRANSFORM = 32;
   /** The bits the chat list sets (setForceHidden); the others are the toolbar's own. */
   private static final int FORCE_OWN = FORCE_IME | FORCE_TRANSFORM;
@@ -176,7 +198,10 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
   @Nullable private final XgramTwoPane owner;
   @Nullable private final NavigationController navigation;
   @Nullable private final ViewGroup container;
-  /** The settings page's live preview: no navigation, no badges, a tap only moves the selection. */
+  /**
+   * The settings page's live preview: no navigation, no badges, never hides, a tap only moves the selection (and brings
+   * back a bar its demo of Shrink or Collapse made compact).
+   */
   private final boolean preview;
 
   private final TextPaint labelLarge, labelMedium, badgePaint;
@@ -202,6 +227,8 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
   private int fitStyle = STYLE_R1;
   private boolean iconOnly;
   private float fitW, fitGroupW, fitGroupLeft;
+  /** Shrunk to its icons: every tab's width and the pill's (the padding and the tabs). */
+  private float fitUC, fitWC;
   private final XgramExpressive.Spring widthSpring, leftSpring;
   private int notifiedEndInset = Integer.MIN_VALUE;
 
@@ -220,6 +247,16 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
   private final XgramExpressive.Spring hideSpring;
   private boolean scrollHidden;
   private int forceMask;
+  // What scrolling down does (XgramSettings.NAV_SCROLL_*): Hide slides it away (hideSpring); Shrink and Collapse make
+  // it compact, 0 = full, 1 = compact (laid out and drawn from it every frame, no layout pass). The kind is the mode it
+  // started compacting in: it expands the same way
+  private final XgramExpressive.Spring compactSpring;
+  private int scrollMode = XgramSettings.NAV_SCROLL_HIDE;
+  private int compactKind = XgramSettings.NAV_SCROLL_SHRINK;
+  // The settings page's preview (never hides): a new choice for scrolling plays once, compact, held, back in full. The
+  // choice waiting for the other compact one to come back in full first (NAV_SCROLL_HIDE: none)
+  private int previewDemoNext = XgramSettings.NAV_SCROLL_HIDE;
+  private final Runnable previewDemoEnd = this::endPreviewDemo;
   /** A tab screen on top searches (its search opened): set from ViewController's search hooks. */
   private boolean transformSearching;
   @Nullable private RecyclerView scrollSource;
@@ -323,9 +360,21 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
   private final XgramExpressive.Spring.Listener frameListener = new XgramExpressive.Spring.Listener() {
     @Override
     public void onSpringUpdate (XgramExpressive.Spring s, float value) {
-      pill.markDirty();
+      onTabsMoved();
     }
   };
+
+  /**
+   * A tab's spring moved (or snapped): the pill lays its tabs out again. Folded (Collapse), the pill is as wide as the
+   * selected tab: it is placed again too.
+   */
+  private void onTabsMoved () {
+    if (compactKind == XgramSettings.NAV_SCROLL_COLLAPSE && compactSpring.getValue() != 0f) {
+      layoutGroup(); // marks the pill dirty
+    } else {
+      pill.markDirty();
+    }
+  }
 
   public XgramNavToolbar (BaseActivity context, XgramTwoPane owner, NavigationController navigation, ViewGroup container) {
     this(context, owner, navigation, container, false);
@@ -353,6 +402,9 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     this.hideSpring = new XgramExpressive.Spring(XgramExpressive.SPATIAL_DEFAULT, 0f, (s, value) -> applyHide()).setThreshold(.002f);
     this.hideSpring.setEndListener(this::applyHide);
     this.menuBadgeSpring = new XgramExpressive.Spring(XgramExpressive.EFFECTS_DEFAULT, 0f, (s, value) -> invalidateMenuBadge()).setThreshold(.002f);
+    // The refit springs' token: shrinking feels like a change of the tabs (both ways; Reduce motion snaps it)
+    this.compactSpring = new XgramExpressive.Spring(XgramExpressive.SPATIAL_DEFAULT, 0f, (s, value) -> layoutGroup()).setThreshold(.001f);
+    this.compactSpring.setEndListener(this::onCompactSettled);
     this.badges = preview ? null : new XgramNavBadges(badgeCallback);
     if (preview) {
       this.tdlib = context.currentTdlib();
@@ -585,6 +637,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     if (this.inline != inline) {
       this.inline = inline;
       host.invalidate();
+      layoutGroup(); // a compact pill moves to its place on the row (pillTopNow)
     }
   }
 
@@ -653,7 +706,14 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     }
     bind(root);
     boolean wasButton = buttonMode, wasVibrant = vibrant;
+    int wasScrollMode = scrollMode;
     readSettings();
+    if (scrollMode != wasScrollMode) {
+      // Another choice for scrolling: the bar is back in full at once (the compact spring snaps to 0), the next scroll
+      // down does the new thing
+      scrollHidden = false;
+      updateHidden(false);
+    }
     int[] dests = tabDests();
     boolean tabsChanged = !Arrays.equals(dests, this.dests);
     if (tabsChanged || wasButton != buttonMode || wasVibrant != vibrant || iconPack != XgramIconPack.current()) {
@@ -782,12 +842,18 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       tab.t.setValue(value);
       tab.c.setValue(value);
     }
-    pill.markDirty();
+    onTabsMoved();
   }
 
-  /** A finger started dragging the pages: the morph follows it (also over a tap's page change still settling). */
+  /**
+   * A finger started dragging the pages: the morph follows it (also over a tap's page change still settling). Folded
+   * into one tab (Collapse), the bar comes back: the tabs the pages move to are on it.
+   */
   public void onPagerDragStarted () {
     ignorePagerScroll = false;
+    if (!destroyed && !preview && shown && collapsesToTab() && compactSpring.getTarget() >= 1f) {
+      expandFolded();
+    }
   }
 
   /** The pager stopped: taps on the toolbar no longer hold back the pager-driven morph. */
@@ -815,8 +881,9 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
   }
 
   /**
-   * Scrolling down hides the toolbar, scrolling up brings it back (never with touch exploration, nor while the photo
-   * is dragged or slides to switch accounts: the list may still scroll from a fling).
+   * Scrolling down hides the toolbar, or shrinks it to its icons or folds it into one tab (Navigation bar > While
+   * scrolling), scrolling up brings it back (never with touch exploration, nor while the photo is dragged or slides to
+   * switch accounts: the list may still scroll from a fling).
    */
   public void setScrollHidden (boolean hidden) {
     if (hidden && !scrollHidden && (isTouchExploration() || isSwipingPhoto())) {
@@ -870,6 +937,8 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     attachScrollSource(null);
     dropWarm();
     hideSpring.cancel();
+    compactSpring.cancel();
+    cancelPreviewDemo();
     widthSpring.cancel();
     leftSpring.cancel();
     menuBadgeSpring.cancel();
@@ -1342,6 +1411,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     XgramSettings settings = XgramSettings.instance();
     buttonMode = settings.navProfile() == XgramSettings.NAV_PROFILE_BUTTON;
     vibrant = settings.navStyle() == XgramSettings.NAV_STYLE_VIBRANT;
+    scrollMode = settings.navScroll();
   }
 
   // Scroll hiding on the tab screens (the chat list hides it with its compose button)
@@ -1426,14 +1496,235 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     if (preview) {
       return;
     }
-    float target = scrollHidden || forceMask != 0 ? 1f : 0f;
+    final boolean hideOnScroll = scrollMode == XgramSettings.NAV_SCROLL_HIDE;
+    float target = (scrollHidden && hideOnScroll) || forceMask != 0 ? 1f : 0f;
     // Hiding and showing animate only while the toolbar is on a tab screen (also back from slid away, while invisible)
-    if (animated && canAnimateHide()) {
+    final boolean animate = animated && canAnimateHide();
+    if (animate) {
       hideSpring.animateTo(target);
     } else {
       hideSpring.setValue(target);
     }
     applyHide();
+    // Shrunk by scrolling: it stays so while a search, a selection or the keyboard slides it away, and comes back so
+    setCompact(scrollHidden && !hideOnScroll, animate);
+  }
+
+  /** How compact the bar is now: 0 full, 1 shrunk or folded (a little past both ends while the spring overshoots). */
+  private float compactNow () {
+    return Math.max(-.05f, Math.min(1.05f, compactSpring.getValue()));
+  }
+
+  /**
+   * How far the tabs are shrunk to their icons now (the widths, the labels, the button): compactNow() in Shrink. In
+   * Collapse only as far as no tab is selected (the profile button's own profile): with no tab to fold into, the bar
+   * shrinks instead.
+   */
+  private float shrinkNow () {
+    final float k = compactNow();
+    if (k == 0f || compactKind == XgramSettings.NAV_SCROLL_SHRINK) {
+      return k;
+    }
+    return k * (1f - tabSelection());
+  }
+
+  /**
+   * How far the bar is folded into its selected tab now (Collapse; 0 in Shrink): never past either end (the widths of
+   * the tabs folding away would go below 0), and only as far as a tab is selected.
+   */
+  private float collapseNow () {
+    if (compactKind != XgramSettings.NAV_SCROLL_COLLAPSE || compactSpring.getValue() <= 0f) {
+      return 0f;
+    }
+    return MathUtils.clamp(compactSpring.getValue()) * tabSelection();
+  }
+
+  /** How selected the pill's tabs are together: 1 with a tab selected, 0 with the profile button (between, moving). */
+  private float tabSelection () {
+    float sum = 0f;
+    for (Tab tab : tabs) {
+      sum += MathUtils.clamp(tab.e.getValue());
+    }
+    return MathUtils.clamp(sum);
+  }
+
+  /** Collapse folds the bar into a tab: one is selected (the profile button's own profile shrinks it instead). */
+  private boolean collapsesToTab () {
+    return compactKind == XgramSettings.NAV_SCROLL_COLLAPSE && selectedIndex >= 0 && selectedIndex < tabs.length;
+  }
+
+  /** Folding into one tab, folded, or not back in full yet: the photo may be out of sight (no account switch). */
+  private boolean isFolding () {
+    return collapseNow() > 0f || (collapsesToTab() && compactSpring.getTarget() >= 1f);
+  }
+
+  /**
+   * A tab Collapse folds away: while the bar folds or stays folded, and as long as it is out of sight while the bar
+   * comes back.
+   */
+  private boolean isFoldedAway (Tab tab) {
+    return collapsesToTab() && tabs[selectedIndex] != tab && (compactSpring.getTarget() >= 1f || tab.opacity <= 0f);
+  }
+
+  /**
+   * Folded into one tab (Collapse): a tap on it or a page drag brings the bar back, with the chat list's compose button
+   * when it went with the bar (as scrolling up brings both).
+   */
+  private void expandFolded () {
+    if (preview) {
+      endPreviewDemo(); // the settings page's demo: back in full now
+      return;
+    }
+    final MainController root = this.root;
+    if (root != null && !root.isDestroyed() && navigation != null && navigation.getCurrentStackItem() == root) {
+      root.showComposeWrap(null); // the chat list's own way back: its compose button, then setScrollHidden(false) here
+    }
+    if (scrollHidden) {
+      scrollHidden = false;
+      updateHidden(true);
+    }
+  }
+
+  /** The pill's height now, in px: 64dp, 56dp compact (exactly today's 64dp at 0). Its items are 8dp in from it. */
+  private float pillHeightNow () {
+    final float full = Screen.dpf(HEIGHT);
+    return full + (Screen.dpf(HEIGHT_COMPACT) - full) * compactNow();
+  }
+
+  /**
+   * The pill's height for what is drawn in it, in px: exactly 64dp when full (as before), its laid-out (rounded) height
+   * while compact, so the icons and the inner pill move with the pill's px (no 1px jitter back and forth as it shrinks).
+   */
+  private float pillHeightIn (int laidOutHeight) {
+    return compactSpring.getValue() == 0f ? Screen.dpf(HEIGHT) : laidOutHeight;
+  }
+
+  private void setCompact (boolean compact, boolean animated) {
+    final float target = compact ? 1f : 0f;
+    final boolean targetChanged = compactSpring.getTarget() != target;
+    if (compact && targetChanged && compactSpring.getValue() <= .001f) {
+      compactKind = scrollMode; // it starts from full: it expands back the same way, whatever the setting is by then
+    }
+    if (animated) {
+      compactSpring.animateTo(target); // its listener lays the group out every frame
+    } else if (compactSpring.getValue() != target || compactSpring.isRunning()) {
+      compactSpring.setValue(target); // no listener call: laid out here
+      layoutGroup();
+      onCompactSettled();
+    }
+    if (targetChanged) {
+      updateTooltips(); // the selected tab's label goes or comes back
+      updateFoldedAccessibility(); // the tabs folded away are back in reach as soon as it expands
+    }
+  }
+
+  /** The bar settled full or compact. */
+  private void onCompactSettled () {
+    updateTooltips();
+    updateFoldedAccessibility();
+    if (preview) {
+      onPreviewDemoSettled();
+    }
+  }
+
+  // The settings page's preview: a new choice for scrolling, shown once
+
+  /**
+   * The settings page chose another way for scrolling: its preview (no list to scroll) shows it once. Shrink and
+   * Collapse make it compact, hold it for PREVIEW_DEMO_HOLD and bring it back in full; Hide brings it back in full. From
+   * one compact choice to the other, it comes back in full first (no jump between the two shapes). Not while it is off
+   * screen, nor with touch exploration (the bar never gets compact then).
+   */
+  private void playPreviewDemo () {
+    UI.cancel(previewDemoEnd);
+    previewDemoNext = XgramSettings.NAV_SCROLL_HIDE;
+    final boolean animated = canAnimateHide();
+    if (scrollMode == XgramSettings.NAV_SCROLL_HIDE || !animated || isTouchExploration()) {
+      setCompact(false, animated);
+      return;
+    }
+    if (scrollMode == XgramSettings.NAV_SCROLL_COLLAPSE && selectedIndex == -1 && tabs.length > 0) {
+      // The profile button selected (a tap on it here): Collapse would shrink the bar instead. The preview's selection
+      // is only for show: it folds into a tab
+      setTarget(indexOf(DEST_CHATS) != -1 ? DEST_CHATS : tabs[0].dest, true);
+    }
+    if (compactSpring.getValue() > .001f && compactKind != scrollMode) {
+      previewDemoNext = scrollMode; // played once it is back in full (onPreviewDemoSettled)
+      setCompact(false, true);
+      return;
+    }
+    startPreviewDemo();
+  }
+
+  /** From full (or on its way back from the same choice): compact, held once it settles there. */
+  private void startPreviewDemo () {
+    previewDemoNext = XgramSettings.NAV_SCROLL_HIDE;
+    if (compactSpring.getTarget() >= 1f && !compactSpring.isRunning()) {
+      UI.cancel(previewDemoEnd);
+      UI.post(previewDemoEnd, PREVIEW_DEMO_HOLD); // compact already: no settle to wait for
+      return;
+    }
+    setCompact(true, true); // the kind is the choice, as it starts from full
+  }
+
+  /** The demo held the compact bar long enough, or a tap on it ends it now (as it brings the real bar back). */
+  private void endPreviewDemo () {
+    UI.cancel(previewDemoEnd);
+    previewDemoNext = XgramSettings.NAV_SCROLL_HIDE;
+    if (!destroyed && preview) {
+      setCompact(false, canAnimateHide());
+    }
+  }
+
+  /** The preview's bar settled: compact (held for a moment), or back in full (the other compact choice plays now). */
+  private void onPreviewDemoSettled () {
+    if (destroyed) {
+      return;
+    }
+    if (compactSpring.getTarget() >= 1f) {
+      UI.cancel(previewDemoEnd);
+      UI.post(previewDemoEnd, PREVIEW_DEMO_HOLD);
+    } else if (previewDemoNext != XgramSettings.NAV_SCROLL_HIDE) {
+      if (previewDemoNext == scrollMode && canAnimateHide()) {
+        startPreviewDemo();
+      } else {
+        previewDemoNext = XgramSettings.NAV_SCROLL_HIDE;
+      }
+    }
+  }
+
+  /** The preview left the screen (or the toolbar is destroyed): no demo pending, the bar in full when it is back. */
+  private void cancelPreviewDemo () {
+    UI.cancel(previewDemoEnd);
+    previewDemoNext = XgramSettings.NAV_SCROLL_HIDE;
+  }
+
+  /**
+   * Folded into one tab and settled (Collapse): the tabs folded away and the button are no longer read by TalkBack nor
+   * reached with a keyboard. Back as soon as the bar starts to expand.
+   */
+  private void updateFoldedAccessibility () {
+    final boolean folded = collapsesToTab() && compactSpring.getTarget() >= 1f && !compactSpring.isRunning();
+    for (int i = 0; i < tabs.length; i++) {
+      setReachable(tabs[i].view, !folded || i == selectedIndex);
+    }
+    setReachable(profile, !folded);
+  }
+
+  private static void setReachable (View view, boolean reachable) {
+    final int important = reachable ? View.IMPORTANT_FOR_ACCESSIBILITY_AUTO : View.IMPORTANT_FOR_ACCESSIBILITY_NO;
+    if (view.getImportantForAccessibility() != important) {
+      view.setImportantForAccessibility(important);
+    }
+    if (view.isFocusable() != reachable) {
+      view.setFocusable(reachable);
+    }
+  }
+
+  private void updateTooltips () {
+    for (Tab tab : tabs) {
+      tab.updateTooltip();
+    }
   }
 
   private void applyHide () {
@@ -1582,7 +1873,8 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       tab.setSelectedState(i == index);
     }
     profile.setSelectedState(dest == DEST_PROFILE && buttonMode, animated);
-    pill.markDirty();
+    onTabsMoved();
+    updateFoldedAccessibility(); // folded into one tab: the one in reach is the selected one
   }
 
   // Fit (5.3)
@@ -1693,6 +1985,9 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     this.fitW = w;
     this.fitGroupW = groupW;
     this.fitGroupLeft = groupLeft;
+    // Shrunk to its icons: every tab as wide as an unselected one, at most 48dp (the 40dp items stay 4dp in)
+    this.fitUC = Math.min(Screen.dpf(U_COMPACT), u);
+    this.fitWC = 2f * pad + n * fitUC;
     if (animated) {
       widthSpring.animateTo(w);
       leftSpring.animateTo(groupLeft);
@@ -1724,29 +2019,117 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     }
   }
 
-  /** The pill's top in the host: 16dp above the inset, 64dp tall. */
+  /**
+   * The full pill's top in the host: 16dp above the inset, 64dp tall. The band and its solid part stay there while the
+   * pill shrinks (pillTopNow).
+   */
   private int pillTop (int hostHeight) {
     return hostHeight - (preview ? 0 : inset) - Screen.dp(SCREEN_OFFSET) - Screen.dp(HEIGHT);
   }
 
-  /** Places the pill and the button (the re-fit springs move them; no layout pass). */
+  /** The pill's height now, in whole px (Screen.dp(HEIGHT) when full). */
+  private int pillHeightPx () {
+    return Math.round(pillHeightNow());
+  }
+
+  /**
+   * The pill's top now: its bottom stays 16dp above the inset while it shrinks. On the compose button's row (inline) it
+   * stays centred on the row instead, as the button is.
+   */
+  private int pillTopNow (int hostHeight) {
+    final int shrunkBy = Screen.dp(HEIGHT) - pillHeightPx();
+    return pillTop(hostHeight) + (inline ? shrunkBy / 2 : shrunkBy);
+  }
+
+  /** The pill's width now: the fit's, less as it shrinks to its icons, the selected tab's as it folds into it. */
+  private float pillWidthNow () {
+    final float shrunk = shrunkWidthNow();
+    final float collapse = collapseNow();
+    return collapse > 0f ? Math.max(0f, shrunk + (collapsedWidth() - shrunk) * collapse) : shrunk;
+  }
+
+  /** The pill's width shrunk to its icons as far as it is now (the fit's when full): where folding starts from. */
+  private float shrunkWidthNow () {
+    final float w = Math.max(0f, widthSpring.getValue());
+    return Math.max(0f, w + (fitWC - w) * shrinkNow());
+  }
+
+  /**
+   * Folded into one tab: the padding around the selected tab (between two tabs' widths while the selection moves, as
+   * relayoutItems weights them).
+   */
+  private float collapsedWidth () {
+    float sum = 0f, weight = 0f;
+    for (Tab tab : tabs) {
+      float e = MathUtils.clamp(tab.e.getValue());
+      sum += e * tab.s;
+      weight += e;
+    }
+    return 2f * Screen.dpf(PAD) + (weight > 0f ? sum / weight : fitUC);
+  }
+
+  /** The profile button's scale beside the shrunk bar: 1, 48/56 shrunk (folding into one tab scales it further). */
+  private float buttonScaleNow () {
+    return 1f + (BUTTON_COMPACT / BUTTON - 1f) * shrinkNow();
+  }
+
+  /**
+   * Places the pill and the button (the re-fit springs and the compact spring move them; no layout pass). Shrinking,
+   * the group stays centred where the fit put it, the button scales around its centre (its view keeps its size).
+   * Folding into one tab, the pill goes from there to 16dp from the window's start edge (both its edges at once), the
+   * button keeps its gap to it as it shrinks and fades out.
+   */
   private void layoutGroup () {
     int hostHeight = host.getHeight() > 0 ? host.getHeight() : host.getMeasuredHeight();
     if (hostHeight <= 0) {
       return;
     }
-    float w = Math.max(0f, widthSpring.getValue());
-    float groupLeft = leftSpring.getValue();
+    float shrunkW = shrunkWidthNow(), w = pillWidthNow();
+    float shrunkScale = buttonScaleNow();
+    // What the button gives back as it scales (0 when full: every value below is exactly the fit's then)
+    float buttonShrink = Screen.dpf(BUTTON) * (1f - shrunkScale);
+    float buttonSpace = Screen.dpf(BUTTON + BUTTON_GAP) - buttonShrink;
+    float fullGroupW = Math.max(0f, widthSpring.getValue()) + (buttonMode ? Screen.dpf(BUTTON + BUTTON_GAP) : 0f);
+    float groupW = shrunkW + (buttonMode ? buttonSpace : 0f);
+    float groupLeft = leftSpring.getValue() + (fullGroupW - groupW) / 2f;
     boolean rtl = Lang.rtl();
-    int top = pillTop(hostHeight);
-    int pillLeft = Math.round(rtl && buttonMode ? groupLeft + Screen.dpf(BUTTON + BUTTON_GAP) : groupLeft);
-    int pillWidth = Math.round(w);
-    pill.layout(pillLeft, top, pillLeft + pillWidth, top + Screen.dp(HEIGHT));
+    int top = pillTopNow(hostHeight);
+    int height = pillHeightPx();
+    float left = rtl && buttonMode ? groupLeft + buttonSpace : groupLeft;
+    final float collapse = collapseNow();
+    if (collapse > 0f) {
+      // Folding into one tab: towards the start edge (the right one in right to left languages)
+      final float edge = Screen.dpf(SCREEN_OFFSET);
+      if (rtl) {
+        int hostWidth = host.getWidth() > 0 ? host.getWidth() : host.getMeasuredWidth();
+        float right = left + shrunkW;
+        left = right + (hostWidth - edge - right) * collapse - w;
+      } else {
+        left += (edge - left) * collapse;
+      }
+    }
+    int pillLeft = Math.round(left);
+    // Compact (both edges move every frame): its end rounded on its own, as the button's place is (a steady gap)
+    int pillRight = compactSpring.getValue() != 0f ? Math.round(left + w) : pillLeft + Math.round(w);
+    pill.layout(pillLeft, top, pillRight, top + height);
     if (buttonMode) {
-      int buttonLeft = Math.round(rtl ? groupLeft : groupLeft + w + Screen.dpf(BUTTON_GAP));
-      int buttonTop = top + (Screen.dp(HEIGHT) - Screen.dp(BUTTON)) / 2;
+      // Laid out at its full size, centred where the scaled button goes (its gap to the pill kept)
+      float buttonScale = shrunkScale * (1f + (BUTTON_FOLDED - 1f) * collapse);
+      float scaledAway = Screen.dpf(BUTTON) * (1f - buttonScale);
+      // (Right to left, not folding: from the group's start, so it is exactly the fit's place when full)
+      int buttonLeft = Math.round(!rtl ? left + w + Screen.dpf(BUTTON_GAP) - scaledAway / 2f : collapse > 0f ? left - Screen.dpf(BUTTON + BUTTON_GAP) + scaledAway / 2f : groupLeft - scaledAway / 2f);
+      int buttonTop = top + (height - Screen.dp(BUTTON)) / 2;
       int slop = Screen.dp(BUTTON_HIT_SLOP); // the view is 4dp larger on each side: the touch area around the button
       profile.layout(buttonLeft - slop, buttonTop - slop, buttonLeft + Screen.dp(BUTTON) + slop, buttonTop + Screen.dp(BUTTON) + slop);
+      if (profile.getScaleX() != buttonScale) {
+        profile.setScaleX(buttonScale); // around its centre (no pivot set)
+        profile.setScaleY(buttonScale);
+      }
+      // Folding into one tab: gone by about .29, its shadow with it
+      float buttonAlpha = MathUtils.clamp(1f - FOLD_FADE * collapse);
+      if (profile.getAlpha() != buttonAlpha) {
+        profile.setAlpha(buttonAlpha);
+      }
     }
     pill.markDirty();
     host.invalidate();
@@ -1768,11 +2151,12 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
   }
 
   /**
-   * A swipe on the photo may switch accounts now: where a tap could navigate, the toolbar not sliding away, and the
-   * photo's account the one in use (no other switch on its way).
+   * A swipe on the photo may switch accounts now: where a tap could navigate, the toolbar not sliding away nor folded
+   * into one tab (the photo out of sight; back once the bar is in full), and the photo's account the one in use (no
+   * other switch on its way).
    */
   private boolean canSwitchAccounts () {
-    return canNavigate(false) && !away && hideSpring.getTarget() < 1f && tdlib.id() == TdlibManager.instance().preferredAccountId();
+    return canNavigate(false) && !away && hideSpring.getTarget() < 1f && !isFolding() && tdlib.id() == TdlibManager.instance().preferredAccountId();
   }
 
   /** A finger drags the photo (beside the bar or as a tab) to switch accounts, or it slides to the new one. */
@@ -1860,12 +2244,33 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
   }
 
   private void onTabClick (int dest, @Nullable View view) {
+    if (view != null && collapsesToTab()) {
+      if (compactSpring.getTarget() >= 1f) {
+        // Folding into one tab, or folded: a tap anywhere on it only brings the bar back (never a tab out of sight;
+        // the preview's demo too)
+        if (!destroyed && (shown || preview)) {
+          ViewUtils.onClick(view);
+          Tab selected = tabs[selectedIndex];
+          selected.q.setValue(POP_FROM);
+          selected.q.animateTo(1f);
+          expandFolded();
+        }
+        return;
+      }
+      Tab tab = tabOf(dest);
+      if (tab != null && isFoldedAway(tab)) {
+        return; // the bar comes back, this tab is still out of sight
+      }
+    }
     if (preview) {
       if (dest != DEST_SAVED && dest != selectedDest) {
         if (view != null) {
           ViewUtils.onClick(view);
         }
         setTarget(dest, true);
+        if (compactSpring.getTarget() >= 1f) {
+          endPreviewDemo(); // shrunk by its demo: another tab brings the bar back, as on the real one
+        }
       }
       return;
     }
@@ -2148,6 +2553,10 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     if (preview || destroyed) {
       return false;
     }
+    Tab tab = tabOf(dest);
+    if (tab != null && isFoldedAway(tab)) {
+      return true; // folded into another tab: no menu and no tooltip for a tab out of sight
+    }
     if (dest == DEST_PROFILE) {
       return showAccounts();
     }
@@ -2329,6 +2738,9 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       if (selectedDest != DEST_PROFILE) {
         ViewUtils.onClick(view);
         setTarget(DEST_PROFILE, true);
+        if (compactSpring.getTarget() >= 1f) {
+          endPreviewDemo(); // shrunk by its demo: the profile brings the bar back, as on the real one
+        }
       }
       return;
     }
@@ -2434,6 +2846,8 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     float s;
     /** This frame's geometry, in the pill: the item, the icon centre. */
     float left, right, iconX;
+    /** This frame's opacity and scale of its icon and badge: below 1 as the bar folds into another tab (Collapse). */
+    float opacity = 1f, scale = 1f;
 
     int badgeCount;
     boolean badgeDot;
@@ -2528,11 +2942,16 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       view.setContentDescription(description);
     }
 
-    /** Unselected tabs (and every tab while labels don't fit) tell their name in a tooltip (Android 8+). */
+    /**
+     * Unselected tabs (and every tab while labels don't fit, or the bar shrinks to its icons) tell their name in a
+     * tooltip (Android 8+); not the ones folded away into another tab (out of sight).
+     */
     void updateTooltip () {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         boolean selected = indexOf(dest) == selectedIndex && selectedIndex != -1;
-        view.setTooltipText(selected && !iconOnly ? null : Lang.getString(DEST_TITLE[dest]));
+        boolean compact = compactSpring.getTarget() >= 1f;
+        boolean shrunk = compact && !collapsesToTab(), foldedAway = compact && collapsesToTab() && !selected;
+        view.setTooltipText(foldedAway || (selected && !iconOnly && !shrunk) ? null : Lang.getString(DEST_TITLE[dest]));
       }
     }
 
@@ -2625,11 +3044,15 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       if (destroyed || !preview) {
         return;
       }
+      int wasScrollMode = scrollMode;
       readSettings();
       int[] next = tabDests();
       rebuildTabs(next);
       requestFit(true);
       requestAvatars();
+      if (scrollMode != wasScrollMode) {
+        playPreviewDemo(); // it never scrolls: the new choice plays once (Shrink, Collapse)
+      }
     }
 
     float getHeightForHide () {
@@ -2651,7 +3074,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       int height = MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.UNSPECIFIED ? (preview ? listRoom() : hostHeight()) : MeasureSpec.getSize(heightMeasureSpec);
       setMeasuredDimension(width, height);
       ensureFit(width);
-      pill.measure(MeasureSpec.makeMeasureSpec(Math.max(0, Math.round(widthSpring.getValue())), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(Screen.dp(HEIGHT), MeasureSpec.EXACTLY));
+      pill.measure(MeasureSpec.makeMeasureSpec(Math.round(pillWidthNow()), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(pillHeightPx(), MeasureSpec.EXACTLY));
       int buttonSize = Screen.dp(BUTTON) + 2 * Screen.dp(BUTTON_HIT_SLOP);
       profile.measure(MeasureSpec.makeMeasureSpec(buttonSize, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(buttonSize, MeasureSpec.EXACTLY));
     }
@@ -2684,6 +3107,11 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
         profile.snap();
         widthSpring.setValue(widthSpring.getTarget());
         leftSpring.setValue(leftSpring.getTarget());
+        // A demo of the choice for scrolling stops: in full when it comes back (not left compact with no end to come)
+        cancelPreviewDemo();
+        compactSpring.setValue(0f);
+        layoutGroup();
+        onCompactSettled();
       }
     }
 
@@ -2716,6 +3144,15 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       return slot.shader;
     }
 
+    /**
+     * The lower of two band layers' alpha, with the upper one at {@code band * upper}: the pair is then the band faded to
+     * {@code band} (the lower colour never shows through as it fades). Exactly 1 at band 1, as before.
+     */
+    private float lowerBandAlpha (float band, float upper) {
+      final float over = band * upper;
+      return over >= .999f ? 1f : band * (1f - upper) / (1f - over);
+    }
+
     private void drawBandLayer (Canvas c, int color, float alpha, int mid, int end) {
       if (alpha <= 0f) {
         return;
@@ -2730,26 +3167,33 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       if (preview || inline || !shown || getHeight() <= 0) {
         return;
       }
+      // The full pill's geometry, whatever its size now: the shrunk pill floats with its shadow, the band fades out
+      // (its gradients stay cached: only the alpha moves)
       int top = pillTop(getHeight());
       int mid = top + Screen.dp(HEIGHT / 2f), end = top + Screen.dp(HEIGHT);
+      float band = MathUtils.clamp(1f - compactNow());
+      if (band <= 0f) {
+        return;
+      }
       if (transitionActive && tabL && tabR) {
         // A fade between two tab screens: the band of the one it leaves, then the other's over it
         boolean forward = tForward;
         ViewController<?> from = forward ? tLeft : tRight, to = forward ? tRight : tLeft;
-        drawBandLayer(c, bandColorOf(from), 1f, mid, end);
-        drawBandLayer(c, bandColorOf(to), transitionProgress(), mid, end);
+        float progress = transitionProgress();
+        drawBandLayer(c, bandColorOf(from), lowerBandAlpha(band, progress), mid, end);
+        drawBandLayer(c, bandColorOf(to), progress * band, mid, end);
         return;
       }
       ViewController<?> subject = transitionActive ? (tabL ? tLeft : tRight) : (navigation != null ? navigation.getCurrentStackItem() : null);
       if (subject != null && subject == root && root != null) {
         // The chat list: its two pages' colours, crossfaded by the pager (no new gradient per frame)
         float calls = root.xgramCallsFraction();
-        drawBandLayer(c, Theme.getColor(ColorId.filling), 1f, mid, end);
-        drawBandLayer(c, Theme.getColor(ColorId.background), calls, mid, end);
+        drawBandLayer(c, Theme.getColor(ColorId.filling), lowerBandAlpha(band, calls), mid, end);
+        drawBandLayer(c, Theme.getColor(ColorId.background), calls * band, mid, end);
         return;
       }
       if (subject != null) {
-        drawBandLayer(c, bandColorOf(subject), 1f, mid, end);
+        drawBandLayer(c, bandColorOf(subject), band, mid, end);
       }
     }
 
@@ -2797,8 +3241,11 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       if (!buttonMode || profile.getVisibility() != View.VISIBLE) {
         return false;
       }
+      if (profile.getAlpha() <= 0f || (collapsesToTab() && compactSpring.getTarget() >= 1f)) {
+        return false; // folding into one tab, or out of sight as the bar comes back: the rows under it take the touch
+      }
       float cx = (profile.getLeft() + profile.getRight()) / 2f, cy = (profile.getTop() + profile.getBottom()) / 2f;
-      float radius = Screen.dpf(BUTTON / 2f + BUTTON_HIT_SLOP);
+      float radius = Screen.dpf(BUTTON / 2f + BUTTON_HIT_SLOP) * profile.getScaleX(); // scaled around its centre beside the shrunk bar
       float dx = x - cx, dy = y - cy;
       return dx * dx + dy * dy <= radius * radius;
     }
@@ -2819,8 +3266,9 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
           }
           return super.dispatchTouchEvent(e);
         }
-        if (!preview && !inline && y >= pillTop(getHeight()) + Screen.dp(HEIGHT / 2f)) {
-          touchMode = TOUCH_SWALLOW; // the band's solid part: the rows there are covered
+        if (!preview && !inline && compactSpring.getTarget() < 1f && y >= pillTop(getHeight()) + Screen.dp(HEIGHT / 2f)) {
+          // The band's solid part: the rows there are covered (not beside the compact pill: the band fades out)
+          touchMode = TOUCH_SWALLOW;
           return true;
         }
         return false;
@@ -2841,7 +3289,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
    * then the icons, labels and badges. Its tabs are laid out again before every frame a spring moved (no layout pass).
    */
   private final class PillView extends ViewGroup {
-    private final RectF rect = new RectF();
+    private final RectF rect = new RectF(), layerRect = new RectF();
     private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private boolean layoutDirty = true;
     @Nullable private ViewTreeObserver observer;
@@ -2956,18 +3404,21 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       }
       final float pad = Screen.dpf(PAD);
       final float content = width - 2f * pad;
+      // Shrinking to the icons, the selected width goes to the compact one with the pill's (they still add up)
+      final float k = shrinkNow(), uC = fitUC;
       float sumE = 0f, sumES = 0f;
       for (Tab tab : tabs) {
         float e = tab.e.getValue();
         sumE += e;
-        sumES += e * tab.s;
+        sumES += e * (tab.s + (uC - tab.s) * k);
       }
       float bw = Math.max(0f, (content - sumES) / Math.max(.5f, n - sumE));
       final boolean rtl = Lang.rtl();
       float x = pad;
       for (int slot = 0; slot < n; slot++) {
         Tab tab = tabs[rtl ? n - 1 - slot : slot];
-        float itemWidth = bw + tab.e.getValue() * (tab.s - bw);
+        float sEff = tab.s + (uC - tab.s) * k;
+        float itemWidth = bw + tab.e.getValue() * (sEff - bw);
         tab.left = x;
         tab.right = x + itemWidth;
         x = tab.right;
@@ -3008,7 +3459,8 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
           slowR /= sumT;
         }
         float l = Math.min(fastL, slowL), r = Math.max(fastR, slowR);
-        final float min = Screen.dpf(ITEM_H), lo = Screen.dpf(4f), hi = width - Screen.dpf(4f);
+        // At least as wide as it is tall (48dp, 40dp compact): a stadium on the icon
+        final float min = pillHeightIn(height) - 2f * pad, lo = Screen.dpf(4f), hi = width - Screen.dpf(4f);
         if (r - l < min) {
           float mid = (l + r) / 2f;
           l = mid - min / 2f;
@@ -3029,17 +3481,29 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
         innerR = mid + w / 2f;
         innerAlpha = p;
         float press = selectedIndex != -1 ? MathUtils.clamp(tabs[selectedIndex].p.getValue()) : 0f;
-        float full = Screen.dpf(ITEM_H / 2f);
+        float full = min / 2f;
         innerCorner = full + (Screen.dpf(PRESSED_CORNER) - full) * press;
       }
 
-      // Icons: from the item's centre to 24dp in from its start as it becomes selected
+      // Icons: from the item's centre to 24dp in from its start as it becomes selected. Shrinking to the icons, that
+      // inset goes straight to half the compact width: centred at the end, never towards the fading label
       final float inset = Screen.dpf(LEAD + ICON / 2f);
+      final float iconInset = inset + (uC / 2f - inset) * MathUtils.clamp(k);
       for (Tab tab : tabs) {
         float e = Math.max(-.2f, Math.min(1.2f, tab.e.getValue()));
         float centre = (tab.left + tab.right) / 2f;
-        float target = iconOnly ? centre : rtl ? tab.right - inset : tab.left + inset;
+        float target = iconOnly ? centre : rtl ? tab.right - iconInset : tab.left + iconInset;
         tab.iconX = centre + (target - centre) * e;
+      }
+
+      // Folding into the selected tab (Collapse): the others fade out (gone by about .29) and shrink, each as far as it
+      // is unselected (a selection moving meanwhile crossfades); 1 when full
+      final float collapse = collapseNow();
+      final float fade = MathUtils.clamp(1f - FOLD_FADE * collapse);
+      for (Tab tab : tabs) {
+        float away = collapse > 0f ? 1f - MathUtils.clamp(tab.e.getValue()) : 0f;
+        tab.opacity = 1f - (1f - fade) * away;
+        tab.scale = 1f - FOLD_SCALE * collapse * away;
       }
       invalidate();
     }
@@ -3057,8 +3521,16 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       fillPaint.setColor(containerColor());
       rect.set(0, 0, width, height);
       c.drawRoundRect(rect, height / 2f, height / 2f, fillPaint);
-      // Inner pill
-      final float itemTop = Screen.dpf((HEIGHT - ITEM_H) / 2f), itemBottom = itemTop + Screen.dpf(ITEM_H);
+      // Folding into one tab (Collapse): the tabs folding away (their state layers, icons and badges) stay inside the
+      // pill as it narrows (the pill and the host draw outside their bounds otherwise)
+      final float collapse = collapseNow();
+      final int clip = collapse > 0f ? c.save() : -1;
+      if (clip != -1) {
+        c.clipRect(0, 0, width, height);
+      }
+      // Inner pill: 8dp in from the pill's top and bottom, whatever its height now (48dp items, 40dp compact)
+      final float pillH = pillHeightIn(height), pad = Screen.dpf(PAD);
+      final float itemTop = pad, itemBottom = itemTop + (pillH - 2f * pad);
       if (innerVisible && innerAlpha > 0f) {
         fillPaint.setColor(XgramExpressive.withAlpha(indicatorColor(), innerAlpha));
         rect.set(innerL, itemTop, innerR, itemBottom);
@@ -3069,19 +3541,24 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       // Icons, labels, badges
       updateIconPaints();
       final boolean rtl = Lang.rtl();
-      final float cy = Screen.dpf(HEIGHT / 2f);
+      final float cy = pillH / 2f;
       final TextPaint labelPaint = fitStyle == STYLE_DENSE ? labelMedium : labelLarge;
       final float labelCenter = fitStyle == STYLE_DENSE ? labelMediumCenter : labelLargeCenter;
       final int labelColor = selectedContentColor();
       final float labelInset = Screen.dpf(LEAD + ICON + (fitStyle == STYLE_DENSE ? GAP_DENSE : GAP_REGULAR));
+      // Shrinking to the icons: the label is wiped out by the inner pill (gone halfway), the badge's dot grows back
+      // into its count
+      final float shrink = shrinkNow();
+      final float labelFade = MathUtils.clamp(1f - 2f * shrink), badgeFade = 1f - MathUtils.clamp(shrink);
       for (Tab tab : tabs) {
         drawIcon(c, tab, cy);
         float a = MathUtils.clamp((tab.e.getValue() - .5f) / .5f);
-        if (a > 0f && innerVisible && !iconOnly && !tab.shownLabel.isEmpty()) {
+        float labelA = a * labelFade;
+        if (labelA > 0f && innerVisible && !iconOnly && !tab.shownLabel.isEmpty()) {
           float clipL = Math.max(tab.left, innerL), clipR = Math.min(tab.right, innerR);
           if (clipR > clipL) {
             labelPaint.setColor(labelColor);
-            labelPaint.setAlpha(Math.round(Color.alpha(labelColor) * a));
+            labelPaint.setAlpha(Math.round(Color.alpha(labelColor) * labelA));
             float x = rtl ? tab.right - labelInset - tab.shownLabelWidth : tab.left + labelInset;
             int save = c.save();
             c.clipRect(clipL, itemTop, clipR, itemBottom);
@@ -3089,16 +3566,31 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
             c.restoreToCount(save);
           }
         }
-        drawBadge(c, tab, a, rtl, cy);
+        drawBadge(c, tab, a * badgeFade, rtl, cy);
+      }
+      if (clip != -1) {
+        drawFoldedBadge(c, width, height, collapse, rtl);
+        c.restoreToCount(clip);
       }
     }
 
     private void drawIcon (Canvas c, Tab tab, float cy) {
+      final float opacity = tab.opacity;
+      if (opacity <= 0f) {
+        return; // folded away (Collapse)
+      }
       final float cx = tab.iconX;
-      final float pop = tab.q.getValue();
+      final float pop = tab.q.getValue() * tab.scale;
       if (tab.avatar != null) {
         float size = Screen.dpf(TAB_AVATAR) * pop;
         int left = Math.round(cx - size / 2f), top = Math.round(cy - size / 2f), sizePx = Math.round(size);
+        // Folding away: the photo and the menu button's badge on it fade through a layer, only while they fade
+        int layer = -1;
+        if (opacity < 1f) {
+          float slack = Screen.dpf(4.5f); // the badge's cutout, past the photo's corner
+          layerRect.set(left - slack, top - slack, left + sizePx + slack, top + sizePx + slack);
+          layer = c.saveLayerAlpha(layerRect, Math.round(255f * opacity));
+        }
         if (tab.swipe != null) {
           tab.swipe.draw(c, tab.avatar, left, top, sizePx); // two photos sliding while a swipe switches accounts
         } else {
@@ -3111,6 +3603,9 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
         // The menu button's badge while the side menu is hidden: cut out of the pill, or of the inner pill as the tab is selected
         float selected = innerVisible ? MathUtils.clamp(tab.e.getValue()) * MathUtils.clamp(innerAlpha) : 0f;
         drawMenuBadge(c, left + sizePx / 2f, top + sizePx / 2f, sizePx / 2f, ColorUtils.fromToArgb(containerColor(), indicatorColor(), selected));
+        if (layer != -1) {
+          c.restoreToCount(layer);
+        }
         return;
       }
       Drawable ref = tab.rest != null ? tab.rest : tab.active;
@@ -3123,14 +3618,18 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       if (Math.abs(scale - 1f) > .001f) {
         c.scale(scale, scale, cx, cy);
       }
-      XgramIconCrossfade.draw(c, tab.rest, restIconPaint, tab.active, activeIconPaint, cx, cy, tab.c.getValue(), 1f);
+      XgramIconCrossfade.draw(c, tab.rest, restIconPaint, tab.active, activeIconPaint, cx, cy, tab.c.getValue(), opacity);
       c.restoreToCount(save);
     }
 
-    /** 5.6: at the icon's top end corner; on the selected tab a count becomes the 6dp dot as the label comes in. */
+    /**
+     * 5.6: at the icon's top end corner; on the selected tab a count becomes the 6dp dot as the label comes in. Folding
+     * away into another tab, it fades and shrinks with its icon.
+     */
     private void drawBadge (Canvas c, Tab tab, float a, boolean rtl, float cy) {
       final float presence = tab.badge.getValue();
-      if (presence <= .001f || tab.drawKind == 0 || (tab.dest != DEST_CHATS && tab.dest != DEST_CALLS && tab.dest != DEST_ACTIVITY)) {
+      final float opacity = tab.opacity;
+      if (presence <= .001f || opacity <= 0f || tab.drawKind == 0 || (tab.dest != DEST_CHATS && tab.dest != DEST_CALLS && tab.dest != DEST_ACTIVITY)) {
         return;
       }
       final float half = Screen.dpf(ICON / 2f);
@@ -3138,12 +3637,15 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       final float dotSize = Screen.dpf(BADGE_SMALL);
       final float dotLeft = rtl ? iconRight - Screen.dpf(BADGE_SMALL_START) - dotSize : iconLeft + Screen.dpf(BADGE_SMALL_START);
       int save = c.save();
+      if (tab.scale != 1f) {
+        c.scale(tab.scale, tab.scale, tab.iconX, cy); // around the icon's centre, as the icon
+      }
       if (tab.drawKind == 2) {
         float dotCx = dotLeft + dotSize / 2f, dotCy = iconTop + dotSize / 2f;
         if (presence != 1f) {
           c.scale(presence, presence, dotCx, dotCy);
         }
-        fillPaint.setColor(mutedDotColor());
+        fillPaint.setColor(XgramExpressive.withAlpha(mutedDotColor(), opacity));
         c.drawCircle(dotCx, dotCy, dotSize / 2f, fillPaint);
         c.restoreToCount(save);
         return;
@@ -3161,10 +3663,10 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       if (presence != 1f) {
         c.scale(presence, presence, rect.centerX(), rect.centerY());
       }
-      fillPaint.setColor(color(XgramExpressive.ERROR));
+      fillPaint.setColor(XgramExpressive.withAlpha(color(XgramExpressive.ERROR), opacity));
       float radius = rect.height() / 2f;
       c.drawRoundRect(rect, radius, radius, fillPaint);
-      float textAlpha = 1f - MathUtils.clamp(2f * m);
+      float textAlpha = (1f - MathUtils.clamp(2f * m)) * opacity;
       if (textAlpha > 0f && tab.drawText != null) {
         int textColor = color(XgramExpressive.ON_ERROR);
         badgePaint.setColor(textColor);
@@ -3172,6 +3674,43 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
         c.drawText(tab.drawText, rect.centerX() - tab.drawTextWidth / 2f, rect.centerY() + badgeCenter, badgePaint);
       }
       c.restoreToCount(save);
+    }
+
+    /**
+     * Folded into one tab (Collapse): a 6dp dot at the pill's top end corner while a tab folded away has a badge (the
+     * error colour for a count, the muted dot's for muted chats only), fading in over the end of the fold.
+     */
+    private void drawFoldedBadge (Canvas c, int width, int height, float collapse, boolean rtl) {
+      float appear = MathUtils.clamp((collapse - FOLDED_BADGE_FROM) / (1f - FOLDED_BADGE_FROM));
+      if (selectedIndex >= 0 && selectedIndex < tabs.length) {
+        // Pressed, the inner pill's corner squares and reaches the dot's place: it fades out with the press (the tap
+        // brings the bar back)
+        appear *= 1f - MathUtils.clamp(tabs[selectedIndex].p.getValue());
+      }
+      if (appear <= 0f) {
+        return;
+      }
+      float presence = 0f;
+      boolean count = false;
+      for (Tab tab : tabs) {
+        if (tab.drawKind == 0 || (tab.dest != DEST_CHATS && tab.dest != DEST_CALLS && tab.dest != DEST_ACTIVITY)) {
+          continue;
+        }
+        // As far as it has a badge and is folded away (not the selected tab's own)
+        float p = MathUtils.clamp(tab.badge.getValue()) * (1f - MathUtils.clamp(tab.e.getValue()));
+        if (p > .001f) {
+          presence = Math.max(presence, p);
+          count |= tab.drawKind == 1;
+        }
+      }
+      if (presence <= .001f) {
+        return;
+      }
+      // At 45° on the end's arc, in the middle of the 8dp ring between the pill's edge and the inner pill's (no overlap)
+      final float dot = Screen.dpf(BADGE_SMALL), radius = height / 2f, d = (radius - Screen.dpf(PAD) / 2f) * .7071f;
+      final float cx = rtl ? radius - d : width - radius + d, cy = radius - d;
+      fillPaint.setColor(XgramExpressive.withAlpha(count ? color(XgramExpressive.ERROR) : mutedDotColor(), appear));
+      c.drawCircle(cx, cy, dot / 2f * presence, fillPaint);
     }
 
     @Override
@@ -3303,12 +3842,17 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
 
     @Override
     protected void onDraw (Canvas c) {
+      if (tab.opacity <= 0f) {
+        return; // folded away into another tab (Collapse): a tap there only brings the bar back
+      }
       final float offset = getLeft();
-      final float top = Screen.dpf((HEIGHT - ITEM_H) / 2f), bottom = top + Screen.dpf(ITEM_H);
+      // As the inner pill: 8dp in from the pill's top and bottom (48dp, 40dp compact)
+      final float pad = Screen.dpf(PAD), itemH = pillHeightIn(getHeight()) - 2f * pad;
+      final float top = pad, bottom = top + itemH;
       if (isSelectedTab() && pill.innerVisible) {
         setStateShape(pill.innerL - offset, top, pill.innerR - offset, bottom, pill.innerCorner);
       } else {
-        float full = Screen.dpf(ITEM_H / 2f);
+        float full = itemH / 2f;
         float radius = full + (Screen.dpf(PRESSED_CORNER) - full) * MathUtils.clamp(tab.p.getValue());
         float cx = tab.iconX - offset;
         setStateShape(cx - full, top, cx + full, bottom, radius);
@@ -3322,6 +3866,10 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
         int index = indexOf(tab.dest);
         info.setCollectionItemInfo(AccessibilityNodeInfo.CollectionItemInfo.obtain(0, 1, index != -1 ? visualSlot(index) : 0, 1, false, isSelectedTab()));
+        if (isSelectedTab() && collapsesToTab() && compactSpring.getTarget() >= 1f) {
+          // Folded into this tab (Collapse): a tap brings the bar back ("double tap to expand navigation")
+          info.addAction(new AccessibilityNodeInfo.AccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, Lang.getString(R.string.XgramNavExpand)));
+        }
       }
     }
   }
