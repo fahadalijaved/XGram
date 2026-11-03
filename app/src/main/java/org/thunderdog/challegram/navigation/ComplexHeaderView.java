@@ -1582,6 +1582,7 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
       return;
     }
 
+    parent.xgramSheetOnce(); // XGram: stays a sheet with Compact popups (Appearance › Menus): patchOptions changes its OptionsLayout
     final PopupLayout layout = parent.showOptions(titleOptionsBuilder.getValue(), titleOptionsDelegate, null);
     patchOptions(layout, emojiStatusHelper.getSticker());
   }

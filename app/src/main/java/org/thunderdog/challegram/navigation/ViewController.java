@@ -2792,6 +2792,23 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
       this.ignoreOtherPopUps = ignoreOtherPopUps;
     }
 
+    // XGram: Appearance › Menus › Compact popups (com.fahadali.xgram.appearance.XgramCompactMenu)
+
+    /** XGram: the menu stays a bottom sheet with Compact popups too (its caller changes the sheet after it opens). */
+    public boolean xgramSheetOnly;
+    /** XGram: what a compact popup opens next to (null: the view that was tapped, found by the touch). */
+    public @Nullable View xgramAnchor;
+
+    public Options xgramSetSheetOnly () {
+      this.xgramSheetOnly = true;
+      return this;
+    }
+
+    public Options xgramSetAnchor (@Nullable View anchor) {
+      this.xgramAnchor = anchor;
+      return this;
+    }
+
     public static class Builder {
       private CharSequence info;
       private CharSequence title;
@@ -2886,10 +2903,31 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     return showOptions(options, delegate, null);
   }
 
+  // XGram: Appearance › Menus › Compact popups: the next showOptions of this screen stays a bottom sheet, for callers
+  // that change the sheet after it opens (setDisableCancelOnTouchDown, a back listener, a cast of its OptionsLayout)
+  private boolean xgramNextOptionsSheet;
+
+  public final ViewController<T> xgramSheetOnce () {
+    this.xgramNextOptionsSheet = true;
+    return this;
+  }
+
   public final PopupLayout showOptions (Options options, final OptionDelegate delegate, final @Nullable ThemeDelegate forcedTheme) {
+    final boolean xgramSheetOnly = options.xgramSheetOnly || xgramNextOptionsSheet;
+    xgramNextOptionsSheet = false;
     if (isStackLocked()) {
       Log.i("Ignoring options show because stack is locked");
       return null;
+    }
+
+    // XGram: Appearance › Menus › Compact popups: a simple menu (no title, no question, no long text) opens as a small
+    // card next to what was tapped, as official Telegram; anything else, and every menu with Sheets, is the sheet below
+    if (!xgramSheetOnly && com.fahadali.xgram.appearance.XgramCompactMenu.isEnabled()) {
+      final PopupLayout xgramPopup = com.fahadali.xgram.appearance.XgramCompactMenu.show(this, options, delegate, forcedTheme);
+      if (xgramPopup != null) {
+        onCreatePopupLayout(xgramPopup);
+        return xgramPopup;
+      }
     }
 
     final PopupLayout popupLayout = new PopupLayout(context);

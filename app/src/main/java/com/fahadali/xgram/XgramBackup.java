@@ -172,6 +172,7 @@ public final class XgramBackup {
     XgramSettings.KEY_CHECKIN_TIMER, XgramSettings.KEY_CHECKIN_GRACE, XgramSettings.KEY_CHECKIN_RADIUS, // Check In
     XgramSettings.KEY_COLOR_SOURCE, XgramSettings.KEY_COLOR_SEED, XgramSettings.KEY_COLOR_STYLE, // Colours (Appearance)
     XgramSettings.KEY_FORWARD_SENDER, // Forwarding (Messages)
+    XgramSettings.KEY_MENU_STYLE, // Menus (Appearance): Sheets or Compact popups
     // Chat export's last media types and size limit: the exact keys (a bare "xgram_export_" prefix would read the
     // running export's string key as an int)
     com.fahadali.xgram.export.ExportOptions.KEY_TYPES, com.fahadali.xgram.export.ExportOptions.KEY_SIZE_MB};
@@ -287,6 +288,7 @@ public final class XgramBackup {
             key.equals(XgramSettings.KEY_CHECKIN_TIMER) || key.equals(XgramSettings.KEY_CHECKIN_GRACE) || key.equals(XgramSettings.KEY_CHECKIN_RADIUS) || // Check In
             key.equals(XgramSettings.KEY_COLOR_SOURCE) || key.equals(XgramSettings.KEY_COLOR_SEED) || key.equals(XgramSettings.KEY_COLOR_STYLE) || // Colours
             key.equals(XgramSettings.KEY_FORWARD_SENDER) || // Forwarding
+            key.equals(XgramSettings.KEY_MENU_STYLE) || // Menus
             key.equals(com.fahadali.xgram.export.ExportOptions.KEY_TYPES) || key.equals(com.fahadali.xgram.export.ExportOptions.KEY_SIZE_MB)) { // Chat export
             pmc().putInt(key, ints.getInt(key));
             count++;

@@ -352,6 +352,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.getToggler().setRadioEnabled(com.fahadali.xgram.appearance.XgramExpressive.isEnabled(), isUpdate);
         } else if (id == R.id.btn_xgramHaptics) {
           view.getToggler().setRadioEnabled(settings.hapticFeedback(), isUpdate);
+        } else if (id == R.id.btn_xgramMenuStyle) {
+          view.setData(com.fahadali.xgram.appearance.XgramCompactMenu.styleName(settings.menuStyle()));
         } else if (id == R.id.btn_xgramComposeTgx) {
           view.getToggler().setRadioEnabled(settings.composeTgxPages(), isUpdate);
         } else if (id == R.id.btn_xgramColorSource) {
@@ -831,6 +833,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     }
     addRows(items, toggle(R.id.btn_xgramHaptics, R.string.XgramHaptics, R.string.XgramHapticsSub));
     items.add(description(R.string.XgramHapticsInfo));
+    // Menus: Telegram X's bottom sheets, or simple menus as a card next to what was tapped (XgramCompactMenu)
+    addRows(items, link(R.id.btn_xgramMenuStyle, R.string.XgramMenuStyle));
+    items.add(description(R.string.XgramMenuStyleInfo));
 
     items.add(header(R.string.XgramColors));
     if (expressive) {
@@ -2352,6 +2357,20 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     } else if (id == R.id.btn_xgramExpressive) {
       adapter.toggleView(v);
       com.fahadali.xgram.appearance.XgramExpressive.setEnabled(this, !com.fahadali.xgram.appearance.XgramExpressive.isEnabled());
+      return;
+    } else if (id == R.id.btn_xgramMenuStyle) {
+      final int[] styles = {XgramSettings.MENU_STYLE_SHEETS, XgramSettings.MENU_STYLE_COMPACT};
+      final String[] titles = new String[styles.length];
+      for (int i = 0; i < styles.length; i++) {
+        titles[i] = com.fahadali.xgram.appearance.XgramCompactMenu.styleName(styles[i]);
+      }
+      showOptions(null, new int[] {1, 2}, titles, null, null, (itemView, optionId) -> {
+        if (optionId >= 1 && optionId <= styles.length) {
+          settings.setMenuStyle(styles[optionId - 1]);
+          adapter.updateValuedSettingById(R.id.btn_xgramMenuStyle);
+        }
+        return true;
+      });
       return;
     } else if (id == R.id.btn_xgramHaptics) {
       // Saved before the switch moves, so its own toggle haptic plays when turned on and not when turned off

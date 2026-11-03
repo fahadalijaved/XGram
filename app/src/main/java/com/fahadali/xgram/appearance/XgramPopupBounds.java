@@ -56,6 +56,13 @@ public final class XgramPopupBounds {
    */
   public static final int PLACE_PREFER_ABOVE = 1;
 
+  /**
+   * {@link #placeVertically} and {@link #opensAbove}: below the anchor when the popup fits there, else above when it
+   * fits there, else on the side with more room (Telegram's popups). For a row or a button that was tapped
+   * (XgramCompactMenu).
+   */
+  public static final int PLACE_BELOW_FIRST = 2;
+
   private static final int[] location = new int[2];
 
   /** {@link #safeRect(View, int, Rect)} in a new rect. */
@@ -221,12 +228,15 @@ public final class XgramPopupBounds {
 
   /**
    * Whether a popup {@code contentHeight} tall opens above its anchor, given the room above and below it (heights the
-   * popup may take on each side) and the {@code policy}: {@link #PLACE_FIT} or {@link #PLACE_PREFER_ABOVE} (two rows:
-   * {@link #twoMenuRowsHeight()}).
+   * popup may take on each side) and the {@code policy}: {@link #PLACE_FIT}, {@link #PLACE_PREFER_ABOVE} (two rows:
+   * {@link #twoMenuRowsHeight()}) or {@link #PLACE_BELOW_FIRST}.
    */
   public static boolean opensAbove (int roomAbove, int roomBelow, int contentHeight, int policy) {
     if (policy == PLACE_PREFER_ABOVE) {
       return roomAbove >= Math.min(contentHeight, twoMenuRowsHeight()) || roomAbove >= roomBelow;
+    }
+    if (policy == PLACE_BELOW_FIRST) {
+      return contentHeight > roomBelow && (contentHeight <= roomAbove || roomAbove > roomBelow);
     }
     return contentHeight <= roomAbove || !(contentHeight <= roomBelow || roomBelow > roomAbove);
   }

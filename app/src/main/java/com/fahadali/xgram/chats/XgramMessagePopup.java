@@ -178,16 +178,16 @@ public final class XgramMessagePopup {
    * with the chat, and the popup closed from any page (its placement lost). This callback, above the keyboard's while
    * the popup shows, hands Back to the activity's.
    */
-  private static final class BackAboveKeyboard {
+  public static final class BackAboveKeyboard { // also the compact menus' (XgramCompactMenu)
     private final BaseActivity activity;
     /** An android.window.OnBackInvokedCallback (Android 13+), while registered. */
     private @Nullable Object callback;
 
-    BackAboveKeyboard (BaseActivity activity) {
+    public BackAboveKeyboard (BaseActivity activity) {
       this.activity = activity;
     }
 
-    void register () {
+    public void register () {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && callback == null) {
         final android.window.OnBackInvokedCallback c = () -> activity.getOnBackPressedDispatcher().onBackPressed();
         callback = c;
@@ -195,7 +195,7 @@ public final class XgramMessagePopup {
       }
     }
 
-    void unregister () {
+    public void unregister () {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && callback != null) {
         activity.getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback((android.window.OnBackInvokedCallback) callback);
         callback = null;

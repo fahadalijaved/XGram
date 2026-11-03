@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: Menus: Sheets / Compact popups (Appearance, XgramSettings.menuStyle). Compact popups open Telegram X's option
+     menus as a small card next to what was tapped, as official Telegram does (com.fahadali.xgram.appearance.XgramCompactMenu) -->
+<resources>
+  <string name="XgramMenuStyle">Menus</string>
+  <string name="XgramMenuStyleSheets">Sheets</string>
+  <string name="XgramMenuStyleCompact">Compact popups</string>
+  <string name="XgramMenuStyleInfo">Compact popups open menus as a small card next to what you tapped, like Telegram, instead of a sheet across the bottom of the screen. Confirmations, choices and menus with a description stay sheets. Compact popups also turn on Popup menu in Messages › Message menu, unless you set it yourself.</string>
+  <string name="XgramSearchKwMenuStyle">menu, menus, popup, popups, pop-up, context menu, compact, floating, bottom sheet, sheet, long press, options</string>
+</resources>

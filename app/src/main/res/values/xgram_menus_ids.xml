@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: Menus: Sheets / Compact popups (Appearance, XgramSettings.menuStyle; com.fahadali.xgram.appearance.XgramCompactMenu) -->
+  <item type="id" name="btn_xgramMenuStyle" />
+</resources>

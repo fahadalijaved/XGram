@@ -846,6 +846,13 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
     keyEventListeners.remove(listener);
   }
 
+  // XGram: Menus › Compact popups: where the finger was, for a menu that opens from it (XgramCompactMenu)
+  @Override
+  public boolean dispatchTouchEvent (MotionEvent event) {
+    com.fahadali.xgram.appearance.XgramCompactMenu.onTouch(getWindow() != null ? getWindow().getDecorView() : null, event);
+    return super.dispatchTouchEvent(event);
+  }
+
   // XGram: hardware keyboard shortcuts (Esc, Ctrl+F, Ctrl+K, Ctrl+Tab) before the focused view gets the key
   @Override
   public boolean dispatchKeyEvent (KeyEvent event) {
@@ -2256,6 +2263,25 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
 
   private static boolean isContextual (View view) {
     return view instanceof OptionsLayout || view instanceof MenuMoreWrap /*|| view instanceof StickerPreviewView*/;
+  }
+
+  /**
+   * XGram: whether a popup on screen is a window of its own (a sheet, the media viewer, the camera): a compact menu
+   * (XgramCompactMenu) then opens as a window too, else it would open under it. Option sheets and ⋮ menus are left out
+   * when {@code skipContextual} (a new popup closes them, hideContextualPopups).
+   */
+  public boolean xgramHasWindowPopup (boolean skipContextual) {
+    for (int i = windows.size() - 1; i >= 0; i--) {
+      final PopupLayout window = windows.get(i);
+      if (window == null || window.isWindowHidden() || window.isDestroyed() || window.xgramIsInRoot()) {
+        continue;
+      }
+      if (skipContextual && isContextual(window.getBoundView())) {
+        continue;
+      }
+      return true;
+    }
+    return false;
   }
 
   private static boolean isContextual (ViewController<?> c) {

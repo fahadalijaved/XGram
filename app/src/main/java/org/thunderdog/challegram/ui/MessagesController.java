@@ -5535,6 +5535,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
               });
             }
           } else {
+            xgramSheetOnce(); // XGram: stays a sheet with Compact popups (Appearance › Menus): the read receipts and emoji packs patch its OptionsLayout
             PopupLayout popupLayout = showOptions(messageOptions, messageHandler);
             patchReadReceiptsOptions(popupLayout, messageContext);
             patchUsedEmojiPacks(popupLayout, messageContext);

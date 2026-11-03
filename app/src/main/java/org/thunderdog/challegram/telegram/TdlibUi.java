@@ -802,6 +802,7 @@ public class TdlibUi extends Handler {
     tdlib.client().send(new TdApi.GetSupportUser(), tdlib.silentHandler());
 
     PopupLayout[] popupFinal = new PopupLayout[1];
+    context.xgramSheetOnce(); // XGram: stays a sheet with Compact popups (Appearance › Menus): its text has links
     popupFinal[0] = context.showOptions(Strings.buildMarkdown(context, Lang.getString(R.string.AskAQuestionInfo), (view, span, clickedText) -> {
       if (popupFinal[0] != null) {
         popupFinal[0].hideWindow(true);
@@ -7294,6 +7295,7 @@ public class TdlibUi extends Handler {
                 b.item(new ViewController.OptionItem(id, option.text, ViewController.OptionColor.NORMAL, 0));
                 idToOptionId.put(id, option.id);
               }
+              context.xgramSheetOnce(); // XGram: stays a sheet with Compact popups (Appearance › Menus): a choice of report reasons that can't be dismissed by a touch outside
               PopupLayout popup = context.showOptions(b.build(), (optionItemView, id) -> {
                 byte[] optionId = idToOptionId.get(id);
                 if (optionId != null) {

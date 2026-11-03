@@ -207,6 +207,11 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
     this.needRootInsets = true;
   }
 
+  /** XGram: whether this popup is shown in the activity's own views (setNeedRootInsets), not as a window of its own. */
+  public boolean xgramIsInRoot () {
+    return needRootInsets;
+  }
+
   private boolean needFullScreen;
 
   public void setNeedFullScreen (boolean needFullScreen) {
@@ -631,6 +636,9 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
 
   @Override
   public boolean dispatchTouchEvent (MotionEvent e) {
+    // XGram: Menus › Compact popups: a menu opened from this popup (a window of its own: the activity never sees its
+    // touches) opens where the finger was (XgramCompactMenu)
+    com.fahadali.xgram.appearance.XgramCompactMenu.onTouch(this, e);
     // XGram M3E: the finger's velocity for every sheet release (the popup's own drag and a list's nested one)
     final int action = e.getActionMasked();
     if (action == MotionEvent.ACTION_DOWN) {

@@ -92,6 +92,13 @@ public final class XgramSettings {
   public static final String KEY_MESSAGE_POPUP = "xgram_message_popup";
   /** Appearance › Haptic feedback: every haptic of the app, XGram's and Telegram X's (XgramHaptics). On by default. */
   public static final String KEY_HAPTICS = "xgram_haptics";
+  /**
+   * Appearance › Menus: {@link #MENU_STYLE_SHEETS} (Telegram X's bottom sheets, the default) or
+   * {@link #MENU_STYLE_COMPACT} (simple menus as a small card next to what was tapped, as official Telegram:
+   * com.fahadali.xgram.appearance.XgramCompactMenu).
+   */
+  public static final String KEY_MENU_STYLE = "xgram_menu_style";
+  public static final int MENU_STYLE_SHEETS = 0, MENU_STYLE_COMPACT = 1;
   /** A bot's profile → Add to group or channel: as an admin in groups too (channels always), with every right. */
   public static final String KEY_ADD_BOT_ADMIN = "xgram_add_bot_admin", KEY_ADD_BOT_ALL_RIGHTS = "xgram_add_bot_all_rights";
   /** XDrive (Saved Messages as the drive) is a test for now: Testing utilities switches it on (debug builds on, CI off). */
@@ -723,13 +730,28 @@ public final class XgramSettings {
     }
   }
 
-  /** Message menu → Popup menu: a long press opens the menu next to the message, the reactions above it (Telegram). */
+  /**
+   * Message menu → Popup menu: a long press opens the menu next to the message, the reactions above it (Telegram). Until
+   * it is set, it follows Appearance › Menus: on with Compact popups ({@link #menuStyle()}).
+   */
   public boolean messagePopup () {
-    return pmc().getBoolean(KEY_MESSAGE_POPUP, false);
+    return pmc().getBoolean(KEY_MESSAGE_POPUP, menuStyle() == MENU_STYLE_COMPACT);
   }
 
   public void setMessagePopup (boolean value) {
     put(KEY_MESSAGE_POPUP, value);
+  }
+
+  /**
+   * Appearance › Menus: {@link #MENU_STYLE_SHEETS} (the default) or {@link #MENU_STYLE_COMPACT}. Read from the
+   * settings each time (a menu opens now and then), so an imported value applies at once.
+   */
+  public int menuStyle () {
+    return pmc().getInt(KEY_MENU_STYLE, MENU_STYLE_SHEETS) == MENU_STYLE_COMPACT ? MENU_STYLE_COMPACT : MENU_STYLE_SHEETS;
+  }
+
+  public void setMenuStyle (int style) {
+    putInt(KEY_MENU_STYLE, style == MENU_STYLE_COMPACT ? MENU_STYLE_COMPACT : MENU_STYLE_SHEETS);
   }
 
   /** Add to group or channel: the bot joins groups as an admin too (channels always take bots as admins). */

@@ -657,7 +657,14 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
         total += itemHeight;
       }
     }
-    return total + padding + padding;
+    return total + padding + padding + xgramExtraItemsHeight; // XGram: rows of another height (a compact menu's wrapped header)
+  }
+
+  /** XGram: how much taller (negative: shorter) the rows are than 48dp each, in px; for a menu never filled again. */
+  private int xgramExtraItemsHeight;
+
+  public void xgramSetExtraItemsHeight (int px) {
+    this.xgramExtraItemsHeight = px;
   }
 
   @Override
@@ -1023,6 +1030,26 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     return (xgramSafeRect.bottom + sy) - (xgramAnchorRect.bottom + Screen.dp(XgramPopupBounds.MARGIN) - sy);
   }
 
+  /** XGram: the anchored menu may move over its anchor (inside the safe area) rather than scroll while the screen has room for it. */
+  private boolean xgramMayCoverAnchor;
+
+  /** XGram: {@link #xgramMayCoverAnchor} (the compact menus, XgramCompactMenu, as official Telegram's popups). */
+  public void xgramSetMayCoverAnchor (boolean mayCover) {
+    if (this.xgramMayCoverAnchor != mayCover) {
+      this.xgramMayCoverAnchor = mayCover;
+      requestLayout();
+    }
+  }
+
+  /** The view height the anchored menu may take on its side: the room there, or (may cover the anchor) all of it up to the safe area's height. */
+  private int xgramSideRoom () {
+    int room = xgramOpensUp ? xgramRoomAbove() : xgramRoomBelow();
+    if (xgramMayCoverAnchor) {
+      room = Math.max(room, Math.min(getItemsHeight(), xgramSafeRect.height() + 2 * xgramCardInsetY()));
+    }
+    return room;
+  }
+
   /** The height cap of this measure (Integer.MAX_VALUE: none); also sets the width cap and, anchored, the direction. */
   private int xgramMeasureCap () {
     int cap = xgramMaxHeight > 0 ? xgramMaxHeight : Integer.MAX_VALUE;
@@ -1034,7 +1061,7 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
       if (!xgramDirectionLatched) {
         xgramOpensUp = XgramPopupBounds.opensAbove(roomAbove, roomBelow, getItemsHeight(), xgramPlacement);
       }
-      cap = Math.min(cap, Math.max(xgramMinHeight(), xgramOpensUp ? roomAbove : roomBelow));
+      cap = Math.min(cap, Math.max(xgramMinHeight(), xgramSideRoom()));
       xgramWidthCap = xgramSafeRect.width() + 2 * xgramCardInsetX();
     } else if (xgramBoundToSafeArea && getParent() instanceof View) {
       final View parent = (View) getParent();
@@ -1111,10 +1138,16 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     setTranslationX(left - getLeft());
     setTranslationY(top - getTop());
     setPivotX(Math.max(sx, Math.min(width - sx, xgramAnchorRect.centerX() - left)));
-    setPivotY(xgramOpensUp ? height - sy : sy);
+    // XGram: moved over its anchor (xgramMayCoverAnchor), it still grows out of the anchor's edge, with no tail
+    final boolean coversAnchor = xgramMayCoverAnchor && (xgramOpensUp ? top + height - sy > xgramAnchorRect.top : top + sy < xgramAnchorRect.bottom);
+    if (coversAnchor) {
+      setPivotY(Math.max(sy, Math.min(height - sy, (xgramOpensUp ? xgramAnchorRect.top : xgramAnchorRect.bottom) - top)));
+    } else {
+      setPivotY(xgramOpensUp ? height - sy : sy);
+    }
 
     int tailX = -1;
-    if (anchorMode == ANCHOR_MODE_CENTER && xgramOpensUp && !xgramFlushCard && xgramAnchorRect.width() < width) {
+    if (anchorMode == ANCHOR_MODE_CENTER && xgramOpensUp && !coversAnchor && !xgramFlushCard && xgramAnchorRect.width() < width) {
       tailX = Math.max(sx + Screen.dp(16f), Math.min(width - sx - Screen.dp(16f), xgramAnchorRect.centerX() - left));
     }
     if (bubbleTailX != tailX) {
@@ -1190,7 +1223,7 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
       }
       // The cap from the current layout, also when the anchor is where the last layout put the menu: the measure in
       // the pass that moved it (the keyboard hiding, a fold or a rotation) still saw its old place and the old size
-      final int cap = Math.min(xgramMaxHeight > 0 ? xgramMaxHeight : Integer.MAX_VALUE, Math.max(xgramMinHeight(), xgramOpensUp ? xgramRoomAbove() : xgramRoomBelow()));
+      final int cap = Math.min(xgramMaxHeight > 0 ? xgramMaxHeight : Integer.MAX_VALUE, Math.max(xgramMinHeight(), xgramSideRoom()));
       if (cap != xgramMeasuredCap && Math.min(cap, getItemsHeight()) != getMeasuredHeight()) {
         requestLayout();
       }
@@ -1359,7 +1392,7 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
         cy - Screen.dp(4.5f),
         cx + Screen.dp(4.5f),
         cy + Screen.dp(4.5f),
-        Paints.fillingPaint(Theme.fillingColor())
+        Paints.fillingPaint(forcedTheme != null ? forcedTheme.getColor(ColorId.overlayFilling) : Theme.headerFloatBackgroundColor()) // XGram: the card's own color (bg_popup_fixed tinted with overlayFilling)
       );
       canvas.restore();
     }

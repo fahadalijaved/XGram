@@ -76,6 +76,21 @@ fun AppearancePage() {
     }
     description(R.string.XgramHapticsInfo)
 
+    // Menus: Telegram X's bottom sheets, or simple menus as a card next to what was tapped (XgramCompactMenu)
+    group {
+      buttons(
+        R.id.btn_xgramMenuStyle, s(R.string.XgramMenuStyle),
+        listOf(
+          s(R.string.XgramMenuStyleSheets) to XgramSettings.MENU_STYLE_SHEETS,
+          s(R.string.XgramMenuStyleCompact) to XgramSettings.MENU_STYLE_COMPACT
+        ),
+        selected = settings.menuStyle()
+      ) {
+        settings.setMenuStyle(it)
+      }
+    }
+    description(R.string.XgramMenuStyleInfo)
+
     header(R.string.XgramColors)
     if (expressiveOn) {
       // Expressive design's colors: the wallpaper's or a picked one (AppearanceColors.kt)

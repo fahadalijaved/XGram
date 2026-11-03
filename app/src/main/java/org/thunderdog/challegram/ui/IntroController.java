@@ -292,6 +292,7 @@ public class IntroController extends ViewController<Void> implements GLSurfaceVi
     long timeout = getTdlib().calculateConnectionTimeoutMs(HELP_TIMEOUT);
 
     CharSequence info = Strings.buildMarkdown(new TdlibContext(context, getTdlib()), Lang.getString(languagePackInfo, R.string.LoginErrorLongConnecting), null);
+    xgramSheetOnce(); // XGram: stays a sheet with Compact popups (Appearance › Menus): it can't be dismissed by a touch outside
     PopupLayout popupLayout = showOptions(info, ids.get(), strings.get(), null, icons.get(), (itemView, id) -> {
       if (id == R.id.btn_startMessaging) {
         // nothing to do?
@@ -379,6 +380,7 @@ public class IntroController extends ViewController<Void> implements GLSurfaceVi
     ids.append(R.id.btn_settings);
     strings.append(Lang.getString(languagePackInfo, R.string.Settings));
     icons.append(R.drawable.baseline_settings_24);
+    xgramSheetOnce(); // XGram: stays a sheet with Compact popups (Appearance › Menus): it can't be dismissed by a touch outside
     PopupLayout popupLayout = showOptions(msg, ids.get(), strings.get(), null, icons.get(), (itemView, id) -> {
       if (id == R.id.btn_settings) {
         if (U.isAirplaneModeOn()) {

@@ -1930,6 +1930,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
 
           CharSequence text = Strings.buildMarkdown(this, TD.findOrdinary(cloudStrings, Lang.getResourceEntryName(R.string.language_continueInLanguagePopupText), () -> Lang.getString(R.string.language_continueInLanguagePopupText)), null);
 
+          xgramSheetOnce(); // XGram: stays a sheet with Compact popups (Appearance › Menus): it can't be dismissed by a touch outside
           PopupLayout popupLayout = showOptions(text, ids.get(), strings.get(), colors.get(), icons.get(), (itemView, id) -> {
             if (id == R.id.btn_done) {
               tdlib.applyLanguage(languagePack, applySuccess -> {
@@ -4375,6 +4376,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       options.item(new OptionItem(id, name, OptionColor.NORMAL, R.drawable.baseline_link_24));
     }
     options.item(new OptionItem(R.id.btn_createInviteLink, Lang.getString(R.string.CreateANewLink), createNewLinkOptionColor, R.drawable.baseline_add_link_24));
+    xgramSheetOnce(); // XGram: stays a sheet with Compact popups (Appearance › Menus): its locked row gets a lock and a tooltip after it opens
     PopupLayout popupLayout = showOptions(options.build(), (view, id) -> {
       if (id == R.id.btn_createInviteLink) {
         return onCreateChatFolderInviteLinkClick(view, chatFolderId, true, chatFolderInviteLinkCount);
