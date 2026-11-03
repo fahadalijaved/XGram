@@ -44,6 +44,7 @@ import com.fahadali.xgram.compose.ui.str
 import com.fahadali.xgram.layout.XgramNavRail
 import com.fahadali.xgram.layout.XgramNavToolbar
 import org.thunderdog.challegram.R
+import org.thunderdog.challegram.telegram.TdlibSettingsManager
 import org.thunderdog.challegram.unsorted.Settings
 
 /**
@@ -179,6 +180,17 @@ fun ChatListPage() {
 
     header(R.string.XgramChats)
     group {
+      // Telegram X's Hide from Chat List (the archive row's menu), per account: hidden, a pull down on the chat list shows
+      // it (Telegram's "Swipe down for archive", XgramArchivePull)
+      val hideArchive = host.tdlib.settings().needHideArchive()
+      buttons(
+        R.id.btn_xgramArchiveMode, s(R.string.XgramArchiveMode),
+        listOf(s(R.string.XgramArchivePinned) to false, s(R.string.XgramArchiveHidden) to true),
+        selected = hideArchive,
+        subtitle = s(if (hideArchive) R.string.XgramArchiveHiddenSub else R.string.XgramArchivePinnedSub)
+      ) {
+        host.tdlib.settings().setUserPreference(TdlibSettingsManager.PREFERENCE_HIDE_ARCHIVE, it)
+      }
       switch(R.id.btn_xgramMergeCommunities, s(R.string.XgramMergeCommunities), s(R.string.XgramMergeCommunitiesSub), checked = settings.mergeCommunities()) {
         settings.setMergeCommunities(it)
         XgramCommunities.notifyAllAccounts() // the setting is shared by every account

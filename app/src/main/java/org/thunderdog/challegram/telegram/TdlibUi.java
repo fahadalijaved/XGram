@@ -5479,6 +5479,13 @@ public class TdlibUi extends Handler {
       icons.append(canRead ? Config.ICON_MARK_AS_READ : Config.ICON_MARK_AS_UNREAD);
     }
 
+    if (!hasPasscode && com.fahadali.xgram.export.XgramExport.canOffer(tdlib, chat)) {
+      ids.append(R.id.btn_xgramExportChat); // XGram: the chat ⋮'s Export chat (not past a chat passcode, as Clear history)
+      strings.append(R.string.XgramExportChat);
+      colors.append(ViewController.OptionColor.NORMAL);
+      icons.append(R.drawable.baseline_file_download_24);
+    }
+
     if (!hasPasscode && tdlib.canClearHistory(chat)) {
       ids.append(R.id.btn_clearChatHistory);
       strings.append(R.string.ClearHistory);
@@ -5922,6 +5929,9 @@ public class TdlibUi extends Handler {
       return true;
     } else if (actionId == R.id.btn_xgramLaterUnsnooze) {
       com.fahadali.xgram.later.XgramLaterPicker.unsnooze(context, tdlib, chatId); // XGram Later
+      return true;
+    } else if (actionId == R.id.btn_xgramExportChat) {
+      com.fahadali.xgram.export.XgramExport.prompt(context, chatId, null); // XGram: from the chat list, the whole chat
       return true;
     } else if (actionId == R.id.btn_removeChatFromFolder) {
       if (TD.isChatListFolder(chatList)) {

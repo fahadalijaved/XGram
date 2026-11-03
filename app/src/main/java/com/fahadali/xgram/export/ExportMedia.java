@@ -469,7 +469,7 @@ final class ExportMedia {
       skip = SKIP_TYPE;
     } else if (size > options.sizeLimitBytes) {
       skip = SKIP_SIZE;
-    } else if (!message.canBeSaved || (file.local != null && !file.local.canBeDownloaded && !file.local.isDownloadingCompleted)) {
+    } else if (!options.canSave(message) || (file.local != null && !file.local.canBeDownloaded && !file.local.isDownloadingCompleted)) {
       skip = SKIP_UNAVAILABLE;
     } else {
       skip = SKIP_NONE;

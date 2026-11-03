@@ -735,6 +735,28 @@ public class TdlibSettingsManager implements CleanupStartupDelegate {
     return getUserPreference(PREFERENCE_MUTE_NON_CONTACTS);
   }
 
+  /** XGram: an account's Archive choice (Chat list: pinned at the top or hidden) for the settings backup, read as stored. */
+  public static boolean xgramHideArchive (TdlibAccount account) {
+    return BitwiseUtils.hasFlag(Settings.instance().getLong(key(PREFERENCES_KEY, account.id), 0), PREFERENCE_HIDE_ARCHIVE);
+  }
+
+  /**
+   * XGram: restores an account's Archive choice. Through its Tdlib when it has one (its chat lists follow at once),
+   * stored as it is otherwise, without starting one.
+   */
+  public static void xgramSetHideArchive (TdlibAccount account, boolean hide) {
+    if (account.hasTdlib(false)) {
+      account.tdlibNoWakeup().settings().setUserPreference(PREFERENCE_HIDE_ARCHIVE, hide);
+      return;
+    }
+    String key = key(PREFERENCES_KEY, account.id);
+    long preferences = Settings.instance().getLong(key, 0);
+    long newPreferences = BitwiseUtils.setFlag(preferences, PREFERENCE_HIDE_ARCHIVE, hide);
+    if (preferences != newPreferences) {
+      Settings.instance().putLong(key, newPreferences);
+    }
+  }
+
   public void toggleUserPreference (long key) {
     boolean value = getUserPreference(key);
     setUserPreference(key, !value);
@@ -780,6 +802,9 @@ public class TdlibSettingsManager implements CleanupStartupDelegate {
   }
 
   private void notifyPreferenceChanged (long key, boolean value) {
+    if (preferenceListeners == null) {
+      return; // XGram: changed with no chat list listening yet (a settings restore for another account)
+    }
     for (PreferenceChangeListener listener : preferenceListeners) {
       listener.onPreferenceChanged(tdlib, key, value);
     }

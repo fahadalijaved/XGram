@@ -776,9 +776,9 @@ public final class ExportJob {
         item.vcardSkip = ExportMedia.SKIP_TYPE;
       } else if (data.length > options.sizeLimitBytes) {
         item.vcardSkip = ExportMedia.SKIP_SIZE;
-      } else if (!item.message.canBeSaved || !zip.canAddMedia(data.length, 0, reserveBytes, reserveEntries)) {
+      } else if (!options.canSave(item.message) || !zip.canAddMedia(data.length, 0, reserveBytes, reserveEntries)) {
         item.vcardSkip = ExportMedia.SKIP_UNAVAILABLE; // as the media of a message that can't be saved, or Android 6's zip limits
-        if (item.message.canBeSaved) {
+        if (options.canSave(item.message)) {
           onLegacyZipLimit();
         }
       } else {

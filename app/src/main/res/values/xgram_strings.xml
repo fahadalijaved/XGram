@@ -668,7 +668,7 @@
   <string name="XgramGhostScheduleSendSub">Sending keeps you offline</string>
   <string name="XgramGhostSilentSub">No notification sound</string>
   <string name="XgramAllowScreenshotsSub">In protected chats</string>
-  <string name="XgramSaveProtectedSub">Protected media and text</string>
+  <string name="XgramSaveProtectedSub">Protected media, text and chat export</string>
   <string name="XgramHidePhoneSub">In Settings and side menu</string>
   <string name="XgramBlockContentCaptureSub">Android system intelligence</string>
   <string name="XgramHideSponsoredSub">In channels</string>

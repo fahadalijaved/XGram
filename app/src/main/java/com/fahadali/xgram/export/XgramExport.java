@@ -30,6 +30,7 @@ import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.view.ViewCompat;
 
+import com.fahadali.xgram.XgramSettings;
 import com.fahadali.xgram.appearance.XgramExpressive;
 import com.fahadali.xgram.appearance.XgramR5SheetsInfo;
 import com.fahadali.xgram.appearance.XgramR6B3Shell;
@@ -70,12 +71,13 @@ public final class XgramExport {
   private XgramExport () { }
 
   /**
-   * Whether to offer the export for {@code chat}. Protected chats are refused, as Desktop does; secret chats are
-   * local-only history. An empty or not yet loaded chat still passes (its last message can be unknown): the export
-   * then writes Desktop's "No exported messages".
+   * Whether to offer the export for {@code chat}. Protected chats are refused, as Desktop does, unless XGram's
+   * Privacy → Allow saving is on (then their media goes into the .zip too, {@link ExportOptions#saveProtected});
+   * secret chats are local-only history. An empty or not yet loaded chat still passes (its last message can be
+   * unknown): the export then writes Desktop's "No exported messages".
    */
   public static boolean canOffer (@Nullable Tdlib tdlib, @Nullable TdApi.Chat chat) {
-    return chat != null && !ChatId.isSecret(chat.id) && !chat.hasProtectedContent;
+    return chat != null && !ChatId.isSecret(chat.id) && (!chat.hasProtectedContent || XgramSettings.instance().saveProtected());
   }
 
   /**
@@ -90,7 +92,7 @@ public final class XgramExport {
     if (chat == null || ChatId.isSecret(chatId)) {
       return;
     }
-    if (chat.hasProtectedContent) {
+    if (chat.hasProtectedContent && !XgramSettings.instance().saveProtected()) {
       XgramR6B3Shell.snackbar(Lang.getString(R.string.XgramExportProtected), true);
       return;
     }

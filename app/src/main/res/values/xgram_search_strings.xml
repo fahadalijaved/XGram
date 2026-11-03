@@ -67,6 +67,7 @@
   <string name="XgramSearchKwSelfDestruct">self-destruct|inactive</string>
   <string name="XgramSearchKwAutoLock">timeout|lock after</string>
   <string name="XgramSearchKwScreenshot">screenshot|screen recording|screen capture|protected content|save restricted</string>
+  <string name="XgramSearchKwExportProtected">export chat|chat export|export protected|restrict saving</string>
   <string name="XgramSearchKwBubbles">bubble|chat style|classic</string>
   <string name="XgramSearchKwIcons">icons|icon pack</string>
   <string name="XgramSearchKwChatListView">one line|two lines|three lines|compact|density</string>

@@ -513,8 +513,19 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
     reactionsReceiver.detach();
   }
 
+  // XGram: Telegram's pull for the hidden archive, drawn over this row while it is the archive's (ChatsAdapter sets it)
+  @Nullable private com.fahadali.xgram.chats.XgramArchivePull xgramArchivePull;
+
+  public void xgramSetArchivePull (@Nullable com.fahadali.xgram.chats.XgramArchivePull pull) {
+    if (this.xgramArchivePull != pull) {
+      this.xgramArchivePull = pull;
+      invalidate();
+    }
+  }
+
   public void setChat (TGChat chat) {
     if (this.chat != chat) {
+      this.xgramArchivePull = null; // XGram: the adapter gives it again to the archive's row
       if (this.chat != null) {
         this.chat.detachFromView(this);
         if (this.chat.isArchive()) {
@@ -1169,6 +1180,12 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
     // XGram: the schedule clock and the selection check at the photo's scale (3/4 with the one line photo)
     DrawAlgorithms.drawIcon(c, avatarReceiver, 315f, chat.getScheduleAnimator().getFloatValue(), cutOutColor, getSparseDrawable(R.drawable.baseline_watch_later_10, ColorId.badgeMuted), PorterDuffPaint.get(ColorId.badgeMuted, chat.getScheduleAnimator().getFloatValue()), xgramMetrics.badgeScale);
     DrawAlgorithms.drawSimplestCheckBox(c, avatarReceiver, isSelected.getFloatValue(), cutOutColor, xgramMetrics.badgeScale);
+
+    if (xgramArchivePull != null && chat.isArchive() && xgramArchivePull.isDrawing()) {
+      // XGram: the hidden archive pulled into sight: "Swipe down for archive", then "Release for archive" (as Telegram)
+      xgramArchivePull.draw(this, c, viewWidth, getMeasuredHeight(), avatarReceiver.getLeft(), avatarReceiver.getTop(), avatarReceiver.getRight(),
+        avatarReceiver.getBottom(), avatarReceiver.getDisplayRadius(), Math.round(xgramMetrics.textLeft), rtl, xgramMetrics.badgeScale);
+    }
 
     if (clipSaveCount != -1) {
       Views.restore(c, clipSaveCount);

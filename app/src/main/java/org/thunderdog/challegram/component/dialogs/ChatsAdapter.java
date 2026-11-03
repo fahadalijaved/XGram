@@ -203,6 +203,8 @@ public class ChatsAdapter extends RecyclerView.Adapter<ChatsViewHolder> {
         TGChat currentChat = getChatByItemPosition(position);
         TGChat nextChat = getChatByItemPosition(position + 1);
         holder.setChat(currentChat, false, nextChat != null && currentChat.isPinnedOrSpecial() && !nextChat.isPinnedOrSpecial(), context.isChatSelected(currentChat));
+        // XGram: the hidden archive's pull, drawn over the archive's row
+        ((ChatView) holder.itemView).xgramSetArchivePull(currentChat != null && currentChat.isArchive() ? context.xgramArchivePull() : null);
         break;
       }
       case VIEW_TYPE_INFO: {
@@ -235,7 +237,7 @@ public class ChatsAdapter extends RecyclerView.Adapter<ChatsViewHolder> {
         break;
       }
       case VIEW_TYPE_XGRAM_SNOOZED: {
-        ((com.fahadali.xgram.later.XgramSnoozedRowView) holder.itemView).setDividerAbove(hasArchive && !context.xgramArchiveCollapsed()); // XGram Later: in the archive's group, unless it is pulled up out of sight
+        ((com.fahadali.xgram.later.XgramSnoozedRowView) holder.itemView).setDividerAbove(hasArchive && !context.xgramArchiveCollapsed() && !context.xgramArchiveHiddenNow()); // XGram Later: in the archive's group, unless it is pulled up out of sight, waiting above the top or being pulled
         ((com.fahadali.xgram.later.XgramSnoozedRowView) holder.itemView).setState(xgramSnoozed, true);
         break;
       }

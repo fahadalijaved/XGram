@@ -11,6 +11,9 @@
  */
 package com.fahadali.xgram.export;
 
+import com.fahadali.xgram.XgramSettings;
+
+import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.unsorted.Settings;
 
 /**
@@ -59,6 +62,11 @@ public final class ExportOptions {
   public final int fromDate;
   /** Exclusive, unix seconds, 0 = till now. */
   public final int tillDate;
+  /**
+   * XGram's Privacy → Allow saving (protected media and text) as it was when the export started: the media and vCards
+   * of messages that can't be saved go into the .zip too. Read once, so switching it halfway doesn't split an export.
+   */
+  public final boolean saveProtected;
 
   public ExportOptions (int accountId, long chatId, int scope, long topicId, int typesMask, long sizeLimitBytes, int fromDate, int tillDate) {
     this.accountId = accountId;
@@ -69,10 +77,16 @@ public final class ExportOptions {
     this.sizeLimitBytes = sizeLimitBytes;
     this.fromDate = fromDate;
     this.tillDate = tillDate;
+    this.saveProtected = XgramSettings.instance().saveProtected();
   }
 
   public boolean includes (int type) {
     return (typesMask & type) != 0;
+  }
+
+  /** Whether {@code message}'s media (or vCard) may go into the .zip: it can be saved, or Allow saving is on. */
+  public boolean canSave (TdApi.Message message) {
+    return message.canBeSaved || saveProtected;
   }
 
   public boolean isTopic () {

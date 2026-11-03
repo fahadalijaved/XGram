@@ -557,6 +557,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.getToggler().setRadioEnabled(settings.downloadBoost(), isUpdate);
         } else if (id == R.id.btn_xgramForwardSender) {
           view.setData(com.fahadali.xgram.chats.XgramForwardOptions.defaultName(settings.forwardSender()));
+        } else if (id == R.id.btn_xgramArchiveMode) {
+          view.setData(tdlib.settings().needHideArchive() ? R.string.XgramArchiveHiddenValue : R.string.XgramArchivePinned);
         } else if (id == R.id.btn_xgramMergeCommunities) {
           view.getToggler().setRadioEnabled(settings.mergeCommunities(), isUpdate);
         } else if (id == R.id.btn_xgramHideBlocked) {
@@ -933,6 +935,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
 
     items.add(header(R.string.XgramChats));
     addRows(items,
+      link(R.id.btn_xgramArchiveMode, R.string.XgramArchiveMode), // pinned at the top or hidden (pull down), per account
       toggle(R.id.btn_xgramMergeCommunities, R.string.XgramMergeCommunities, R.string.XgramMergeCommunitiesSub),
       link(R.id.btn_xgramChatLongPress, R.string.XgramChatLongPress),
       link(R.id.btn_xgramChatActionsOrder, R.string.XgramChatActionsOrder)
@@ -2037,6 +2040,15 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     } else if (id == R.id.btn_xgramHeaderButtons) {
       navigateTo(new com.fahadali.xgram.chats.XgramHeaderButtonsController(context, tdlib));
+      return;
+    } else if (id == R.id.btn_xgramArchiveMode) {
+      // Telegram X's Hide from Chat List, per account: the chat list follows at once (ChatsController.onPreferenceChanged)
+      String[] titles = {Lang.getString(R.string.XgramArchivePinned), Lang.getString(R.string.XgramArchiveHiddenValue)};
+      showOptions(Lang.getString(R.string.XgramArchiveModeInfo), new int[] {1, 2}, titles, null, null, (itemView, optionId) -> {
+        tdlib.settings().setUserPreference(org.thunderdog.challegram.telegram.TdlibSettingsManager.PREFERENCE_HIDE_ARCHIVE, optionId == 2);
+        adapter.updateValuedSettingById(R.id.btn_xgramArchiveMode);
+        return true;
+      });
       return;
     } else if (id == R.id.btn_xgramMergeCommunities) {
       settings.setMergeCommunities(adapter.toggleView(v));

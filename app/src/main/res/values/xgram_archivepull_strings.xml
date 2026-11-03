@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: Archive pinned at the top or hidden (Settings > XGram > Chat list), Telegram X's per account Hide from Chat List -->
+  <string name="XgramArchiveMode">Archive</string>
+  <string name="XgramArchivePinned">Pinned at top</string>
+  <string name="XgramArchiveHidden">Hidden</string>
+  <string name="XgramArchiveHiddenValue">Hidden (pull down to show)</string>
+  <string name="XgramArchivePinnedSub">On this account: the first row of the chat list</string>
+  <string name="XgramArchiveHiddenSub">On this account: pull the chat list down to show it</string>
+  <string name="XgramArchiveModeInfo">Applies to this account. When hidden, pull the chat list down from the top and let go at Release for archive.</string>
+  <!-- XGram: the hidden archive's pull, drawn over the archive row as it comes into sight (as in Telegram) -->
+  <string name="XgramArchivePullDown">Swipe down for archive</string>
+  <string name="XgramArchivePullRelease">Release for archive</string>
+  <!-- XGram: settings search, the Archive row's extra words -->
+  <string name="XgramSearchKwArchivePull">hide archive|pin archive|hidden archive|pull down|swipe down|archived chats</string>
+</resources>

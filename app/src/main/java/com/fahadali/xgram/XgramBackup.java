@@ -113,6 +113,7 @@ public final class XgramBackup {
       values.put("hideFolders", XgramSettings.instance().hideFolders(account.id));
       values.put("hideAllChats", XgramSettings.instance().hideAllChats(account.id));
       values.put("hiddenFolders", hiddenFolders);
+      values.put("hideArchive", TdlibSettingsManager.xgramHideArchive(account)); // Archive: pinned at the top or hidden (Chat list)
       values.put("autoTranslate", com.fahadali.xgram.chats.XgramAutoTranslate.exportAccount(account.id)); // chats set in their menu
       values.put("later", com.fahadali.xgram.later.XgramLater.exportAccount(account.id)); // Later: pending and due items
       accounts.put(user, values);
@@ -149,6 +150,9 @@ public final class XgramBackup {
           ids[i] = hiddenFolders.getInt(i);
         }
         Settings.instance().putIntArray(key, ids);
+      }
+      if (values.has("hideArchive")) {
+        TdlibSettingsManager.xgramSetHideArchive(account, values.optBoolean("hideArchive", false)); // older backups keep the choice
       }
       if (values.has("autoTranslate")) {
         com.fahadali.xgram.chats.XgramAutoTranslate.importAccount(account.id, values.optJSONObject("autoTranslate"));

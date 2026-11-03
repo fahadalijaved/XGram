@@ -1065,7 +1065,14 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
                   View view = manager.findViewByPosition(firstVisiblePosition);
                   int top = view != null ? -manager.getDecoratedTop(view) : 0;
                   int itemHeight = ChatsViewHolder.measureHeightForType(ChatsAdapter.VIEW_TYPE_CHAT);
-                  if (top < itemHeight / 2) {
+                  // XGram: the archive pulled into sight stays only when let go past the threshold (Telegram's "Release
+                  // for archive"); once it stays it is a row again, kept while at least half of it shows
+                  final boolean xgramPulled = xgramArchivePull != null && xgramArchivePull.isActive() && !xgramArchivePull.isShown();
+                  if (xgramPulled ? xgramArchivePull.isReady() : top < itemHeight / 2) {
+                    if (xgramPulled) {
+                      xgramArchivePull.show(true);
+                      adapter.xgramRebindSnoozedRow(); // XGram Later: kept as a row, the Snoozed row's divider comes back
+                    }
                     com.fahadali.xgram.appearance.XgramMotion.smoothScrollByOr(chatsView, 0, -top);
                   } else {
                     onScrollToTopRequested();
@@ -1073,8 +1080,10 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
                 } else if (firstVisiblePosition == 1) {
                   View view = manager.findViewByPosition(firstVisiblePosition);
                   setArchiveCollapsed(view == null || manager.getDecoratedTop(view) < 0);
+                  xgramResetArchivePull(); // XGram: out of sight, the next pull starts over
                 } else {
                   setArchiveCollapsed(true);
+                  xgramResetArchivePull();
                 }
               }
             }
@@ -1084,10 +1093,45 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
           public void onScrolled (@NonNull RecyclerView recyclerView, int dx, int dy) {
             if (hideArchive && !archiveCollapsed && chatScrollState == RecyclerView.SCROLL_STATE_SETTLING && dy > 0 && ((LinearLayoutManager) recyclerView.getLayoutManager()).findFirstVisibleItemPosition() > 0) {
               setArchiveCollapsed(true);
+              xgramResetArchivePull();
+            }
+            if (hideArchive && xgramArchivePull != null) {
+              final boolean dragging = recyclerView.getScrollState() == RecyclerView.SCROLL_STATE_DRAGGING;
+              if (!dragging && dy < 0 && !xgramFlingStopPending && !xgramArchivePull.isShown() &&
+                recyclerView.getScrollState() == RecyclerView.SCROLL_STATE_SETTLING && xgramArchivePullFraction() > 0f) {
+                // XGram: only a pull brings the hidden archive into sight, never a fling (as in Telegram): a fling let go
+                // below the top stops as the archive comes in, and the idle state below hides it. Posted, not from
+                // inside the fling's own step; the list's own scrolls never come here (they hide it, or it is shown).
+                xgramFlingStopPending = true;
+                recyclerView.post(() -> {
+                  xgramFlingStopPending = false;
+                  if (recyclerView.getScrollState() == RecyclerView.SCROLL_STATE_SETTLING) {
+                    recyclerView.stopScroll();
+                  }
+                });
+              }
+              xgramOnArchivePullScrolled(dragging);
             }
           }
         });
+        // XGram: as in Telegram, letting go of the pulled archive decides at once, no fling carries it on: the fling is
+        // eaten before its first step and the idle state (stopScroll sets it) keeps the archive past the threshold and
+        // hides it otherwise. A fling up the list before the threshold goes on (Telegram X's rule hides it on the way).
+        chatsView.setOnFlingListener(new RecyclerView.OnFlingListener() {
+          @Override
+          public boolean onFling (int velocityX, int velocityY) {
+            if (hideArchive && xgramArchivePull != null && !xgramArchivePull.isShown() && (xgramArchivePull.isReady() || velocityY < 0) &&
+              xgramArchivePullFraction() >= 0f) {
+              chatsView.stopScroll();
+              return true;
+            }
+            return false;
+          }
+        });
         hideArchive = archiveCollapsed = xgramNeedHideArchive();
+        // XGram: Telegram's pull for the hidden archive (its text, arrow and tick), drawn by the archive's row
+        xgramArchivePull = new com.fahadali.xgram.chats.XgramArchivePull(chatsView);
+        xgramArchivePull.setActive(hideArchive);
         archiveList = tdlib.chatList(ChatPosition.CHAT_LIST_ARCHIVE);
         archiveListListener = new ChatListListener() {
           @Override
@@ -1240,6 +1284,115 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
 
   private int chatScrollState = RecyclerView.SCROLL_STATE_IDLE;
 
+  // XGram: Telegram's pull for the hidden archive (com.fahadali.xgram.chats.XgramArchivePull)
+
+  @Nullable private com.fahadali.xgram.chats.XgramArchivePull xgramArchivePull;
+  /** The pull's resistance: the part of a pixel the list still owes the finger (xgramArchivePullDy). */
+  private float xgramPullRemainder;
+  /** A fling carrying the hidden archive into sight is being stopped (one post at a time). */
+  private boolean xgramFlingStopPending;
+
+  /** The hidden archive's pull, drawn by the archive's row; null on lists that never hide it. */
+  @Nullable
+  public com.fahadali.xgram.chats.XgramArchivePull xgramArchivePull () {
+    return xgramArchivePull;
+  }
+
+  private void xgramResetArchivePull () {
+    if (xgramArchivePull != null && xgramArchivePull.reset() && adapter != null) {
+      adapter.xgramRebindSnoozedRow(); // XGram Later: no divider under an archive gone back to waiting
+    }
+  }
+
+  /**
+   * XGram: the hidden archive is no row now (Hidden, not kept by a pull): pulled up out of sight, waiting right above
+   * the top for a pull, or being pulled. The Snoozed row under it draws no divider then.
+   */
+  public boolean xgramArchiveHiddenNow () {
+    return hideArchive && xgramArchivePull != null && xgramArchivePull.isActive() && !xgramArchivePull.isShown();
+  }
+
+  /**
+   * XGram: {@link #xgramArchiveHiddenNow()} with the row after the archive at the list's top: the list is at its top
+   * (ChatsRecyclerView.canScrollVertically, for the lifted bars and the extended FAB), the hidden archive above it is
+   * no scroll position.
+   */
+  public boolean xgramArchiveWaitsAbove () {
+    return xgramArchiveHiddenNow() && chatsView != null && adapter != null && adapter.hasArchive() && xgramRowAfterArchiveAtTop();
+  }
+
+  /** XGram: the row after the archive's is laid out with its top at the list's top or below. */
+  private boolean xgramRowAfterArchiveAtTop () {
+    final int position = adapter.getArchiveItemPosition();
+    final LinearLayoutManager manager = (LinearLayoutManager) chatsView.getLayoutManager();
+    final View next = position != -1 && manager != null ? manager.findViewByPosition(position + 1) : null;
+    return next != null && manager.getDecoratedTop(next) >= chatsView.getPaddingTop();
+  }
+
+  /**
+   * How much of the hidden archive's row is in sight (0..1) while it can be pulled down, 0 while it waits right above
+   * the top (not laid out yet), or -1: not hidden, pulled up out of reach (collapsed) or away from the top.
+   */
+  private float xgramArchivePullFraction () {
+    if (xgramArchivePull == null || !xgramArchivePull.isActive() || !hideArchive || archiveCollapsed || chatsView == null || adapter == null || !adapter.hasArchive()) {
+      return -1f;
+    }
+    final int position = adapter.getArchiveItemPosition();
+    if (position == -1) {
+      return -1f;
+    }
+    final LinearLayoutManager manager = (LinearLayoutManager) chatsView.getLayoutManager();
+    if (manager == null) {
+      return -1f;
+    }
+    final View view = manager.findViewByPosition(position);
+    if (view == null) {
+      final View next = manager.findViewByPosition(position + 1);
+      return next != null && manager.getDecoratedTop(next) >= chatsView.getPaddingTop() ? 0f : -1f;
+    }
+    final int height = view.getHeight();
+    if (height <= 0) {
+      return -1f;
+    }
+    final float fraction = (view.getBottom() - chatsView.getPaddingTop()) / (float) height;
+    return fraction < 0f ? 0f : fraction > 1f ? 1f : fraction;
+  }
+
+  /** The row that pulls, tick and redraw as the list moves; the finger's pull past the threshold arms it. */
+  private void xgramOnArchivePullScrolled (boolean dragging) {
+    final float fraction = xgramArchivePullFraction();
+    if (fraction < 0f) {
+      return;
+    }
+    final View row = chatsView.getLayoutManager() != null ? chatsView.getLayoutManager().findViewByPosition(adapter.getArchiveItemPosition()) : null;
+    if (dragging) {
+      xgramArchivePull.onPull(fraction, row);
+    } else {
+      xgramArchivePull.onMoved(row);
+    }
+  }
+
+  /**
+   * ChatsRecyclerView's layout manager: the distance the list moves for a finger's {@code dy}. Pulling the hidden
+   * archive down (dy &lt; 0 while dragging, before it stays) is harder the more of it shows, as in Telegram.
+   */
+  public int xgramArchivePullDy (int dy) {
+    if (dy >= 0 || xgramArchivePull == null || xgramArchivePull.isShown() || chatsView == null || chatsView.getScrollState() != RecyclerView.SCROLL_STATE_DRAGGING) {
+      xgramPullRemainder = 0f;
+      return dy;
+    }
+    final float fraction = xgramArchivePullFraction();
+    if (fraction < 0f) {
+      xgramPullRemainder = 0f;
+      return dy;
+    }
+    // The part of a pixel left over goes into the next step: slow pulls (a pixel or two per event) resist as fast ones
+    final float exact = dy * com.fahadali.xgram.chats.XgramArchivePull.pullFactor(fraction) + xgramPullRemainder;
+    final int step = (int) exact;
+    xgramPullRemainder = exact - step;
+    return step;
+  }
+
   public boolean isPullingArchive () {
     if (!hideArchive || adapter == null || !adapter.hasArchive())
       return false;
@@ -1271,11 +1424,33 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
   private void setHideArchive (boolean hide) {
     if (this.archiveList != null && this.hideArchive != hide) {
       this.hideArchive = hide;
+      if (xgramArchivePull != null) {
+        xgramArchivePull.setActive(hide); // XGram: a pull only while it is hidden
+      }
+      // XGram: pinned (Settings, a backup) while it was pulled up out of sight or waiting above the top: the row comes
+      // back, into sight when the list was at its top (the restored scroll position keeps the next row at the top)
+      final boolean xgramShowPinned = !hide && chatsView != null && adapter != null && adapter.hasArchive() && xgramRowAfterArchiveAtTop();
+      if (!hide) {
+        setArchiveCollapsed(false);
+      }
       if (chatsView == null) {
         return;
       }
+      if (!hide) {
+        adapter.xgramRebindSnoozedRow(); // XGram Later: its divider under the archive row again
+        if (xgramShowPinned) {
+          UI.post(() -> { // after setArchiveCollapsed's own post
+            if (!isDestroyed() && chatsView != null && !hideArchive) {
+              ((LinearLayoutManager) chatsView.getLayoutManager()).scrollToPositionWithOffset(0, 0);
+            }
+          });
+        }
+      }
       adapter.notifyLastItemChanged();
       if (hide) {
+        if (xgramArchivePull != null && ((LinearLayoutManager) chatsView.getLayoutManager()).findFirstVisibleItemPosition() == 0) {
+          xgramArchivePull.show(false); // XGram: hidden while in sight: it scrolls away as a row, without the pull over it
+        }
         onHideArchiveRequested();
         // TODO scroll by so it becomes invisible
         // if it is not visible, just invalidate decoration

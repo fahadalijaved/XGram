@@ -77,7 +77,19 @@ public class ChatsRecyclerView extends CustomRecyclerView implements ClickHelper
 
     // setItemAnimator(null);
 
-    setLayoutManager(manager = new LinearLayoutManager(context, RecyclerView.VERTICAL, false));
+    setLayoutManager(manager = new LinearLayoutManager(context, RecyclerView.VERTICAL, false) {
+      @Override
+      public int scrollVerticallyBy (int dy, RecyclerView.Recycler recycler, RecyclerView.State state) {
+        // XGram: the hidden archive is pulled down against a resistance, as in Telegram (ChatsController.xgramArchivePullDy);
+        // all of the finger's way counts as used, so the rest never stretches the list
+        final int pullDy = controller != null ? controller.xgramArchivePullDy(dy) : dy;
+        if (pullDy != dy) {
+          super.scrollVerticallyBy(pullDy, recycler, state);
+          return dy;
+        }
+        return super.scrollVerticallyBy(dy, recycler, state);
+      }
+    });
     addOnScrollListener(new OnScrollListener() {
       @Override
       public void onScrolled (@NonNull RecyclerView recyclerView, int dx, int dy) {
@@ -100,6 +112,16 @@ public class ChatsRecyclerView extends CustomRecyclerView implements ClickHelper
   }
 
   private final ClickHelper helper = new ClickHelper(this);
+
+  @Override
+  public boolean canScrollVertically (int direction) {
+    // XGram: the hidden archive waiting above the top (or pulled, not kept yet) is no scroll position: the list is at its
+    // top for those who ask (the lifted bars, the extended FAB). RecyclerView's own scrolling asks its layout manager.
+    if (direction < 0 && controller != null && controller.xgramArchiveWaitsAbove()) {
+      return false;
+    }
+    return super.canScrollVertically(direction);
+  }
 
   @Override
   public boolean onTouchEvent (MotionEvent e) {
