@@ -60,6 +60,8 @@ public class EditEnabledReactionsController extends EditBaseController<EditEnabl
 
   public static final int TYPE_ENABLED_REACTIONS = 0;
   public static final int TYPE_QUICK_REACTION = 1;
+  /** XGram: Double tap reaction (Messages > Gestures): one choice, the account's default reaction (TdApi.SetDefaultReactionType). */
+  public static final int TYPE_XGRAM_DOUBLE_TAP = 2;
 
   public static class Args {
     public TdApi.Chat chat;
@@ -78,6 +80,11 @@ public class EditEnabledReactionsController extends EditBaseController<EditEnabl
   private TdApi.ChatAvailableReactions availableReactions;
   private final Set<String> enabledReactions = new HashSet<>();
   private final List<String> quickReactions = new ArrayList<>();
+  // XGram: Double tap reaction: the account's default reaction as picked here, and the custom emoji of the installed
+  // sets (Premium only), keys as TD.makeReactionKey
+  private TdApi.ReactionType xgramDefaultReaction;
+  private final List<String> xgramCustomEmoji = new ArrayList<>();
+  private static final int XGRAM_CUSTOM_EMOJI_LIMIT = 200; // GetCustomEmojiStickers takes up to 200 at once
 
   public EditEnabledReactionsController (Context context, Tdlib tdlib) {
     super(context, tdlib);
@@ -137,6 +144,10 @@ public class EditEnabledReactionsController extends EditBaseController<EditEnabl
       case TYPE_QUICK_REACTION: {
         String[] quickReactions = Settings.instance().getQuickReactions(tdlib);
         this.quickReactions.addAll(Arrays.asList(quickReactions));
+        break;
+      }
+      case TYPE_XGRAM_DOUBLE_TAP: {
+        xgramDefaultReaction = com.fahadali.xgram.chats.XgramDoubleTapReaction.current(tdlib); // XGram
         break;
       }
     }
@@ -231,6 +242,8 @@ public class EditEnabledReactionsController extends EditBaseController<EditEnabl
           } else if (type == TYPE_QUICK_REACTION) {
             int index = quickReactions.indexOf(reactionKey);
             userView.setNumber(index >= 0 ? index + 1 : index, isUpdate);
+          } else if (type == TYPE_XGRAM_DOUBLE_TAP) {
+            userView.setChecked(reactionKey.equals(TD.makeReactionKey(xgramDefaultReaction)), isUpdate); // XGram: one choice
           }
         }
       }
@@ -289,6 +302,8 @@ public class EditEnabledReactionsController extends EditBaseController<EditEnabl
         tdlib.ensureReactionsAvailable(chat.availableReactions, customReactionsFetched ->
           executeOnUiThreadOptional(after)
         );
+      } else if (type == TYPE_XGRAM_DOUBLE_TAP) {
+        xgramLoadCustomEmoji(after); // XGram: Premium's custom emoji, and a custom emoji default reaction
       } else {
         executeOnUiThreadOptional(after);
       }
@@ -330,6 +345,18 @@ public class EditEnabledReactionsController extends EditBaseController<EditEnabl
       items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
       items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, Lang.getMarkdownString(this, R.string.QuickReactionEnableDesc), false));
       items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+    } else if (type == TYPE_XGRAM_DOUBLE_TAP) {
+      // XGram: Double tap reaction: the emoji reactions first, a custom emoji default that is not listed below (set with
+      // Premium, or in another app) at their start
+      items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
+      items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+      final String defaultKey = TD.makeReactionKey(xgramDefaultReaction);
+      if (xgramDefaultReaction.getConstructor() == TdApi.ReactionTypeCustomEmoji.CONSTRUCTOR && !xgramCustomEmoji.contains(defaultKey)) {
+        TGReaction reaction = tdlib.getReaction(xgramDefaultReaction, false);
+        if (reaction != null) {
+          items.add(new ListItem(ListItem.TYPE_REACTION_CHECKBOX, R.id.btn_enabledReactionsCheckboxGroup, 0, reaction.key, false));
+        }
+      }
     }
 
     if (type == TYPE_ENABLED_REACTIONS && availableReactions.getConstructor() == TdApi.ChatAvailableReactionsSome.CONSTRUCTOR) {
@@ -354,6 +381,9 @@ public class EditEnabledReactionsController extends EditBaseController<EditEnabl
       }
     }
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+    if (type == TYPE_XGRAM_DOUBLE_TAP) {
+      xgramAddCustomEmoji(items); // XGram: Double tap reaction, what it is, then Premium's custom emoji
+    }
 
     /* TODO: custom reactions
     List<TGReaction> premiumReactions = tdlib.getOnlyPremiumReactions();
@@ -374,7 +404,71 @@ public class EditEnabledReactionsController extends EditBaseController<EditEnabl
   }
 
   private boolean needPremiumRestriction () {
-    return type == TYPE_QUICK_REACTION && !tdlib.hasPremium();
+    return (type == TYPE_QUICK_REACTION || type == TYPE_XGRAM_DOUBLE_TAP) && !tdlib.hasPremium(); // XGram: Double tap reaction too
+  }
+
+  // XGram: Double tap reaction (TYPE_XGRAM_DOUBLE_TAP)
+
+  /**
+   * XGram: Double tap reaction: with Premium, the custom emoji of the installed sets (GetStickers with no query) as
+   * reactions, a custom emoji default reaction first; without it, only a custom emoji default (set while it had
+   * Premium, shown locked). {@code after} runs on the UI thread once they are loaded.
+   */
+  private void xgramLoadCustomEmoji (Runnable after) {
+    final TdApi.ReactionType defaultReaction = xgramDefaultReaction;
+    final boolean isCustomDefault = defaultReaction.getConstructor() == TdApi.ReactionTypeCustomEmoji.CONSTRUCTOR;
+    if (!tdlib.hasPremium()) {
+      if (isCustomDefault) {
+        tdlib.ensureReactionsAvailable(new TdApi.ChatAvailableReactionsSome(new TdApi.ReactionType[] {defaultReaction}, 0), loaded -> executeOnUiThreadOptional(after));
+      } else {
+        executeOnUiThreadOptional(after);
+      }
+      return;
+    }
+    tdlib.send(new TdApi.GetStickers(new TdApi.StickerTypeCustomEmoji(), "", XGRAM_CUSTOM_EMOJI_LIMIT, 0), (stickers, error) -> {
+      final java.util.LinkedHashSet<String> keys = new java.util.LinkedHashSet<>();
+      if (isCustomDefault) {
+        keys.add(TD.makeReactionKey(defaultReaction));
+      }
+      if (stickers != null) {
+        for (TdApi.Sticker sticker : stickers.stickers) {
+          if (keys.size() >= XGRAM_CUSTOM_EMOJI_LIMIT) {
+            break;
+          }
+          if (sticker.fullType instanceof TdApi.StickerFullTypeCustomEmoji) {
+            keys.add(TD.makeReactionKey(new TdApi.ReactionTypeCustomEmoji(((TdApi.StickerFullTypeCustomEmoji) sticker.fullType).customEmojiId)));
+          }
+        }
+      }
+      final Runnable done = () -> {
+        xgramCustomEmoji.clear();
+        xgramCustomEmoji.addAll(keys);
+        after.run();
+      };
+      if (keys.isEmpty()) {
+        executeOnUiThreadOptional(done);
+      } else {
+        tdlib.ensureReactionsAvailable(keys.toArray(new String[0]), loaded -> executeOnUiThreadOptional(done));
+      }
+    });
+  }
+
+  /** XGram: Double tap reaction: the note on what it is, then the custom emoji (Premium) as a grid of their own. */
+  private void xgramAddCustomEmoji (List<ListItem> items) {
+    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramDoubleTapReactionInfo));
+    final List<ListItem> cells = new ArrayList<>();
+    for (String key : xgramCustomEmoji) {
+      TGReaction reaction = tdlib.getReaction(TD.toReactionType(key), false);
+      if (reaction != null) {
+        cells.add(new ListItem(ListItem.TYPE_REACTION_CHECKBOX, R.id.btn_enabledReactionsCheckboxGroup, 0, reaction.key, false));
+      }
+    }
+    if (!cells.isEmpty()) {
+      items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramDoubleTapReactionCustomEmoji));
+      items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+      items.addAll(cells);
+      items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+    }
   }
 
   private void showPremiumLockTooltip (View v) {
@@ -531,6 +625,26 @@ public class EditEnabledReactionsController extends EditBaseController<EditEnabl
             adapter.updateValuedSettingById(R.id.btn_quick_reaction_enabled);
             break;
           }
+          case TYPE_XGRAM_DOUBLE_TAP: {
+            // XGram: Double tap reaction, one choice: it becomes the account's default reaction at once (and back, if
+            // Telegram refuses it)
+            if (needPremiumRestriction() && tgReaction.isPremium()) {
+              showPremiumLockTooltip(v);
+            } else if (!Td.equalsTo(xgramDefaultReaction, tgReaction.type)) {
+              final TdApi.ReactionType previous = xgramDefaultReaction;
+              final TdApi.ReactionType picked = tgReaction.type;
+              xgramDefaultReaction = picked;
+              checked = true;
+              tdlib.xgramSetDefaultReactionType(picked, isSet -> {
+                if (!isSet && !isDestroyed() && Td.equalsTo(xgramDefaultReaction, picked)) {
+                  xgramDefaultReaction = previous;
+                  adapter.updateAllValuedSettingsById(R.id.btn_enabledReactionsCheckboxGroup);
+                }
+              });
+              adapter.updateAllValuedSettingsById(R.id.btn_enabledReactionsCheckboxGroup);
+            }
+            break;
+          }
         }
 
         if (checked) {
@@ -582,6 +696,8 @@ public class EditEnabledReactionsController extends EditBaseController<EditEnabl
   public CharSequence getName () {
     if (type == TYPE_ENABLED_REACTIONS)
       return Lang.getString(R.string.Reactions);
+    else if (type == TYPE_XGRAM_DOUBLE_TAP)
+      return Lang.getString(R.string.XgramDoubleTapReaction); // XGram
     else
       return Lang.getString(R.string.QuickReaction);
   }
@@ -788,6 +904,8 @@ public class EditEnabledReactionsController extends EditBaseController<EditEnabl
 
     @Override
     public void onDraw (@NonNull android.graphics.Canvas c, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
+      // One panel per run of cells: a page can have two grids with rows between them (Double tap reaction: the emoji
+      // reactions, then a note, a header and the custom emoji). Children are in adapter order.
       float top = Float.MAX_VALUE, bottom = -Float.MAX_VALUE;
       int minPosition = Integer.MAX_VALUE, maxPosition = -1;
       final int childCount = parent.getChildCount();
@@ -795,6 +913,13 @@ public class EditEnabledReactionsController extends EditBaseController<EditEnabl
         View child = parent.getChildAt(i);
         int position = parent.getChildAdapterPosition(child);
         if (!isCell(position)) {
+          if (maxPosition != -1 && position != RecyclerView.NO_POSITION) {
+            drawPanel(c, parent, top, bottom, minPosition, maxPosition);
+            top = Float.MAX_VALUE;
+            bottom = -Float.MAX_VALUE;
+            minPosition = Integer.MAX_VALUE;
+            maxPosition = -1;
+          }
           continue;
         }
         final float ty = child.getTranslationY();
@@ -803,9 +928,12 @@ public class EditEnabledReactionsController extends EditBaseController<EditEnabl
         minPosition = Math.min(minPosition, position);
         maxPosition = Math.max(maxPosition, position);
       }
-      if (maxPosition == -1) {
-        return;
+      if (maxPosition != -1) {
+        drawPanel(c, parent, top, bottom, minPosition, maxPosition);
       }
+    }
+
+    private void drawPanel (android.graphics.Canvas c, RecyclerView parent, float top, float bottom, int minPosition, int maxPosition) {
       final float corner = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L);
       final float padding = Screen.dp(PANEL_PADDING) + Screen.dp(TILE_GAP);
       // a group running past the list's top or bottom keeps its corners off screen

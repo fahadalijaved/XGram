@@ -2,4 +2,6 @@
 <resources>
   <!-- XGram: Double tap to react (Messages > Gestures, XgramSettings.doubleTapReact) -->
   <item type="id" name="btn_xgramDoubleTapReact" />
+  <!-- XGram: Double tap reaction under it (the account's default reaction, XgramDoubleTapReaction) -->
+  <item type="id" name="btn_xgramDoubleTapReaction" />
 </resources>

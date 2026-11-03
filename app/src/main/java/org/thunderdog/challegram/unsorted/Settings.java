@@ -6896,11 +6896,6 @@ public class Settings {
     return quickReactions;
   }
 
-  /** XGram: the user picked the quick reactions (Double tap to react takes the server's default reaction otherwise, a custom emoji one too). */
-  public boolean xgramHasQuickReactions () {
-    return pmc.getStringArray(KEY_QUICK_REACTIONS) != null;
-  }
-
   public void setBigReactionsInChannels (boolean inChannels) {
     pmc.putBoolean(KEY_BIG_REACTIONS_IN_CHANNELS, inChannels);
   }

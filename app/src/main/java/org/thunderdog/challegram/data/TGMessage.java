@@ -9574,9 +9574,10 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   }
 
   /**
-   * XGram: Double tap to react, the second tap lifted at {@code x, y} in {@code view}: toggles the first of the quick
-   * reactions (Quick reaction in Stickers and emoji) this message takes, else the server's default reaction (a custom
-   * emoji one too), so a second double tap takes it back. {@code orElse} (the single tap) runs when there is none.
+   * XGram: Double tap to react, the second tap lifted at {@code x, y} in {@code view}: toggles the account's default
+   * reaction (Double tap reaction, a custom emoji one too) when this message takes it, else the first of the quick
+   * reactions (Quick reaction in Stickers and emoji) it takes, else 👍, so a second double tap takes it back.
+   * {@code orElse} (the single tap) runs when there is none.
    */
   public final void xgramDoubleTapReact (View view, float x, float y, Runnable orElse) {
     final int[] location = new int[2];
@@ -9615,22 +9616,21 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     if (!canBeReacted() || tdlib.isSelfChat(msg.chatId) || xgramHidesReactions()) {
       return null;
     }
-    if (Settings.instance().xgramHasQuickReactions()) {
-      for (String key : Settings.instance().getQuickReactions(tdlib)) {
-        final TdApi.ReactionType reactionType = TD.toReactionType(key);
-        if (xgramCanDoubleTapSend(reactionType)) {
-          return reactionType;
-        }
-      }
-    }
-    // Not picked (or none of them is taken here): the server's default, which defaultEmojiReaction() leaves out when
-    // it is a custom emoji, then that emoji one
+    // XGram: Double tap reaction first: the account's default reaction (TdApi.SetDefaultReactionType, picked in
+    // Messages > Gestures or in an official app, a custom emoji one too), when this message takes it
     final TdApi.ReactionType defaultType = tdlib.xgramDefaultReactionType();
     if (defaultType != null && xgramCanDoubleTapSend(defaultType)) {
       return defaultType;
     }
-    final TdApi.ReactionType emojiType = new TdApi.ReactionTypeEmoji(tdlib.defaultEmojiReaction());
-    return xgramCanDoubleTapSend(emojiType) ? emojiType : null;
+    // Then the first quick reaction (Stickers and emoji > Quick reaction) this message takes, then 👍
+    for (String key : Settings.instance().getQuickReactions(tdlib)) {
+      final TdApi.ReactionType reactionType = TD.toReactionType(key);
+      if (xgramCanDoubleTapSend(reactionType)) {
+        return reactionType;
+      }
+    }
+    final TdApi.ReactionType thumbsUp = new TdApi.ReactionTypeEmoji(org.thunderdog.challegram.emoji.EmojiCodes.THUMBS_UP);
+    return xgramCanDoubleTapSend(thumbsUp) ? thumbsUp : null;
   }
 
   /** XGram: Double tap to react can toggle {@code reactionType} here: chosen already (taken back), or one this message takes. Never a paid one. */

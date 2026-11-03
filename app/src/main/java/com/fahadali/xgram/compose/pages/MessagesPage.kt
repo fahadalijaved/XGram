@@ -13,10 +13,12 @@ package com.fahadali.xgram.compose.pages
 
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import com.fahadali.xgram.XgramComposeBridge
 import com.fahadali.xgram.XgramReorder
 import com.fahadali.xgram.XgramSettingDeps
 import com.fahadali.xgram.XgramSettings
+import com.fahadali.xgram.chats.XgramDoubleTapReaction
 import com.fahadali.xgram.chats.XgramForwardOptions
 import com.fahadali.xgram.chats.XgramInlineVideo
 import com.fahadali.xgram.chats.XgramInputButtonsController
@@ -40,6 +42,17 @@ import org.thunderdog.challegram.R
 @Composable
 fun MessagesPage() {
   val host = LocalXgramHost.current
+  // Double tap reaction: its row names this account's default reaction, read again once that reaction is loaded
+  // (checked after every change and focus, so a reaction picked in the grid or on another device is loaded too)
+  DisposableEffect(host.tdlib, host.version) {
+    var active = true
+    XgramDoubleTapReaction.load(host.tdlib) {
+      if (active) {
+        host.changed()
+      }
+    }
+    onDispose { active = false }
+  }
   SettingsPage(title = str(R.string.XgramMessages)) {
     val settings = XgramSettings.instance()
     // Worked out once per build of the page, not while rows are drawn.
@@ -85,6 +98,14 @@ fun MessagesPage() {
       // Double tap to react: a double tap toggles the quick reaction, a single tap then opens the menu a moment later
       switch(R.id.btn_xgramDoubleTapReact, s(R.string.XgramDoubleTapReact), s(R.string.XgramDoubleTapReactSub), checked = settings.doubleTapReact()) {
         settings.setDoubleTapReact(it)
+      }
+      // Double tap reaction: the account's default reaction (TdApi.SetDefaultReactionType), picked in Telegram X's
+      // reaction grid (one choice); what a double tap sends first
+      value(
+        R.id.btn_xgramDoubleTapReaction, s(R.string.XgramDoubleTapReaction), XgramDoubleTapReaction.rowValue(host.tdlib),
+        enabled = settings.doubleTapReact()
+      ) {
+        host.open(XgramDoubleTapReaction.newPicker(host.activity, host.tdlib))
       }
       // Swipe between emoji categories: a sideways swipe on the emoji panel's grid jumps a category (XgramEmojiCategorySwipe)
       switch(R.id.btn_xgramEmojiCategorySwipe, s(R.string.XgramEmojiCategorySwipe), s(R.string.XgramEmojiCategorySwipeSub), checked = settings.emojiCategorySwipe()) {

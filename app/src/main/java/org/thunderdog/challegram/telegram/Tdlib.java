@@ -4508,6 +4508,27 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     }
   }
 
+  /**
+   * XGram: Double tap reaction (Messages > Gestures): makes {@code reactionType} this account's default reaction
+   * (TdApi.SetDefaultReactionType: the one official apps send on a double tap, the same on the account's other
+   * devices). Kept here as soon as it is set, so a double tap sends it before updateDefaultReactionType comes.
+   * {@code after} runs on the UI thread with whether it was set; an error is shown.
+   */
+  public void xgramSetDefaultReactionType (@NonNull TdApi.ReactionType reactionType, @Nullable RunnableBool after) {
+    send(new TdApi.SetDefaultReactionType(reactionType), (ok, error) -> {
+      if (error != null) {
+        UI.showError(error);
+      } else {
+        synchronized (dataLock) {
+          this.defaultReactionType = reactionType;
+        }
+      }
+      if (after != null) {
+        ui().post(() -> after.runWithBool(error == null));
+      }
+    });
+  }
+
   @Nullable
   public TdApi.PaidReactionType defaultPaidReaction () {
     synchronized (dataLock) {

@@ -541,6 +541,15 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.getToggler().setRadioEnabled(settings.textSelectDrag(), isUpdate);
         } else if (id == R.id.btn_xgramDoubleTapReact) {
           view.getToggler().setRadioEnabled(settings.doubleTapReact(), isUpdate);
+        } else if (id == R.id.btn_xgramDoubleTapReaction) {
+          // Double tap reaction: this account's default reaction (its name once loaded), used while Double tap to react is on
+          view.setData(com.fahadali.xgram.chats.XgramDoubleTapReaction.rowValue(tdlib));
+          view.setEnabled(settings.doubleTapReact());
+          com.fahadali.xgram.chats.XgramDoubleTapReaction.load(tdlib, () -> {
+            if (!isDestroyed() && adapter != null) {
+              adapter.updateValuedSettingById(R.id.btn_xgramDoubleTapReaction);
+            }
+          });
         } else if (id == R.id.btn_xgramEmojiCategorySwipe) {
           view.getToggler().setRadioEnabled(settings.emojiCategorySwipe(), isUpdate);
         } else if (id == R.id.btn_xgramCleanLinks) {
@@ -960,6 +969,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     addRows(items,
       toggle(R.id.btn_xgramTextSelectDrag, R.string.XgramSelTextDrag, R.string.XgramSelTextDragSub), // Select text without the menu
       toggle(R.id.btn_xgramDoubleTapReact, R.string.XgramDoubleTapReact, R.string.XgramDoubleTapReactSub),
+      link(R.id.btn_xgramDoubleTapReaction, R.string.XgramDoubleTapReaction), // the account's default reaction
       toggle(R.id.btn_xgramEmojiCategorySwipe, R.string.XgramEmojiCategorySwipe, R.string.XgramEmojiCategorySwipeSub), // the emoji panel's grid
       toggle(R.id.btn_xgramPullToNext, R.string.XgramPullToNext, R.string.XgramPullToNextSub)
     );
@@ -1828,6 +1838,13 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     } else if (id == R.id.btn_xgramDoubleTapReact) {
       settings.setDoubleTapReact(adapter.toggleView(v));
+      adapter.updateValuedSettingById(R.id.btn_xgramDoubleTapReaction); // used only while this is on
+      return;
+    } else if (id == R.id.btn_xgramDoubleTapReaction) {
+      // The account's default reaction, picked in Telegram X's reaction grid (one choice)
+      if (settings.doubleTapReact()) {
+        navigateTo(com.fahadali.xgram.chats.XgramDoubleTapReaction.newPicker(context, tdlib));
+      }
       return;
     } else if (id == R.id.btn_xgramEmojiCategorySwipe) {
       settings.setEmojiCategorySwipe(adapter.toggleView(v));

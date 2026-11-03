@@ -73,6 +73,7 @@ internal object XgramSearchIndex {
     R.id.btn_xgramForwardSender -> intArrayOf(R.string.XgramSearchKwForward)
     R.id.btn_xgramTextSelectDrag -> intArrayOf(R.string.XgramSearchKwSelectText)
     R.id.btn_xgramDoubleTapReact -> intArrayOf(R.string.XgramSearchKwDoubleTap)
+    R.id.btn_xgramDoubleTapReaction -> intArrayOf(R.string.XgramSearchKwDoubleTap, R.string.XgramSearchKwDefaultReaction)
     R.id.btn_xgramEmojiCategorySwipe -> intArrayOf(R.string.XgramSearchKwEmojiSwipe, R.string.XgramSearchKwEmoji)
     R.id.btn_xgramActivityShow, R.id.btn_xgramActivityReactions, R.id.btn_xgramActivityMuted, R.id.btn_xgramActivityDiscussion,
     R.id.btn_xgramActivityLookBack, R.id.btn_xgramActivityBadge,

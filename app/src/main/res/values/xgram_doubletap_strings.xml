@@ -1,7 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- XGram: Double tap to react (Messages > Gestures, XgramSettings.doubleTapReact; TGMessage.xgramDoubleTapReact) -->
+<!-- XGram: Double tap to react (Messages > Gestures, XgramSettings.doubleTapReact; TGMessage.xgramDoubleTapReact) and
+     Double tap reaction under it (the account's default reaction, com.fahadali.xgram.chats.XgramDoubleTapReaction) -->
 <resources>
   <string name="XgramDoubleTapReact">Double tap to react</string>
-  <string name="XgramDoubleTapReactSub">Tap a message twice for your quick reaction; one tap then opens the menu a moment later</string>
+  <string name="XgramDoubleTapReactSub">Tap a message twice to react; one tap then opens the menu a moment later</string>
   <string name="XgramSearchKwDoubleTap">double tap, double-tap, tap twice, quick reaction, react, reaction, like, heart</string>
+
+  <!-- Double tap reaction: the row and its picker (Telegram X's reaction grid, one choice) -->
+  <string name="XgramDoubleTapReaction">Double tap reaction</string>
+  <!-- The row's value for an emoji reaction: the emoji, then its name (👍 Thumbs Up) -->
+  <string name="XgramDoubleTapReactionEmoji">%1$s %2$s</string>
+  <!-- The row's value for a custom emoji reaction: its emoji -->
+  <string name="XgramDoubleTapReactionCustom">%1$s, custom emoji</string>
+  <string name="XgramDoubleTapReactionCustomEmoji">Custom emoji</string>
+  <string name="XgramDoubleTapReactionInfo">A double tap on a message sends this reaction, and another double tap takes it back. It is your Telegram default reaction, so the official apps on your other devices use it too. Where a chat does not allow it, your quick reaction is sent instead.</string>
+  <string name="XgramSearchKwDefaultReaction">default reaction, double tap reaction, which reaction, choose reaction, pick reaction, change reaction, favorite reaction, emoji, heart, thumbs up, like</string>
 </resources>
