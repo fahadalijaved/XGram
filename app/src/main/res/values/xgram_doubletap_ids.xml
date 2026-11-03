@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: Double tap to react (Messages > Gestures, XgramSettings.doubleTapReact) -->
+  <item type="id" name="btn_xgramDoubleTapReact" />
+</resources>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: Double tap to react (Messages > Gestures, XgramSettings.doubleTapReact; TGMessage.xgramDoubleTapReact) -->
+<resources>
+  <string name="XgramDoubleTapReact">Double tap to react</string>
+  <string name="XgramDoubleTapReactSub">Tap a message twice for your quick reaction; one tap then opens the menu a moment later</string>
+  <string name="XgramSearchKwDoubleTap">double tap, double-tap, tap twice, quick reaction, react, reaction, like, heart</string>
+</resources>

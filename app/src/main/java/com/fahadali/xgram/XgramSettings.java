@@ -50,6 +50,8 @@ public final class XgramSettings {
   public static final String KEY_TAP_TIME_DETAILS = "xgram_tap_time_details";
   /** Long press on text selects it (com.fahadali.xgram.chats.XgramTextSelection), off by default. */
   public static final String KEY_TEXT_SELECT_DRAG = "xgram_text_select_drag";
+  /** Double tap to react (Messages > Gestures), off by default: see {@link #doubleTapReact}. */
+  public static final String KEY_DOUBLE_TAP_REACT = "xgram_double_tap_react";
   public static final String KEY_CLEAN_LINKS = "xgram_clean_links";
   public static final String KEY_FIX_LINK_PREVIEWS = "xgram_fix_link_previews";
   public static final String KEY_ALLOW_SCREENSHOTS = "xgram_allow_screenshots";
@@ -124,6 +126,7 @@ public final class XgramSettings {
   private volatile boolean aiTools, hideFab, pullToNext, allChatsLabel, connectionStatusAtStart, sendMenuTests;
   private volatile boolean tapTimeForDetails;
   private volatile boolean textSelectDrag;
+  private volatile boolean doubleTapReact;
   private volatile boolean tapToRecord;
   private volatile boolean systemEmoji;
   private volatile boolean downloadBoost;
@@ -150,6 +153,7 @@ public final class XgramSettings {
     showSeconds = pmc.getBoolean(KEY_SHOW_SECONDS, false);
     tapTimeForDetails = pmc.getBoolean(KEY_TAP_TIME_DETAILS, false); // off by default (as NagramX): the time pill sits over media corners
     textSelectDrag = pmc.getBoolean(KEY_TEXT_SELECT_DRAG, false); // off by default: a long press keeps what it does
+    doubleTapReact = pmc.getBoolean(KEY_DOUBLE_TAP_REACT, false); // off by default: a tap opens the menu at once
     videoAutoHide = pmc.getBoolean(KEY_VIDEO_AUTO_HIDE, true);
     cleanLinks = pmc.getBoolean(KEY_CLEAN_LINKS, true);
     fixLinkPreviews = pmc.getBoolean(KEY_FIX_LINK_PREVIEWS, true);
@@ -343,6 +347,20 @@ public final class XgramSettings {
   public void setTextSelectDrag (boolean value) {
     textSelectDrag = value;
     put(KEY_TEXT_SELECT_DRAG, value);
+  }
+
+  /**
+   * Double tap to react: a double tap on a message toggles the quick reaction (TGMessage.xgramDoubleTapReact). A
+   * single tap on a message that can take one then waits for the double tap timeout before it opens the menu; off, it
+   * opens it at once as before. Read on every tap.
+   */
+  public boolean doubleTapReact () {
+    return doubleTapReact;
+  }
+
+  public void setDoubleTapReact (boolean value) {
+    doubleTapReact = value;
+    put(KEY_DOUBLE_TAP_REACT, value);
   }
 
   /** Remove tracking parameters (utm_*, fbclid, si…) from links before opening them. */

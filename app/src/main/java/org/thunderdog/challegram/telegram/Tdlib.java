@@ -4500,6 +4500,14 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     return EmojiCodes.THUMBS_UP;
   }
 
+  /** XGram: the default reaction as the server set it, a custom emoji one too (Double tap to react), or null before it came. */
+  @Nullable
+  public TdApi.ReactionType xgramDefaultReactionType () {
+    synchronized (dataLock) {
+      return defaultReactionType;
+    }
+  }
+
   @Nullable
   public TdApi.PaidReactionType defaultPaidReaction () {
     synchronized (dataLock) {

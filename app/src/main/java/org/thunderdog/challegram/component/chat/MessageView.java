@@ -175,6 +175,7 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
 
   @Override
   public void performDestroy () {
+    xgramCancelPendingTap(); // XGram: Double tap to react
     avatarReceiver.destroy();
     avatarsReceiver.performDestroy();
     giveawayAvatarsReceiver.performDestroy();
@@ -289,6 +290,9 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
 
   public void setMessage (TGMessage message) {
     message.xgramBeforeBind(); // XGram: its bubble fits a reply that loaded while it had no view
+    if (this.msg != message) {
+      xgramCancelPendingTap(); // XGram: Double tap to react, the row shows another message now
+    }
     int desiredHeight = message.getHeight();
     int currentHeight = getCurrentHeight();
 
@@ -542,6 +546,7 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
   }
 
   public void onDetachedFromRecyclerView () {
+    xgramCancelPendingTap(); // XGram: Double tap to react, a tap waiting for a second one goes with the row
     if (isAttached) {
       isAttached = false;
       avatarReceiver.detach();
@@ -1643,6 +1648,87 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
     return false;
   }
 
+  // XGram: Double tap to react (Settings, XGram, Messages, Gestures; off by default). A tap that would do what a tap on
+  // the message does (the menu; a tap on a link, media, a button or a sticker is the message's own and never waits)
+  // waits the double tap timeout: a second touch down close to it within that time reacts when it lifts (if it was a
+  // tap on plain area too), else the tap runs then. A touch down anywhere else, a scroll, the row going away or showing another message lets it go.
+
+  private static @Nullable MessageView xgramPendingTapView;
+  private @Nullable CancellableRunnable xgramPendingTap;
+  private float xgramPendingTapX, xgramPendingTapY;
+  private boolean xgramSecondTap;
+
+  private boolean xgramWaitsForDoubleTap () {
+    if (msg == null) {
+      return false;
+    }
+    MessagesController c = msg.messagesController();
+    return !c.inSelectMode() && !c.inPreviewSearchMode() && !c.isEditingMessage() && msg.xgramWaitsForDoubleTap();
+  }
+
+  private void xgramPostPendingTap (float x, float y) {
+    xgramCancelPendingTap();
+    if (xgramPendingTapView != null && xgramPendingTapView != this) {
+      xgramPendingTapView.xgramCancelPendingTap();
+    }
+    final TGMessage tapped = msg;
+    xgramPendingTapX = x;
+    xgramPendingTapY = y;
+    xgramPendingTap = new CancellableRunnable() {
+      @Override
+      public void act () {
+        xgramPendingTap = null;
+        if (xgramPendingTapView == MessageView.this) {
+          xgramPendingTapView = null;
+        }
+        if (msg == null || msg != tapped || !isAttached) {
+          return;
+        }
+        MessagesRecyclerView recyclerView = findParentRecyclerView();
+        if (recyclerView != null && recyclerView.getScrollState() != RecyclerView.SCROLL_STATE_IDLE) {
+          return; // The list was scrolled since
+        }
+        touchX = x;
+        touchY = y;
+        if (onMessageClick(x, y)) {
+          ViewUtils.onClick(MessageView.this);
+        }
+      }
+    };
+    xgramPendingTapView = this;
+    postDelayed(xgramPendingTap, ViewConfiguration.getDoubleTapTimeout());
+  }
+
+  private void xgramCancelPendingTap () {
+    xgramSecondTap = false;
+    if (xgramPendingTap != null) {
+      xgramPendingTap.cancel();
+      removeCallbacks(xgramPendingTap);
+      xgramPendingTap = null;
+    }
+    if (xgramPendingTapView == this) {
+      xgramPendingTapView = null;
+    }
+  }
+
+  /** A touch down at {@code x, y}: true when it is the second tap of a double tap on this message (the waiting tap is taken). */
+  private boolean xgramIsSecondTap (MessagesController c, float x, float y) {
+    if (xgramPendingTapView != null && xgramPendingTapView != this) {
+      xgramPendingTapView.xgramCancelPendingTap();
+    }
+    if (xgramPendingTap == null) {
+      return false;
+    }
+    final float dx = x - xgramPendingTapX, dy = y - xgramPendingTapY;
+    final int slop = ViewConfiguration.get(getContext()).getScaledDoubleTapSlop();
+    final boolean isSecondTap = !c.inSelectMode() && dx * dx + dy * dy <= (float) slop * slop;
+    final float firstX = xgramPendingTapX, firstY = xgramPendingTapY;
+    xgramCancelPendingTap();
+    xgramPendingTapX = firstX; // The single tap's place, for the menu when there is no reaction to send
+    xgramPendingTapY = firstY;
+    return isSecondTap;
+  }
+
   @Override
   public boolean onTouchEvent (MotionEvent e) {
     if (msg == null) {
@@ -1705,6 +1791,10 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
         }
         touchX = e.getX();
         touchY = e.getY();
+        // XGram: Double tap to react: a touch down close to a tap that waits makes it a double tap, which reacts
+        // when this finger lifts if it lands on plain area (a link, media or a button keeps its own tap) and is
+        // still a tap then (no long press, no move). Either way the waiting tap is let go (as GestureDetector does)
+        final boolean xgramDouble = xgramIsSecondTap(c, touchX, touchY);
         if (msg.allowLongPress(touchX, touchY)) {
           postLongPress();
         } else {
@@ -1712,12 +1802,15 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
         }
         if (c.inSelectMode() || !msg.onTouchEvent(this, e)) {
           flags |= FLAG_CAUGHT_CLICK;
+          xgramSecondTap = xgramDouble; // XGram: Double tap to react, plain area only
         } else {
           flags |= FLAG_CAUGHT_MESSAGE_TOUCH;
+          xgramSecondTap = false; // XGram: Double tap to react, the message takes this touch as its own
         }
         return true;
       }
       case MotionEvent.ACTION_CANCEL: {
+        xgramSecondTap = false; // XGram: Double tap to react, the list took the second touch (a scroll)
         if ((flags & FLAG_LONG_PRESSED) != 0) {
           setLongPressed(false);
         }
@@ -1769,6 +1862,8 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
         return false;
       }
       case MotionEvent.ACTION_UP: {
+        final boolean xgramDouble = xgramSecondTap; // XGram: Double tap to react
+        xgramSecondTap = false;
         if ((flags & FLAG_LONG_PRESSED) != 0) {
           setLongPressed(false);
         }
@@ -1781,6 +1876,27 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
         }
         if ((flags & FLAG_CAUGHT_CLICK) != 0) {
           flags &= ~FLAG_CAUGHT_CLICK;
+          // XGram: Double tap to react, the second tap lifted while still a tap (not held for a long press): react (or,
+          // with none to send, the first tap's menu)
+          if (xgramDouble && e.getEventTime() - e.getDownTime() < ViewConfiguration.getLongPressTimeout()) {
+            final TGMessage tapped = msg;
+            final float firstX = xgramPendingTapX, firstY = xgramPendingTapY;
+            ViewUtils.onClick(this);
+            tapped.xgramDoubleTapReact(this, e.getX(), e.getY(), () -> {
+              if (msg == tapped && isAttached) {
+                touchX = firstX;
+                touchY = firstY;
+                onMessageClick(firstX, firstY);
+              }
+            });
+            return true;
+          }
+          // XGram: Double tap to react: a tap on a message that can take a reaction waits for a second one (the
+          // double tap timeout) before it does what a tap does. Off, or in select mode, it does it at once as before
+          if (xgramWaitsForDoubleTap()) {
+            xgramPostPendingTap(e.getX(), e.getY());
+            return true;
+          }
           if (onMessageClick(e.getX(), e.getY())) {
             ViewUtils.onClick(this);
             return true;

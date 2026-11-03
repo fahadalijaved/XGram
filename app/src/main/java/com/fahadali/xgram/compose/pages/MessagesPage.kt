@@ -82,6 +82,10 @@ fun MessagesPage() {
       switch(R.id.btn_xgramTextSelectDrag, s(R.string.XgramSelTextDrag), s(R.string.XgramSelTextDragSub), checked = settings.textSelectDrag()) {
         settings.setTextSelectDrag(it)
       }
+      // Double tap to react: a double tap toggles the quick reaction, a single tap then opens the menu a moment later
+      switch(R.id.btn_xgramDoubleTapReact, s(R.string.XgramDoubleTapReact), s(R.string.XgramDoubleTapReactSub), checked = settings.doubleTapReact()) {
+        settings.setDoubleTapReact(it)
+      }
       switch(R.id.btn_xgramPullToNext, s(R.string.XgramPullToNext), s(R.string.XgramPullToNextSub), checked = settings.pullToNext()) {
         settings.setPullToNext(it)
       }

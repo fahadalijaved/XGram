@@ -9501,14 +9501,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         final boolean isOdd = a % 2 == 1;
         final SwipeQuickAction quickReaction = new SwipeQuickAction(reactionObj.getTitle(), reactionDrawable, () -> {
           xgramQuickFromSwipeRight = translation > 0f; // XGram: React on a swipe right, shown on the other side
-          boolean hasReaction = messageReactions.hasReaction(reactionType);
-          if (Config.DISABLE_ANONYMOUS_NON_OWNER_REACTIONS && !hasReaction && tdlib.isAnonymousAdminNonCreator(msg.chatId)) {
-            showContentHint(findCurrentView(), null, R.string.error_ANONYMOUS_REACTIONS_DISABLED);
-          } else if (!Config.PROTECT_ANONYMOUS_REACTIONS || hasReaction || !canGetAddedReactions() || messagesController().callNonAnonymousProtection(getId() + reactionObj.hashCode(), null)) {
-            if (messageReactions.toggleReaction(reactionType, false, false, handler(findCurrentView(), null, () -> {}))) {
-              scheduleSetReactionAnimation(new NextReactionAnimation(reactionObj, NextReactionAnimation.TYPE_QUICK));
-            }
-          }
+          xgramToggleQuickReaction(reactionType, reactionObj, null); // XGram: the same toggle as Double tap to react
         }, false, true);
 
         if (isOdd) {
@@ -9538,6 +9531,132 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   private int xgramSwipeKey = -1;
   // XGram: the last quick reaction was picked on a swipe right (React in Swipe on a message)
   private boolean xgramQuickFromSwipeRight;
+
+  /**
+   * XGram: a quick reaction's toggle, for a swipe's reaction and Double tap to react. An anonymous admin who isn't the
+   * owner can't react, and a reaction others can see asks once first (Config.PROTECT_ANONYMOUS_REACTIONS). The reaction
+   * flies to its place from {@code startPosition} (on the screen) when there is one, else from the swipe's side.
+   */
+  public final void xgramToggleQuickReaction (TdApi.ReactionType reactionType, TGReaction reactionObj, @Nullable Point startPosition) {
+    boolean hasReaction = messageReactions.hasReaction(reactionType);
+    if (Config.DISABLE_ANONYMOUS_NON_OWNER_REACTIONS && !hasReaction && tdlib.isAnonymousAdminNonCreator(msg.chatId)) {
+      showContentHint(findCurrentView(), null, R.string.error_ANONYMOUS_REACTIONS_DISABLED);
+    } else if (!Config.PROTECT_ANONYMOUS_REACTIONS || hasReaction || !canGetAddedReactions() || messagesController().callNonAnonymousProtection(getId() + reactionObj.hashCode(), null)) {
+      if (messageReactions.toggleReaction(reactionType, false, false, handler(findCurrentView(), null, () -> {}))) {
+        scheduleSetReactionAnimation(new NextReactionAnimation(reactionObj, NextReactionAnimation.TYPE_QUICK).setStartPosition(startPosition));
+      }
+    }
+  }
+
+  // XGram: Double tap to react (Settings, XGram, Messages, Gestures; off by default)
+
+  /**
+   * XGram: Double tap to react: a tap on this message waits a moment for a second one (MessageView). Not in Saved
+   * Messages (its reactions are tags), nor where reactions are hidden (Reactions in channels) or the chat takes none,
+   * nor on sponsored, event log, scheduled, unsent, deleted or unsupported messages. Until the message's own
+   * reactions are known (a swipe, the menu or a double tap loads them), the chat's settings decide; then, only where
+   * a double tap has a reaction to send (or take back).
+   */
+  public final boolean xgramWaitsForDoubleTap () {
+    if (!com.fahadali.xgram.XgramSettings.instance().doubleTapReact()) {
+      return false;
+    }
+    if (msg.chatId == 0 || this instanceof TGMessageBotInfo || isSponsoredMessage() || isEventLog() || isScheduled() || isNotSent() || xgramIsDeleted() || (flags & FLAG_UNSUPPORTED) != 0) {
+      return false;
+    }
+    if (tdlib.isSelfChat(msg.chatId) || xgramHidesReactions()) {
+      return false;
+    }
+    if (messageAvailableReactions != null) {
+      return xgramDoubleTapReaction() != null; // XGram: wait only where a double tap would react
+    }
+    return tdlib.chatReactionsEnabled(msg.chatId);
+  }
+
+  /**
+   * XGram: Double tap to react, the second tap lifted at {@code x, y} in {@code view}: toggles the first of the quick
+   * reactions (Quick reaction in Stickers and emoji) this message takes, else the server's default reaction (a custom
+   * emoji one too), so a second double tap takes it back. {@code orElse} (the single tap) runs when there is none.
+   */
+  public final void xgramDoubleTapReact (View view, float x, float y, Runnable orElse) {
+    final int[] location = new int[2];
+    view.getLocationOnScreen(location);
+    final Point start = new Point(location[0] + (int) x, location[1] + (int) y);
+    final Runnable react = () -> {
+      final TdApi.ReactionType reactionType = xgramDoubleTapReaction();
+      if (reactionType == null) {
+        orElse.run();
+        return;
+      }
+      final TGReaction reactionObj = tdlib.getReaction(reactionType);
+      if (reactionObj != null) {
+        xgramToggleQuickReaction(reactionType, reactionObj, start);
+        return;
+      }
+      // A custom emoji (the server's default) that isn't loaded yet
+      tdlib.ensureReactionsAvailable(new TdApi.ChatAvailableReactionsSome(new TdApi.ReactionType[] {reactionType}, 0), loaded -> runOnUiThreadOptional(() -> {
+        final TGReaction loadedObj = tdlib.getReaction(reactionType, false);
+        if (loadedObj != null) {
+          xgramToggleQuickReaction(reactionType, loadedObj, start);
+        } else {
+          orElse.run();
+        }
+      }));
+    };
+    if (messageAvailableReactions != null) {
+      react.run();
+    } else {
+      loadAvailableReactions(react);
+    }
+  }
+
+  @Nullable
+  private TdApi.ReactionType xgramDoubleTapReaction () {
+    if (!canBeReacted() || tdlib.isSelfChat(msg.chatId) || xgramHidesReactions()) {
+      return null;
+    }
+    if (Settings.instance().xgramHasQuickReactions()) {
+      for (String key : Settings.instance().getQuickReactions(tdlib)) {
+        final TdApi.ReactionType reactionType = TD.toReactionType(key);
+        if (xgramCanDoubleTapSend(reactionType)) {
+          return reactionType;
+        }
+      }
+    }
+    // Not picked (or none of them is taken here): the server's default, which defaultEmojiReaction() leaves out when
+    // it is a custom emoji, then that emoji one
+    final TdApi.ReactionType defaultType = tdlib.xgramDefaultReactionType();
+    if (defaultType != null && xgramCanDoubleTapSend(defaultType)) {
+      return defaultType;
+    }
+    final TdApi.ReactionType emojiType = new TdApi.ReactionTypeEmoji(tdlib.defaultEmojiReaction());
+    return xgramCanDoubleTapSend(emojiType) ? emojiType : null;
+  }
+
+  /** XGram: Double tap to react can toggle {@code reactionType} here: chosen already (taken back), or one this message takes. Never a paid one. */
+  private boolean xgramCanDoubleTapSend (TdApi.ReactionType reactionType) {
+    if (reactionType.getConstructor() == TdApi.ReactionTypePaid.CONSTRUCTOR) {
+      return false;
+    }
+    if (messageReactions.hasReaction(reactionType)) {
+      return true;
+    }
+    final TdApi.AvailableReactions available = messageAvailableReactions;
+    if (available == null) {
+      return false;
+    }
+    for (TdApi.AvailableReaction[] list : new TdApi.AvailableReaction[][] {available.topReactions, available.recentReactions, available.popularReactions}) {
+      if (list == null) {
+        continue;
+      }
+      for (TdApi.AvailableReaction availableReaction : list) {
+        if (Td.equalsTo(reactionType, availableReaction.type)) {
+          return !availableReaction.needsPremium || tdlib.hasPremium();
+        }
+      }
+    }
+    return reactionType.getConstructor() == TdApi.ReactionTypeCustomEmoji.CONSTRUCTOR && available.allowCustomEmoji && tdlib.hasPremium();
+  }
 
   /** XGram: as a swipe starts, the actions follow Swipe on a message changed since, and Bookmark the message's state now. */
   private void xgramOnSwipeStart () {
@@ -9796,6 +9915,10 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         if (height > 256) {
           startY = (int) (positionCords[1] + (mInitialTouchY - getHeaderPadding() + xHeaderPadding));
         }
+      }
+      if (nextSetReactionAnimation.startPosition != null) { // XGram: Double tap to react flies from the finger
+        startX = nextSetReactionAnimation.startPosition.x;
+        startY = nextSetReactionAnimation.startPosition.y;
       }
 
       context().reactionsOverlayManager().addOverlay(
