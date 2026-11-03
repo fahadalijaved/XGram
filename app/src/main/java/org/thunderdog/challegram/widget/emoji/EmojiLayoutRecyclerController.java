@@ -86,6 +86,8 @@ public class EmojiLayoutRecyclerController extends ViewController<EmojiLayoutRec
    * (also when the grid's end keeps it from the top) and a category swipe steps from it, so quick swipes keep going.
    */
   private @Nullable TGStickerSetInfo xgramJumpTarget;
+  /** XGram: an animated jump's scrollBy is running (scrollAnimatedImpl): that scroll is not the user's. */
+  private boolean xgramJumpScrolling;
 
   public EmojiLayoutRecyclerController (Context context, Tdlib tdlib, @IdRes int controllerId) {
     super(context, tdlib);
@@ -193,12 +195,13 @@ public class EmojiLayoutRecyclerController extends ViewController<EmojiLayoutRec
     };
     if (controllerId == EmojiLayout.EMOJI_INSTALLED_CONTROLLER_ID) {
       // XGram: Swipe between emoji categories. Any other scroll (a drag, a fling, a mouse wheel) ends "where the last
-      // jump went": an animated jump's own steps come while it runs, a jump without one scrolls by 0
+      // jump went": an animated jump's own steps are marked (xgramJumpScrolling) and come while it runs, a jump
+      // without one scrolls by 0. The jump is the only code that scrolls this grid by itself.
       xgramCategorySwipe = new com.fahadali.xgram.chats.XgramEmojiCategorySwipe(recyclerView, xgramCategorySwipeDelegate());
       recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
         @Override
         public void onScrolled (@NonNull RecyclerView recyclerView, int dx, int dy) {
-          if (dy != 0 && !scrollAnimationIsActive()) {
+          if (dy != 0 && !xgramJumpScrolling && !scrollAnimationIsActive()) {
             xgramJumpTarget = null;
           }
         }
@@ -553,7 +556,12 @@ public class EmojiLayoutRecyclerController extends ViewController<EmojiLayoutRec
       @Override
       public void onFactorChanged (int id, float factor, float fraction, FactorAnimator callee) {
         int diff = (int) ((float) scrollDiff * factor);
-        recyclerView.scrollBy(0, diff - totalScrolled[0]);
+        xgramJumpScrolling = true; // XGram: the jump's own step (onScrolled comes from inside scrollBy) keeps xgramJumpTarget
+        try {
+          recyclerView.scrollBy(0, diff - totalScrolled[0]);
+        } finally {
+          xgramJumpScrolling = false;
+        }
         totalScrolled[0] = diff;
       }
 
@@ -718,9 +726,12 @@ public class EmojiLayoutRecyclerController extends ViewController<EmojiLayoutRec
       return -1;
     }
     if (xgramJumpTarget != null) {
-      final int jumped = stickerSets.indexOf(xgramJumpTarget);
-      if (jumped != -1) {
-        return jumped;
+      // That very object, not indexOf: TGStickerSetInfo.equals holds all six emoji categories equal (no info, the
+      // same flags), so indexOf found Smileys for any of them and every swipe after the first one stepped from there
+      for (int i = 0; i < stickerSets.size(); i++) {
+        if (stickerSets.get(i) == xgramJumpTarget) {
+          return i;
+        }
       }
       xgramJumpTarget = null; // its pack is gone, or the list was built again
     }
