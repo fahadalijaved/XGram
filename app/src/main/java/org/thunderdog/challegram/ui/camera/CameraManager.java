@@ -213,6 +213,19 @@ public abstract class CameraManager <T extends View> {
     return takingPhoto;
   }
 
+  /**
+   * XGram: the camera lights a front photo with its own screen flash (CameraX's FLASH_MODE_SCREEN: full brightness, a
+   * white overlay, and the exposure waits for it), so the screen takes no TGX white overlay.
+   */
+  public boolean xgramUsesScreenFlash () {
+    return false;
+  }
+
+  /** XGram: a recording was asked for and starts in a moment (CameraX binds its video first): the shutter shows it now. */
+  public boolean xgramIsVideoStarting () {
+    return false;
+  }
+
   public final void setTakingPhoto (boolean isTakingPhoto) {
     if (this.takingPhoto != isTakingPhoto) {
       this.takingPhoto = isTakingPhoto;

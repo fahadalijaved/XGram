@@ -166,6 +166,8 @@ public class CameraManagerX extends CameraManager<PreviewView> {
 
     // Must unbind the use-cases before rebinding them
     cameraProvider.unbindAll();
+    xgramVideoCaptureBound = false; // XGram
+    xgramLockedFocus = null; // XGram: the lock goes with this binding (onCameraBound hides its mark)
 
     AspectRatioStrategy aspectRatioStrategy;
     int aspectRatioMode = Settings.instance().getCameraAspectRatioMode();
@@ -233,18 +235,8 @@ public class CameraManagerX extends CameraManager<PreviewView> {
       .setResolutionSelector(resolutionSelector);
     imageCapture = imageCaptureBuilder.build();
 
-    QualitySelector qualitySelector = QualitySelector.fromOrderedList(
-      Arrays.asList(Quality.FHD, Quality.HD, Quality.SD),
-      FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)
-    );
-    Recorder recorder = new Recorder.Builder()
-      .setQualitySelector(qualitySelector)
-      .build();
-    videoCapture = new VideoCapture.Builder<>(recorder)
-      .setCaptureType(UseCaseConfigFactory.CaptureType.VIDEO_CAPTURE)
-      .setTargetRotation(getSurfaceRotation())
-      .setResolutionSelector(resolutionSelector)
-      .build();
+    xgramVideoResolution = resolutionSelector; // XGram: VideoCapture is bound (and made again) for each recording
+    videoCapture = xgramNewVideoCapture(resolutionSelector);
 
     ImageAnalysis imageAnalyzer;
 
@@ -262,6 +254,18 @@ public class CameraManagerX extends CameraManager<PreviewView> {
       imageAnalyzer = null;
     }
 
+    // XGram: the front camera's flash is CameraX's screen flash (PreviewView: a white overlay at full brightness, and
+    // the exposure waits for it), not TGX's white overlay with the photo taken at once. Not with a phone's mode.
+    xgramScreenFlash = false;
+    if (!needQrScanner && !xgramExtension) {
+      try {
+        cameraView.setScreenFlashWindow(UI.getContext(context).getWindow());
+        imageCapture.setScreenFlash(cameraView.getScreenFlash());
+      } catch (Throwable t) {
+        Log.w(Log.TAG_CAMERA, "XGram: no screen flash", t);
+      }
+    }
+
     try {
       configureCameraX();
       // A variable number of use-cases can be passed here -
@@ -269,13 +273,14 @@ public class CameraManagerX extends CameraManager<PreviewView> {
       if (needQrScanner) {
         // We probably don't want to take photos or videos while scanning QR codes. (Also, there are 3 use case limit in CameraX)
         this.camera = cameraProvider.bindToLifecycle((LifecycleOwner) context, cameraSelector, preview, imageAnalyzer);
-      } else if (xgramExtension) {
-        // XGram: the phone's modes take photos only (no video with an extension)
-        this.camera = cameraProvider.bindToLifecycle((LifecycleOwner) context, cameraSelector, preview, imageCapture);
       } else {
-        this.camera = cameraProvider.bindToLifecycle((LifecycleOwner) context, cameraSelector, preview, imageCapture, videoCapture);
+        // XGram: photos bind no VideoCapture (it joins when the shutter is held: xgramBindVideoCapture). Bound all the
+        // time, it made the camera's repeating request a recording one (TEMPLATE_RECORD), and CameraX then lights a
+        // flash photo with the torch instead of the flash (dark, and taken late). The phone's modes take photos only.
+        this.camera = cameraProvider.bindToLifecycle((LifecycleOwner) context, cameraSelector, preview, imageCapture);
       }
-      xgramVideoBound = !needQrScanner && !xgramExtension;
+      xgramVideoAllowed = !needQrScanner && !xgramExtension;
+      xgramBoundSelector = cameraSelector;
     } catch (Exception e) {
       Log.e(Log.TAG_CAMERA, "Use case binding failed", e);
       if (xgramExtension) {
@@ -284,6 +289,11 @@ public class CameraManagerX extends CameraManager<PreviewView> {
         bindPreview();
       }
       return;
+    }
+
+    if (imageCapture.getScreenFlash() != null && !camera.getCameraInfo().hasFlashUnit() && camera.getCameraInfo().getLensFacing() == CameraSelector.LENS_FACING_FRONT) {
+      xgramScreenFlash = true; // XGram
+      xgramApplyScreenFlashMode();
     }
 
     if (xgramListener != null) {
@@ -325,6 +335,10 @@ public class CameraManagerX extends CameraManager<PreviewView> {
         imageCapture = null;
         cameraProvider = null;
         camera = null;
+        xgramVideoCaptureBound = false; // XGram
+        xgramScreenFlash = false;
+        xgramVideoStarting = false;
+        torchForceEnabled = false; // XGram: the torch went with the camera
       }
       this.isOpen = false;
     }
@@ -379,15 +393,24 @@ public class CameraManagerX extends CameraManager<PreviewView> {
             flashMode = ImageCapture.FLASH_MODE_OFF;
             break;
           case ImageCapture.FLASH_MODE_OFF:
-            flashMode = isCapturingVideo() ? ImageCapture.FLASH_MODE_ON : ImageCapture.FLASH_MODE_AUTO;
+            flashMode = isCapturingVideo() || xgramVideoStarting ? ImageCapture.FLASH_MODE_ON : ImageCapture.FLASH_MODE_AUTO; // XGram: also while the recording starts
             break;
           default:
             return;
         }
         imageCapture.setFlashMode(flashMode);
+        if (isCapturingVideo() || xgramVideoStarting) {
+          // XGram: during a recording the flash button turns the torch on and off (it only changed the photos' mode)
+          if (flashMode == ImageCapture.FLASH_MODE_ON) {
+            forceEnableTorch();
+          } else {
+            disableTorch();
+          }
+        }
         reportFlashMode();
       } else if (preferFrontFacingCamera()) {
         this.flashMode = this.flashMode == ImageCapture.FLASH_MODE_OFF ? ImageCapture.FLASH_MODE_ON : ImageCapture.FLASH_MODE_OFF;
+        xgramApplyScreenFlashMode(); // XGram
         reportFlashMode();
       }
     }
@@ -484,7 +507,6 @@ public class CameraManagerX extends CameraManager<PreviewView> {
         return;
       }
 
-      boolean ok;
       try {
         ImageCapture.OutputFileOptions.Builder b = new ImageCapture.OutputFileOptions.Builder(outFile);
         if (preferFrontFacingCamera() && !Settings.instance().getNewSetting(Settings.SETTING_FLAG_CAMERA_NO_FLIP)) {
@@ -492,9 +514,29 @@ public class CameraManagerX extends CameraManager<PreviewView> {
           metadata.setReversedHorizontal(true);
           b.setMetadata(metadata);
         }
+        final boolean xgramHintOnSave = xgramMode != ExtensionMode.NONE; // XGram: a phone's mode (Night) keeps capturing frames after its start
         imageCapture.takePicture(b.build(), ContextCompat.getMainExecutor(context), new ImageCapture.OnImageSavedCallback() {
+          // XGram: the "taken" blink when the camera starts exposing the photo, after the flash's precapture (it came
+          // when the photo was asked for, a second or more early with the flash, and people lowered the phone)
+          private boolean xgramHinted;
+
+          private void xgramHint () {
+            if (!xgramHinted) {
+              xgramHinted = true;
+              delegate.onPerformSuccessHint(false);
+            }
+          }
+
+          @Override
+          public void onCaptureStarted () {
+            if (!xgramHintOnSave) {
+              xgramHint();
+            }
+          }
+
           @Override
           public void onImageSaved (@NonNull ImageCapture.OutputFileResults ignored) {
+            xgramHint(); // XGram: a phone's mode, or a camera that never said it started
             U.toGalleryFile(outFile, false, file -> {
               if (file != null) {
                 onTakeMediaResult(file, false);
@@ -511,25 +553,20 @@ public class CameraManagerX extends CameraManager<PreviewView> {
             onTakeMediaError(false);
           }
         });
-        ok = true;
       } catch (Throwable t) {
         Log.e(Log.TAG_CAMERA, "Unable to take photo", t);
         onTakeMediaError(false);
-        ok = false;
-      }
-      if (ok) {
-        delegate.onPerformSuccessHint(false);
       }
     }
   }
 
   @Override
   protected boolean onStartVideoCapture (int outRotation) {
-    if (xgramListener != null && !xgramVideoBound) {
+    if (xgramListener != null && !xgramVideoAllowed) {
       xgramListener.onVideoUnavailable(xgramMode); // XGram: a camera mode for photos only
       return false;
     }
-    if (videoCapture != null) {
+    if (videoCapture != null && camera != null && xgramVideoAllowed) {
       boolean success;
       File outFile = getOutputFile(true);
       boolean forceEnableTorch = flashMode == ImageCapture.FLASH_MODE_ON && camera.getCameraInfo().hasFlashUnit();
@@ -544,28 +581,74 @@ public class CameraManagerX extends CameraManager<PreviewView> {
       if (forceEnableTorch) {
         forceEnableTorch();
       }
+      // XGram: VideoCapture joins the camera now (photos bind none). The Recorder holds the recording until the
+      // camera streams to it again (about half a second); the shutter shows the recording at once meanwhile.
+      if (!xgramBindVideoCapture()) {
+        disableTorch();
+        if (outFile.exists() && !outFile.delete()) {
+          Log.e(Log.TAG_CAMERA, "Unable to delete video output file");
+        }
+        return false;
+      }
+      final VideoCapture<Recorder> boundVideoCapture = videoCapture;
+      final Recording[] recording = new Recording[1];
+      final boolean[] started = {false};
+      xgramVideoStarting = true;
+      xgramVideoStopRequested = false;
       try {
         AtomicBoolean isFinished = new AtomicBoolean(false);
-        videoRecording = videoCapture.getOutput()
+        videoRecording = recording[0] = videoCapture.getOutput()
           .prepareRecording(context, new FileOutputOptions.Builder(outFile).build())
           .withAudioEnabled()
           .start(ContextCompat.getMainExecutor(context), event -> {
             if (!(event instanceof VideoRecordEvent.Status)) {
               videoRecordStatus = event;
             }
-            if (event instanceof VideoRecordEvent.Start) {
-              VideoRecordEvent.Start start = (VideoRecordEvent.Start) event;
-              setTakingVideo(true, SystemClock.uptimeMillis());
+            if (event instanceof VideoRecordEvent.Status && !started[0] && event.getRecordingStats().getRecordedDurationNanos() > 0) {
+              // XGram: started with its first frames, not at Start: the Recorder says Start before the camera, bound
+              // again with the video, streams to it (half a second). Let go in between, it is still "starting" (no
+              // error, see Finalize), and the timer matches the file.
+              started[0] = true;
+              if (videoRecording == recording[0]) {
+                xgramVideoStarting = false;
+                if (torchForceEnabled && camera != null) {
+                  // XGram: the torch again once the camera streams with the video (binding it may have reset it)
+                  com.fahadali.xgram.camera.XgramTorchStrength.setMax(camera);
+                  camera.getCameraControl().enableTorch(true);
+                }
+              }
+              setTakingVideo(true, SystemClock.uptimeMillis() - TimeUnit.NANOSECONDS.toMillis(event.getRecordingStats().getRecordedDurationNanos()));
             } else if (event instanceof VideoRecordEvent.Finalize) {
               if (isFinished.getAndSet(true)) {
                 return;
               }
               VideoRecordEvent.Finalize finalize = (VideoRecordEvent.Finalize) event;
+              // XGram: this recording is over: modes can be chosen again, and the camera goes back to photos only
+              final boolean current = videoRecording == recording[0];
+              final boolean stopRequested = xgramVideoStopRequested;
+              if (current) {
+                videoRecording = null;
+                xgramVideoStarting = false;
+                xgramVideoStopRequested = false;
+                disableTorch();
+              }
+              if (boundVideoCapture == videoCapture && videoRecording == null) { // not under a newer recording
+                xgramUnbindVideoCapture();
+              }
 
               if (finalize.hasError()) {
                 if (outFile.exists()) {
                   if (!outFile.delete()) {
                     Log.e(Log.TAG_CAMERA, "Unable to delete video output file");
+                  }
+                }
+                if (!started[0] || stopRequested) {
+                  // XGram: it never started, or it was let go before its first frames: the shutter shown recording
+                  // goes back (no error when it was let go, or when the camera closed)
+                  delegate.onVideoCaptureEnded();
+                  if (stopRequested || !isOpen) {
+                    setTakingVideo(false, -1); // a Status queued before the release may have counted it started
+                    return;
                   }
                 }
                 setTakingVideo(false, -1);
@@ -585,7 +668,11 @@ public class CameraManagerX extends CameraManager<PreviewView> {
         success = false;
       }
       if (!success) {
+        xgramVideoStarting = false; // XGram
         disableTorch();
+        if (videoRecording == null) {
+          xgramUnbindVideoCapture();
+        }
       }
       return success;
     }
@@ -596,6 +683,7 @@ public class CameraManagerX extends CameraManager<PreviewView> {
   @Override
   protected void onFinishOrCancelVideoCapture () {
     if (videoRecording != null) {
+      xgramVideoStopRequested = xgramVideoStarting; // XGram: let go before it started: no error for that
       videoRecording.stop();
       onVideoRecordingFinished();
     }
@@ -604,8 +692,9 @@ public class CameraManagerX extends CameraManager<PreviewView> {
   private boolean torchForceEnabled;
 
   private void forceEnableTorch () {
-    if (!torchForceEnabled) {
+    if (!torchForceEnabled && camera != null) {
       torchForceEnabled = true;
+      com.fahadali.xgram.camera.XgramTorchStrength.setMax(camera); // XGram: the brightest torch (Android 15)
       camera.getCameraControl().enableTorch(true);
     }
   }
@@ -613,8 +702,108 @@ public class CameraManagerX extends CameraManager<PreviewView> {
   private void disableTorch () {
     if (torchForceEnabled) {
       torchForceEnabled = false;
-      camera.getCameraControl().enableTorch(false);
+      if (camera != null) { // XGram: a recording may end after its camera closed
+        camera.getCameraControl().enableTorch(false);
+      }
     }
+  }
+
+  // XGram: VideoCapture is bound only for a recording (see bindPreview)
+
+  @SuppressWarnings("RestrictedApi")
+  private VideoCapture<Recorder> xgramNewVideoCapture (ResolutionSelector resolutionSelector) {
+    QualitySelector qualitySelector = QualitySelector.fromOrderedList(
+      Arrays.asList(Quality.FHD, Quality.HD, Quality.SD),
+      FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)
+    );
+    Recorder recorder = new Recorder.Builder()
+      .setQualitySelector(qualitySelector)
+      .build();
+    return new VideoCapture.Builder<>(recorder)
+      .setCaptureType(UseCaseConfigFactory.CaptureType.VIDEO_CAPTURE)
+      .setTargetRotation(getSurfaceRotation())
+      .setResolutionSelector(resolutionSelector)
+      .build();
+  }
+
+  private @Nullable ResolutionSelector xgramVideoResolution;
+  private @Nullable CameraSelector xgramBoundSelector;
+  private boolean xgramVideoCaptureBound, xgramVideoStarting, xgramVideoStopRequested, xgramScreenFlash;
+  private @Nullable FocusMeteringAction xgramLockedFocus; // the long-press lock in effect (xgramFocusAt)
+
+  /** Adds VideoCapture to the bound camera (preview and photos stay bound). False: it can't be. */
+  private boolean xgramBindVideoCapture () {
+    if (xgramVideoCaptureBound) {
+      return true;
+    }
+    if (cameraProvider == null || xgramBoundSelector == null || videoCapture == null) {
+      return false;
+    }
+    try {
+      cameraProvider.bindToLifecycle((LifecycleOwner) context, xgramBoundSelector, videoCapture);
+      xgramVideoCaptureBound = true;
+      xgramRestoreFocusLock();
+      return true;
+    } catch (Throwable t) {
+      Log.e(Log.TAG_CAMERA, "XGram: cannot bind VideoCapture", t);
+      return false;
+    }
+  }
+
+  /** Back to preview and photos only, so a flash photo gets the flash again (not the torch of a recording camera). */
+  private void xgramUnbindVideoCapture () {
+    if (!xgramVideoCaptureBound) {
+      return;
+    }
+    xgramVideoCaptureBound = false;
+    if (cameraProvider != null && videoCapture != null && isOpen && !isPaused) {
+      try {
+        cameraProvider.unbind(videoCapture);
+        xgramRestoreFocusLock();
+        if (xgramVideoResolution != null) {
+          videoCapture = xgramNewVideoCapture(xgramVideoResolution); // a fresh Recorder for the next recording
+        }
+      } catch (Throwable t) {
+        Log.w(Log.TAG_CAMERA, "XGram: cannot unbind VideoCapture", t);
+      }
+    }
+  }
+
+  /**
+   * The long-press focus and exposure lock again after VideoCapture joined or left: CameraX builds the camera's session
+   * again for it and starts the new one without the lock, while the lock's mark stays on screen.
+   */
+  private void xgramRestoreFocusLock () {
+    if (xgramLockedFocus != null && camera != null) {
+      try {
+        camera.getCameraControl().startFocusAndMetering(xgramLockedFocus);
+      } catch (Throwable t) {
+        Log.w(Log.TAG_CAMERA, "XGram: cannot restore the focus lock", t);
+      }
+    }
+  }
+
+  /** The front camera's flash mode for CameraX: its screen flash while the flash is on. */
+  private void xgramApplyScreenFlashMode () {
+    if (!xgramScreenFlash || imageCapture == null) {
+      return;
+    }
+    try {
+      imageCapture.setFlashMode(flashMode == ImageCapture.FLASH_MODE_OFF ? ImageCapture.FLASH_MODE_OFF : ImageCapture.FLASH_MODE_SCREEN);
+    } catch (Throwable t) {
+      Log.w(Log.TAG_CAMERA, "XGram: no screen flash", t);
+      xgramScreenFlash = false; // TGX's white overlay then
+    }
+  }
+
+  @Override
+  public boolean xgramUsesScreenFlash () {
+    return xgramScreenFlash && flashMode != ImageCapture.FLASH_MODE_OFF;
+  }
+
+  @Override
+  public boolean xgramIsVideoStarting () {
+    return xgramVideoStarting && videoRecording != null;
   }
 
   private void onVideoRecordingFinished () {
@@ -637,6 +826,7 @@ public class CameraManagerX extends CameraManager<PreviewView> {
     isPaused = true;
     if (cameraProvider != null) {
       cameraProvider.unbindAll();
+      xgramVideoCaptureBound = false; // XGram
     }
   }
 
@@ -664,7 +854,7 @@ public class CameraManagerX extends CameraManager<PreviewView> {
 
   private @Nullable XgramListener xgramListener;
   private @Nullable ExtensionsManager xgramExtensions;
-  private boolean xgramExtensionsRequested, xgramVideoBound = true;
+  private boolean xgramExtensionsRequested, xgramVideoAllowed = true; // XGram: this binding can record (not a phone's mode, not QR)
   private @Nullable CameraSelector xgramBaseSelector;
   private int xgramMode = ExtensionMode.NONE;
   private int[] xgramModes = {ExtensionMode.NONE};
@@ -774,7 +964,7 @@ public class CameraManagerX extends CameraManager<PreviewView> {
    * is on its way (a mode's capture takes seconds, and binding again would throw it away) or a video records.
    */
   public boolean xgramIsBusy () {
-    return xgramIsSwitching() || isTakingPhoto() || isCapturingVideo();
+    return xgramIsSwitching() || isTakingPhoto() || isCapturingVideo() || videoRecording != null; // a recording starting or ending too
   }
 
   /** The camera is being bound again, until its first frame: zoom and focus wait (they work while a video records). */
@@ -921,6 +1111,7 @@ public class CameraManagerX extends CameraManager<PreviewView> {
         }
       }
       camera.getCameraControl().startFocusAndMetering(action);
+      xgramLockedFocus = lock ? action : null;
       return true;
     } catch (Throwable t) {
       Log.w(Log.TAG_CAMERA, "XGram: cannot focus", t);
@@ -939,6 +1130,7 @@ public class CameraManagerX extends CameraManager<PreviewView> {
   }
 
   public void xgramCancelFocus () {
+    xgramLockedFocus = null;
     if (camera != null) {
       camera.getCameraControl().cancelFocusAndMetering();
     }

@@ -335,7 +335,7 @@ public abstract class CameraApi {
       return;
     }
     if (isCameraActive) {
-      manager.onPerformSuccessHint(false);
+      // XGram: no "taken" blink here: the shutter callback blinks when the photo is exposed, after the flash's precapture
       try {
         onTakePhoto(trimWidth, trimHeight, orientation);
       } catch (Throwable t) {

@@ -1555,6 +1555,7 @@ public class CameraController extends ViewController<Void> implements CameraDele
       if (isOpen) {
         manager.openCamera();
       } else {
+        xgramCancelScreenFlash(); // XGram
         manager.closeCamera();
         cameraOverlayView.setOverlayVisible(true, !isPaused(), null);
       }
@@ -1579,6 +1580,9 @@ public class CameraController extends ViewController<Void> implements CameraDele
     if (xgramControls != null) {
       xgramControls.bind(null); // XGram
     }
+    handler.removeCallbacks(xgramScreenFlashShot); // XGram: no shot, and the screen's own brightness again
+    xgramScreenFlashPending = false;
+    xgramSetFullBrightness(false);
     if (manager != null) {
       manager.destroy();
     }
@@ -1590,6 +1594,7 @@ public class CameraController extends ViewController<Void> implements CameraDele
     if (Log.isEnabled(Log.TAG_CAMERA)) {
       Log.i(Log.TAG_CAMERA, "onActivityPause");
     }
+    xgramCancelScreenFlash(); // XGram: no full brightness or white screen left behind
     onResetRenderState(true, null);
     manager.pauseCamera();
     checkSensors();
@@ -1905,8 +1910,66 @@ public class CameraController extends ViewController<Void> implements CameraDele
     if (canTakeSnapshot()) {
       takeSnapshotImpl(true);
     } else {
-      manager.setTakingPhoto(false);
+      // XGram: the shot waits for the exposure to meet the white screen at full brightness (taken the moment it was
+      // white, the camera still exposed for the dark face: a dark photo)
+      xgramScreenFlashPending = true;
+      handler.postDelayed(xgramScreenFlashShot, XGRAM_SCREEN_FLASH_EXPOSURE_MS);
+    }
+  }
+
+  // XGram: the front camera's screen flash (Camera1, and CameraX in a phone's mode: TGX's white overlay). The screen
+  // goes to full brightness while it is white, and the photo is taken once the exposure has followed.
+
+  private static final long XGRAM_SCREEN_FLASH_EXPOSURE_MS = 500L;
+  private boolean xgramScreenFlashPending, xgramBrightnessRaised;
+  private float xgramSavedBrightness = android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
+
+  private final Runnable xgramScreenFlashShot = () -> {
+    if (!xgramScreenFlashPending) {
+      return;
+    }
+    xgramScreenFlashPending = false;
+    manager.setTakingPhoto(false);
+    if (manager.isCameraActive()) {
       takeRegularPhoto(true);
+    }
+    if (!manager.isTakingPhoto()) {
+      // No photo after all (the camera went away): the white screen goes
+      releaseFakeFlash = false;
+      cameraOverlayView.releaseFakeFlash(false);
+    }
+  };
+
+  private void xgramCancelScreenFlash () {
+    if (xgramScreenFlashPending) {
+      xgramScreenFlashPending = false;
+      handler.removeCallbacks(xgramScreenFlashShot);
+      manager.setTakingPhoto(false);
+      cameraOverlayView.releaseFakeFlash(false);
+    }
+    xgramSetFullBrightness(false);
+  }
+
+  private void xgramSetFullBrightness (boolean full) {
+    if (xgramBrightnessRaised == full) {
+      return;
+    }
+    final android.view.Window window = context().getWindow();
+    if (window == null) {
+      return;
+    }
+    try {
+      android.view.WindowManager.LayoutParams params = window.getAttributes();
+      if (full) {
+        xgramSavedBrightness = params.screenBrightness;
+        params.screenBrightness = android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_FULL;
+      } else {
+        params.screenBrightness = xgramSavedBrightness;
+      }
+      window.setAttributes(params);
+      xgramBrightnessRaised = full;
+    } catch (Throwable t) {
+      Log.w(Log.TAG_CAMERA, "XGram: cannot change the screen brightness", t);
     }
   }
 
@@ -1922,6 +1985,7 @@ public class CameraController extends ViewController<Void> implements CameraDele
 
   @Override
   public void onFlashFinished () {
+    xgramSetFullBrightness(false); // XGram: the white screen is gone
     if (scheduledInstantResult != null) {
       scheduledInstantResult.run();
       scheduledInstantResult = null;
@@ -1943,8 +2007,9 @@ public class CameraController extends ViewController<Void> implements CameraDele
       } else {
         cameraOverlayView.performFakeFlash();
       }
-    } else if (flashMode == CameraFeatures.FEATURE_FLASH_FAKE) {
+    } else if (flashMode == CameraFeatures.FEATURE_FLASH_FAKE && !manager.xgramUsesScreenFlash()) { // XGram: CameraX lights the screen itself
       manager.setTakingPhoto(true);
+      xgramSetFullBrightness(true); // XGram
       cameraOverlayView.performFakeFlash();
     } else {
       takeRegularPhoto(false);
@@ -1955,7 +2020,11 @@ public class CameraController extends ViewController<Void> implements CameraDele
   public boolean onStartVideoCapture (CameraButton v) {
     if (isInQrScanMode()) return false;
     Settings.instance().markTutorialAsComplete(Settings.TUTORIAL_HOLD_VIDEO);
-    return manager.startVideoCapture(getOutputRotation());
+    final boolean started = manager.startVideoCapture(getOutputRotation());
+    if (started && manager.xgramIsVideoStarting()) {
+      startDurationTimer(0); // XGram: "0:00" while CameraX binds its video, not the last recording's running clock
+    }
+    return started;
   }
 
   @Override

@@ -173,9 +173,12 @@ public class CameraButton extends View implements FactorAnimator.Target, Runnabl
 
   public boolean takePhoto () {
     if (!inVideoCapture) {
-      blurView.performSuccessHint();
       if (listener != null) {
+        // XGram: no blink at the tap: the camera blinks when the photo is exposed (Camera1's onShutter, CameraX's
+        // onCaptureStarted), after a flash's precapture. At the tap it told people to lower the phone too early.
         listener.onTakePicture(this);
+      } else {
+        blurView.performSuccessHint();
       }
       return true;
     }
@@ -188,6 +191,11 @@ public class CameraButton extends View implements FactorAnimator.Target, Runnabl
     takeVideoRequested = true;
     if (listener != null) {
       inVideoCapture = listener.onStartVideoCapture(this);
+      if (inVideoCapture && parent != null && parent.getManager().xgramIsVideoStarting()) {
+        // XGram: the camera binds its video first (CameraX, half a second): the hold shows at once, the timer
+        // starts with the recording
+        setInRecordMode(true);
+      }
     } else {
       inVideoCapture = true;
       setInRecordMode(true);

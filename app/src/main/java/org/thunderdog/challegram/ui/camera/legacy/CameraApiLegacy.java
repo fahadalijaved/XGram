@@ -118,8 +118,41 @@ public class CameraApiLegacy extends CameraApi implements Camera.PreviewCallback
   protected void onFlashModeChange (int newFlashMode) throws Throwable {
     if (isCameraActive) {
       Camera.Parameters params = camera.getParameters();
-      params.setFlashMode(getFlashMode(newFlashMode));
+      params.setFlashMode(xgramFlashMode(newFlashMode)); // XGram
       camera.setParameters(params);
+    }
+  }
+
+  // XGram: a recording's own camera settings (onStartVideoCapture, onFinishVideoCapture)
+
+  private boolean xgramRecording;
+
+  /** The flash while recording is the torch (FLASH_MODE_ON only fires for photos, so a video had no light). */
+  private String xgramFlashMode (int flashMode) {
+    if (xgramRecording && flashMode == CameraFeatures.FEATURE_FLASH_ON && mFeatures != null && mFeatures.has(CameraFeatures.FEATURE_FLASH_TORCH)) {
+      return Camera.Parameters.FLASH_MODE_TORCH;
+    }
+    return getFlashMode(flashMode);
+  }
+
+  /**
+   * The recording hint (and the torch for a flash that is on) only while recording. Set for the whole session, the
+   * hint kept a video stream next to the still capture, and on many phones a flash photo then skipped its precapture.
+   */
+  private void xgramSetRecording (boolean recording) {
+    if (this.xgramRecording == recording || camera == null) {
+      return;
+    }
+    this.xgramRecording = recording;
+    try {
+      Camera.Parameters params = camera.getParameters();
+      params.setRecordingHint(recording);
+      if (mFeatures != null && mFeatures.canFlash(false)) {
+        params.setFlashMode(xgramFlashMode(mFlashMode));
+      }
+      camera.setParameters(params);
+    } catch (Throwable t) {
+      Log.w(Log.TAG_CAMERA, "XGram: cannot set the recording parameters: %b", t, recording);
     }
   }
 
@@ -266,7 +299,8 @@ public class CameraApiLegacy extends CameraApi implements Camera.PreviewCallback
 
     // Then, set all resulting parameters
 
-    params.setRecordingHint(true);
+    params.setRecordingHint(manager.useRoundRender()); // XGram: photos get no recording hint (xgramSetRecording); round videos record from the preview all along
+    xgramRecording = false;
     params.setPictureFormat(ImageFormat.JPEG);
     params.setRotation(outputRotation = calculateOutputRotation());
 
@@ -704,6 +738,7 @@ public class CameraApiLegacy extends CameraApi implements Camera.PreviewCallback
       throw new IllegalStateException("!isCameraActive");
     }
 
+    xgramSetRecording(true); // XGram
     final int frameRate = getVideoFrameRate(camera.getParameters());
     camera.unlock();
 
@@ -819,6 +854,8 @@ public class CameraApiLegacy extends CameraApi implements Camera.PreviewCallback
       try { videoRecorder.release(); } catch (Throwable t) { Log.w(Log.TAG_CAMERA, "Cannot release MediaRecorder", t); }
       videoRecorder = null;
     }
+
+    xgramSetRecording(false); // XGram: back to photos: no recording hint, the flash's own mode
   }
 
   @Override
