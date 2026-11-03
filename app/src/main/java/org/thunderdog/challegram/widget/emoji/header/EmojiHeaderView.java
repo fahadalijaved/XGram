@@ -37,6 +37,7 @@ import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.data.TGStickerSetInfo;
 import org.thunderdog.challegram.navigation.ViewController;
 import org.thunderdog.challegram.theme.Theme;
+import org.thunderdog.challegram.tool.Paints;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.widget.emoji.EmojiHeaderCollapsibleSectionView;
 import org.thunderdog.challegram.widget.emoji.EmojiLayoutRecyclerController;
@@ -151,11 +152,139 @@ public class EmojiHeaderView extends FrameLayout implements FactorAnimator.Targe
     if (xgramMediaSwitchElsewhere) {
       // XGram: the panel's connected button group switches to stickers and GIFs
       goToMediaPageSection.setVisibility(GONE);
-      recyclerView.setPadding(Screen.dp(DEFAULT_PADDING), 0, Screen.dp(DEFAULT_PADDING), 0);
+      xgramTabsEndExtraDp = 0;
+      xgramUpdateTabsPadding();
       return;
     }
     goToMediaPageSection.setVisibility(allowMedia && mediaMustBeVisibility ? VISIBLE : GONE);
-    recyclerView.setPadding(Screen.dp(DEFAULT_PADDING), 0, Screen.dp(DEFAULT_PADDING + (allowMedia ? 44 : 0)), 0);
+    xgramTabsEndExtraDp = allowMedia ? 44 : 0; // XGram: was the padding itself (see xgramUpdateTabsPadding)
+    xgramUpdateTabsPadding();
+  }
+
+  // XGram M3E: the backspace key (com.fahadali.xgram.appearance.XgramEmojiBackspaceKey) in the row's end slot, with
+  // Expressive design, where EmojiLayout's floating circle used to cover the emoji grid. It shows while the message box
+  // has text. While it is there, the tab strip ends 44dp sooner (the room Telegram X keeps for its sticker switch, which
+  // Expressive design has elsewhere) and the non-Premium row spreads its categories over the rest; its slot is filled
+  // with the row's surface, with Telegram X's 48dp fade in front of it while more tabs are that way, so tabs scrolled
+  // under it never show through. With RTL it is at the left end. It slides away with the tabs when they hide on scroll.
+
+  private @Nullable com.fahadali.xgram.appearance.XgramEmojiBackspaceKey xgramBackspace;
+  private boolean xgramBackspaceRtl;
+  /** Telegram X's own end room (its sticker switch), in dp: 44 or 0. */
+  private int xgramTabsEndExtraDp;
+
+  /** Adds the backspace key (Expressive design); {@code deleteOne} deletes one character. */
+  public void xgramEnableBackspace (@NonNull Runnable deleteOne, @Nullable ViewController<?> themeProvider) {
+    if (xgramBackspace != null) {
+      return;
+    }
+    final com.fahadali.xgram.appearance.XgramEmojiBackspaceKey key = new com.fahadali.xgram.appearance.XgramEmojiBackspaceKey(getContext(), new com.fahadali.xgram.appearance.XgramEmojiBackspaceKey.Callback() {
+      @Override
+      public void onBackspace () {
+        deleteOne.run();
+      }
+
+      @Override
+      public void onBackspaceShownFactorChanged (float factor) {
+        xgramOnBackspaceFactor(factor);
+      }
+    });
+    xgramBackspaceRtl = Lang.rtl();
+    key.setMirrored(xgramBackspaceRtl);
+    if (themeProvider != null) {
+      themeProvider.addThemeInvalidateListener(key);
+    }
+    xgramBackspace = key;
+    // Last, so it draws and takes touches over the tab strip and the non-Premium row
+    addView(key, FrameLayoutFix.newParams(Screen.dp(com.fahadali.xgram.appearance.XgramEmojiBackspaceKey.SLOT_DP), ViewGroup.LayoutParams.MATCH_PARENT, xgramBackspaceRtl ? Gravity.LEFT : Gravity.RIGHT));
+  }
+
+  public void xgramSetBackspaceVisible (boolean visible, boolean animated) {
+    if (xgramBackspace != null) {
+      xgramBackspace.setShown(visible, animated);
+      xgramUpdateTabsPadding();
+    }
+  }
+
+  /** The app's direction changed: the key goes to the other end. */
+  public void xgramOnDirectionChanged () {
+    if (xgramBackspace == null || xgramBackspaceRtl == Lang.rtl()) {
+      return;
+    }
+    xgramBackspaceRtl = Lang.rtl();
+    xgramBackspace.setMirrored(xgramBackspaceRtl);
+    final FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) xgramBackspace.getLayoutParams();
+    params.gravity = xgramBackspaceRtl ? Gravity.LEFT : Gravity.RIGHT;
+    xgramBackspace.setLayoutParams(params);
+    xgramUpdateTabsPadding();
+    xgramOnBackspaceFactor(xgramBackspace.getShownFactor());
+  }
+
+  /** The app's language changed: the key's TalkBack label follows it. */
+  public void xgramOnLanguageChanged () {
+    if (xgramBackspace != null) {
+      xgramBackspace.onLanguageChanged();
+    }
+  }
+
+  private void xgramOnBackspaceFactor (float factor) {
+    if (xgramBackspace == null) {
+      return;
+    }
+    final int inset = Math.round(Screen.dp(com.fahadali.xgram.appearance.XgramEmojiBackspaceKey.SLOT_DP) * factor);
+    emojiHeaderViewNonPremium.xgramSetInsets(xgramBackspaceRtl ? inset : 0, xgramBackspaceRtl ? 0 : inset);
+    xgramUpdateTabsPadding(); // the strip's room shrinks with the fade-out (unchanged values don't relayout)
+    invalidate(); // the slot's fill and fade
+  }
+
+  /**
+   * The tab strip's paddings: Telegram X's, plus the key's slot at the end. The whole slot is kept at once when the
+   * key shows (the last tab never sits under it); when it hides, the room shrinks with its fade, so a strip scrolled to
+   * its end slides back instead of jumping 44dp once the key is gone.
+   */
+  private void xgramUpdateTabsPadding () {
+    final boolean rtl = xgramBackspace != null && xgramBackspaceRtl;
+    int end = Screen.dp(DEFAULT_PADDING + xgramTabsEndExtraDp);
+    if (xgramBackspace != null) {
+      final float f = xgramBackspace.isWanted() ? 1f : xgramBackspace.getShownFactor();
+      end = Math.max(end, Screen.dp(DEFAULT_PADDING) + Math.round(Screen.dp(44f) * f));
+    }
+    final int start = Screen.dp(DEFAULT_PADDING);
+    recyclerView.setPadding(rtl ? end : start, 0, rtl ? start : end, 0);
+  }
+
+  /** Draws under the key: its slot in the row's surface, and the fade in front of it while more tabs are that way. */
+  private void xgramDrawBackspaceSlot (Canvas c) {
+    final float factor = xgramBackspace != null ? xgramBackspace.getShownFactor() : 0f;
+    if (factor <= 0f) {
+      return;
+    }
+    final int width = getMeasuredWidth(), height = getMeasuredHeight();
+    final int slot = Screen.dp(com.fahadali.xgram.appearance.XgramEmojiBackspaceKey.SLOT_DP);
+    final int color = xgramFadeColor();
+    updatePaints(color);
+    final int save = c.save();
+    if (xgramBackspaceRtl) {
+      c.scale(-1f, 1f, width / 2f, 0f); // drawn as at the right end
+    }
+    c.drawRect(width - slot, 0, width, height, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(color, factor)));
+    final float tabsAlpha = recyclerView.getVisibility() == VISIBLE ? recyclerView.getAlpha() : 0f;
+    if (tabsAlpha > 0f) {
+      // As checkShadow, toward the key's end (the reversed strip's offset is what lies to its left)
+      final float range = recyclerView.computeHorizontalScrollRange();
+      final float offset = recyclerView.computeHorizontalScrollOffset();
+      final float extent = recyclerView.computeHorizontalScrollExtent();
+      final float more = xgramBackspaceRtl ? offset : range - offset - extent;
+      final int alpha = (int) (MathUtils.clamp(more / Screen.dp(20f)) * 255f * factor * tabsAlpha);
+      if (alpha > 0) {
+        final int restAlpha = shadowPaint.getAlpha();
+        shadowPaint.setAlpha(alpha);
+        c.translate(width - slot * 2, 0);
+        c.drawRect(0, 0, slot, height, shadowPaint);
+        shadowPaint.setAlpha(restAlpha);
+      }
+    }
+    c.restoreToCount(save);
   }
 
   public void setSectionsOnClickListener (OnClickListener onClickListener) {
@@ -190,7 +319,8 @@ public class EmojiHeaderView extends FrameLayout implements FactorAnimator.Targe
     int first = adapter.manager.findFirstVisibleItemPosition();
     int last = adapter.manager.findLastVisibleItemPosition();
     int itemWidth = Screen.dp(44);
-    float sectionsCount = (float) Screen.currentWidth() / itemWidth;
+    final int xgramStripWidth = recyclerView.getMeasuredWidth(); // XGram: the strip's own width (the docked switch, a second pane): the screen's on a phone
+    float sectionsCount = (float) (xgramStripWidth > 0 ? xgramStripWidth : Screen.currentWidth()) / itemWidth; // XGram: was Screen.currentWidth()
 
     if (first != -1) {
       int scrollX = first * itemWidth;
@@ -295,6 +425,8 @@ public class EmojiHeaderView extends FrameLayout implements FactorAnimator.Targe
       canvas.translate(getMeasuredWidth() - Screen.dp(96), 0);
       canvas.drawRect(0, 0, Screen.dp(96), getMeasuredHeight(), shadowPaint);
       canvas.restore();
+    } else if (child == xgramBackspace) {
+      xgramDrawBackspaceSlot(canvas); // XGram
     }
     return super.drawChild(canvas, child, drawingTime);
   }
@@ -316,6 +448,9 @@ public class EmojiHeaderView extends FrameLayout implements FactorAnimator.Targe
     recyclerView.setAlpha(hasStickers.getFloatValue());
     goToMediaPageSection.setAlpha(hasStickers.getFloatValue());
     emojiHeaderViewNonPremium.setAlpha(1f - hasStickers.getFloatValue());
+    if (xgramBackspace != null) {
+      invalidate(); // XGram: the fade in front of the backspace key follows the strip's alpha
+    }
   }
 
   @Override

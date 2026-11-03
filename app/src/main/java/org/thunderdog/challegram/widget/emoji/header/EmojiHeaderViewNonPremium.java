@@ -103,15 +103,28 @@ public class EmojiHeaderViewNonPremium extends FrameLayoutFix {
     updatePositions();
   }
 
+  // XGram M3E: room kept free at one end of the row, for EmojiHeaderView's backspace key (it grows and shrinks with
+  // the key's pop-in, so the categories spread over what is left)
+  private int xgramInsetLeft, xgramInsetRight;
+
+  public void xgramSetInsets (int left, int right) {
+    if (this.xgramInsetLeft != left || this.xgramInsetRight != right) {
+      this.xgramInsetLeft = left;
+      this.xgramInsetRight = right;
+      updatePositions();
+    }
+  }
+
   private void updatePositions () {
     int itemCount = emojiSections.size();
-    float itemWidth = (float) (getMeasuredWidth() - Screen.dp(EmojiHeaderView.DEFAULT_PADDING * 2f)) / itemCount;
+    final int width = getMeasuredWidth() - xgramInsetLeft - xgramInsetRight; // XGram: clear of the backspace key
+    float itemWidth = (float) (width - Screen.dp(EmojiHeaderView.DEFAULT_PADDING * 2f)) / itemCount; // XGram: the width clear of the backspace key
     float itemOffset = (itemWidth - Screen.dp(44)) / 2f;
-    float itemPadding = (getMeasuredWidth() - Screen.dp(EmojiHeaderView.DEFAULT_PADDING * 2) - itemWidth * itemCount) / (itemCount - 1);
+    float itemPadding = (width - Screen.dp(EmojiHeaderView.DEFAULT_PADDING * 2) - itemWidth * itemCount) / (itemCount - 1); // XGram: width (was getMeasuredWidth())
 
     for (int a = 0; a < itemCount; a++) {
       EmojiSectionView v = emojiSectionViews.get(a);
-      v.setTranslationX((int) (Screen.dp(EmojiHeaderView.DEFAULT_PADDING) + itemOffset + (itemWidth + itemPadding) * a));
+      v.setTranslationX((int) (xgramInsetLeft + Screen.dp(EmojiHeaderView.DEFAULT_PADDING) + itemOffset + (itemWidth + itemPadding) * a)); // XGram: + xgramInsetLeft (RTL backspace key)
     }
   }
 }

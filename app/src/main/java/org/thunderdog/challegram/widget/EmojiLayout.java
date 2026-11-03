@@ -367,6 +367,16 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
       emojiHeaderView = new EmojiHeaderView(getContext(), this, themeProvider, emojiSections, expandableSections, allowMedia, xgramGroup);
       emojiHeaderView.setSectionsOnClickListener(this);
       emojiHeaderView.setSectionsOnLongClickListener(this::onEmojiHeaderLongClick);
+      // XGram M3E: the backspace is a key at the end of the category row, not a circle over the emoji grid
+      xgramBackspaceInHeader = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !useDarkMode;
+      if (xgramBackspaceInHeader) {
+        emojiHeaderView.xgramEnableBackspace(() -> {
+          if (listener != null) {
+            listener.onDeleteEmoji();
+          }
+        }, themeProvider);
+        emojiHeaderView.xgramSetBackspaceVisible(xgramInputHasText(), false);
+      }
       checkAllowPremiumFeatures();
       headerView.addView(emojiHeaderView);
     }
@@ -408,7 +418,8 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
 
     final int padding = Screen.dp(4);
     // XGram: with Expressive design the backspace / search button is an M3E FAB (56dp, 16dp corners, elevation
-    // level 3) in the surface colors (surfaceContainerHigh, primary icon), 16dp from the edges
+    // level 3) in the surface colors (surfaceContainerHigh, primary icon), 16dp from the edges. It is only the GIF
+    // search there: the backspace is the category row's key (xgramBackspaceInHeader)
     final float circleSize = xgramCircleSize();
     final int circleBox = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !useDarkMode ? Screen.dp(circleSize) + padding * 2 : Screen.dp(23f) * 2 + padding * 2;
     params = FrameLayoutFix.newParams(circleBox, circleBox, Gravity.RIGHT | Gravity.BOTTOM);
@@ -1045,6 +1056,13 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
   }
 
   public void onTextChanged (CharSequence charSequence) {
+    if (xgramBackspaceInHeader) {
+      // XGram: the category row's backspace key, whatever the page (it slides away with the emoji tabs)
+      if (emojiHeaderView != null) {
+        emojiHeaderView.xgramSetBackspaceVisible(charSequence.length() > 0, getVisibility() == View.VISIBLE);
+      }
+      return;
+    }
     if (pager.getCurrentItem() == 0) {
       setCircleVisible(charSequence.length() > 0, true, R.drawable.baseline_backspace_24, -Screen.dp(BACKSPACE_OFFSET));
     }
@@ -1069,6 +1087,9 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
   }
 
   public void setCircleVisible (boolean isVisible, boolean isSearch) {
+    if (!isSearch && isVisible && xgramBackspaceInHeader) {
+      return; // XGram: no backspace circle with Expressive design (the category row has the key)
+    }
     if (!isSearch || !noInlineSearch) {
       setCircleVisible(isVisible, true, isSearch ? R.drawable.baseline_search_24 : R.drawable.baseline_backspace_24, isSearch ? 0 : -Screen.dp(BACKSPACE_OFFSET));
     }
@@ -1668,8 +1689,21 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
   }
 
   private boolean hasLeftButton () {
+    // XGram: with Expressive design the backspace is the category row's key, never the circle
+    return !xgramBackspaceInHeader && xgramInputHasText();
+  }
+
+  /** XGram: the backspace key (in the circle or in the category row) has something to delete. */
+  private boolean xgramInputHasText () {
     return listener != null && !listener.isEmojiInputEmpty();
   }
+
+  /**
+   * XGram M3E: the emoji page's backspace is a key at the end of the category row (EmojiHeaderView), not this circle:
+   * the circle at the grid's bottom end covered emoji (a tap on one deleted a character, a scroll that started there
+   * died). Expressive design only; the classic look keeps Telegram X's circle.
+   */
+  private boolean xgramBackspaceInHeader;
 
   private boolean noInlineSearch;
 
@@ -1915,9 +1949,15 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
       if (xgramTypeGroup != null) {
         requestLayout(); // XGram: the switch's placement follows the direction
       }
+      if (emojiHeaderView != null) {
+        emojiHeaderView.xgramOnDirectionChanged(); // XGram: the backspace key goes to the row's other end
+      }
     }
     if (xgramTypeGroup != null) {
       xgramTypeGroup.onLanguageChanged(); // XGram: its labels and their fit
+    }
+    if (emojiHeaderView != null) {
+      emojiHeaderView.xgramOnLanguageChanged(); // XGram: the backspace key's TalkBack label
     }
   }
 
