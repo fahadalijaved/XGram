@@ -197,8 +197,8 @@ data class SdkVariant(
   val isLatest: Boolean =
     flavor == "latest"
 
-  val isTens: Boolean =
-    flavor == "tens"
+  val isNop: Boolean =
+    flavor == "nop"
   val isMarshmallow: Boolean =
     flavor == "marshmallow"
   val isLollipop: Boolean =
@@ -238,7 +238,7 @@ object Sdk {
       maxSdk = 23
     )),
     Pair(NOUGAT_OREO_PIE, SdkVariant(
-      flavor = "tens",
+      flavor = "nop",
       minSdk = 24,
       maxSdk = 28,
       displayName = "nougatOreoPie"

@@ -133,7 +133,7 @@ fun <T> selectApiFlavor(
     "legacy" -> legacy
     "lollipop" -> lollipop
     "marshmallow" -> marshmallow
-    "tens",
+    "nop",
     "qrs",
     "latest" -> latest
     else -> error(variant.flavor)
