@@ -20,6 +20,7 @@ import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.view.View;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import org.thunderdog.challegram.mediaview.paint.PaintState;
@@ -41,13 +42,95 @@ public class SimpleDrawingView extends View implements PaintState.SimpleDrawingC
       state.addSimpleDrawingChangeListener(this);
     }
     invalidate();
+    xgramUpdatePlayback(getWindowVisibility()); // XGram
   }
 
   @Override
   public void onSimpleDrawingsChanged (PaintState state) {
     if (this.state == state) {
       invalidate();
+      xgramUpdatePlayback(getWindowVisibility()); // XGram: a GIF or an animated sticker added, or the last one gone
     }
+  }
+
+  // XGram: the drawing's GIFs and animated stickers play while this view is on screen (attached, shown, its window
+  // visible): a timer moves them on to each next frame (PaintState.tickAnimations). They stop, their decoders freed,
+  // when the editor hides it, it leaves the screen or the app goes to the background.
+
+  private boolean xgramAttached;
+  private @Nullable PaintState xgramPlayingState;
+  private final Runnable xgramFrameTick = this::xgramTickAnimations;
+
+  private void xgramUpdatePlayback (int windowVisibility) {
+    if (xgramFrameTick == null) {
+      return; // called from View's constructor
+    }
+    final PaintState state = this.state;
+    final boolean play = state != null && xgramAttached && windowVisibility == View.VISIBLE && isShown() && state.hasAnimatedLayers();
+    final PaintState playingState = this.xgramPlayingState;
+    if (play && playingState == state) {
+      return;
+    }
+    if (playingState != null) {
+      this.xgramPlayingState = null; // first: stopping may tell this view the drawing changed
+      removeCallbacks(xgramFrameTick);
+      playingState.setAnimationPlayer(this, false);
+    }
+    if (play) {
+      this.xgramPlayingState = state;
+      state.setAnimationPlayer(this, true);
+      post(xgramFrameTick);
+    }
+  }
+
+  private void xgramTickAnimations () {
+    final PaintState state = this.xgramPlayingState;
+    if (state == null) {
+      return;
+    }
+    if (!isShown() || getWindowVisibility() != View.VISIBLE) { // in case a change wasn't told
+      xgramUpdatePlayback(getWindowVisibility());
+      return;
+    }
+    final long delay = state.tickAnimations();
+    if (this.xgramPlayingState != state) {
+      return; // it stopped meanwhile
+    }
+    if (delay < 0) {
+      xgramUpdatePlayback(getWindowVisibility()); // nothing plays any more
+      if (this.xgramPlayingState == state) {
+        postDelayed(xgramFrameTick, 100); // an animated layer couldn't start yet: look again
+      }
+      return;
+    }
+    removeCallbacks(xgramFrameTick);
+    postDelayed(xgramFrameTick, Math.max(1, delay));
+  }
+
+  @Override
+  protected void onAttachedToWindow () {
+    super.onAttachedToWindow();
+    xgramAttached = true;
+    xgramUpdatePlayback(getWindowVisibility());
+  }
+
+  @Override
+  protected void onDetachedFromWindow () {
+    xgramAttached = false;
+    xgramUpdatePlayback(getWindowVisibility());
+    super.onDetachedFromWindow();
+  }
+
+  @Override
+  protected void onVisibilityChanged (@NonNull View changedView, int visibility) {
+    super.onVisibilityChanged(changedView, visibility);
+    xgramUpdatePlayback(getWindowVisibility());
+  }
+
+  @Override
+  protected void onWindowVisibilityChanged (int visibility) {
+    super.onWindowVisibilityChanged(visibility);
+    xgramUpdatePlayback(visibility);
   }
 
   // XGram: the photo under the drawing, for the blur and pixelate brushes (mirrored as it is shown under this view)

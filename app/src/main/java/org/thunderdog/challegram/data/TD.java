@@ -6313,6 +6313,10 @@ public class TD {
       } else {
         content = tdlib.filegen().createThumbnail(new TdApi.InputMessagePhoto(new TdApi.InputPhoto(inputFile, null, null, null, width, height), caption, showCaptionAboveMedia, file.getSelfDestructType(), hasSpoiler), isSecretChat);
       }
+      // XGram: a message's photo replaced by an edit stays a photo: its GIFs and animated stickers go on it still
+      if (com.fahadali.xgram.editor.XgramAnimatedEdit.hasAnimatedLayers(file)) {
+        com.fahadali.xgram.editor.XgramAnimatedEdit.showSentAsStillHint();
+      }
     }
 
     return content;

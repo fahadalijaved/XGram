@@ -17,6 +17,7 @@ package org.thunderdog.challegram.mediaview.paint;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.RectF;
+import android.os.SystemClock;
 import android.util.Base64;
 
 import androidx.annotation.Nullable;
@@ -24,6 +25,7 @@ import androidx.collection.SparseArrayCompat;
 
 import com.fahadali.xgram.editor.XgramLayer;
 import com.fahadali.xgram.editor.XgramPaintBase;
+import com.fahadali.xgram.editor.XgramStickerLayer;
 
 import org.thunderdog.challegram.Log;
 import org.thunderdog.challegram.core.Background;
@@ -526,6 +528,183 @@ public class PaintState {
     return layers != null && !layers.isEmpty();
   }
 
+  // XGram: the animated layers (GIFs, animated stickers) play while a view showing the drawing plays them
+  // (SimpleDrawingView, while it is on screen), and stop, their decoders freed, once none does
+
+  private @Nullable List<Object> animationPlayers;
+  private @Nullable List<XgramStickerLayer> playingLayers;
+
+  /** XGram: whether a layer is a GIF or an animated sticker. */
+  public boolean hasAnimatedLayers () {
+    final List<XgramLayer> layers = this.layers;
+    if (layers != null) {
+      for (int i = 0; i < layers.size(); i++) {
+        final XgramLayer layer;
+        try {
+          layer = layers.get(i);
+        } catch (IndexOutOfBoundsException ignored) {
+          break;
+        }
+        if (layer instanceof XgramStickerLayer && ((XgramStickerLayer) layer).isAnimated()) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /** XGram, main thread: {@code player} (a view showing the drawing) starts or stops playing its animated layers. */
+  public void setAnimationPlayer (Object player, boolean isPlaying) {
+    if (isPlaying) {
+      if (animationPlayers == null) {
+        animationPlayers = new ArrayList<>();
+      }
+      if (!animationPlayers.contains(player)) {
+        animationPlayers.add(player);
+      }
+    } else if (animationPlayers != null && animationPlayers.remove(player) && animationPlayers.isEmpty()) {
+      stopAnimations();
+    }
+  }
+
+  /**
+   * XGram, main thread: moves the animated layers on to now (the drawing is drawn again when a frame changed), and
+   * stops those no longer in it. Milliseconds until it is needed again, or -1 when nothing plays.
+   */
+  public long tickAnimations () {
+    if (animationPlayers == null || animationPlayers.isEmpty()) {
+      stopAnimations();
+      return -1;
+    }
+    final long now = SystemClock.uptimeMillis();
+    long delay = -1;
+    boolean changed = false;
+    List<XgramStickerLayer> playing = null;
+    final List<XgramLayer> layers = this.layers;
+    if (layers != null) {
+      for (int i = 0; i < layers.size(); i++) {
+        final XgramLayer layer = layers.get(i);
+        if (!(layer instanceof XgramStickerLayer)) {
+          continue;
+        }
+        final XgramStickerLayer sticker = (XgramStickerLayer) layer;
+        if (!sticker.isAnimated()) {
+          continue;
+        }
+        if (sticker.updateAnimation(now)) {
+          changed = true;
+        }
+        if (!sticker.isAnimated()) {
+          continue;
+        }
+        // still playing, or found still or unreadable by its decoder just now: the next tick (or stopAnimations) stops it
+        final long layerDelay = sticker.getAnimationDelay(now);
+        final long next = layerDelay >= 0 ? layerDelay : 10;
+        delay = delay < 0 ? next : Math.min(delay, next);
+        if (playing == null) {
+          playing = new ArrayList<>();
+        }
+        playing.add(sticker);
+      }
+    }
+    // the layers deleted, undone or cleared since, or found to be still, free their decoders
+    final List<XgramStickerLayer> wasPlaying = this.playingLayers;
+    this.playingLayers = playing;
+    if (wasPlaying != null) {
+      for (XgramStickerLayer layer : wasPlaying) {
+        if (playing == null || !playing.contains(layer)) {
+          layer.stopAnimation();
+        }
+      }
+    }
+    if (changed) {
+      notifySimpleDrawingChanged();
+    }
+    return delay;
+  }
+
+  private void stopAnimations () {
+    final List<XgramStickerLayer> playing = this.playingLayers;
+    this.playingLayers = null;
+    if (playing != null) {
+      for (XgramStickerLayer layer : playing) {
+        layer.stopAnimation();
+      }
+    }
+  }
+
+  // XGram: the GIF a sent edit with animated layers becomes (XgramAnimatedEditExport) bakes the drawings and the layers
+  // under the lowest animated one into a still once, from a copy drawing only those (copyForAnimatedExport), and draws
+  // copies of the others (copyLayersFrom) over it on each frame
+
+  /** XGram: a copy for the GIF of an edit draws only the layers below this index; -1 draws them all. */
+  private int drawLayersBelow = -1;
+
+  /** XGram: the index of the lowest animated layer (a GIF, an animated sticker), or -1. */
+  public int getFirstAnimatedLayerIndex () {
+    final List<XgramLayer> layers = this.layers;
+    if (layers != null) {
+      for (int i = 0; i < layers.size(); i++) {
+        final XgramLayer layer;
+        try {
+          layer = layers.get(i);
+        } catch (IndexOutOfBoundsException ignored) {
+          break;
+        }
+        if (layer instanceof XgramStickerLayer && ((XgramStickerLayer) layer).isAnimated()) {
+          return i;
+        }
+      }
+    }
+    return -1;
+  }
+
+  /** XGram: copies of the layers from {@code fromIndex} up, the lowest first (the GIF of an edit draws them). */
+  public List<XgramLayer> copyLayersFrom (int fromIndex) {
+    final List<XgramLayer> layers = this.layers;
+    final List<XgramLayer> copies = new ArrayList<>();
+    if (layers != null) {
+      for (int i = Math.max(0, fromIndex); i < layers.size(); i++) {
+        final XgramLayer layer;
+        try {
+          layer = layers.get(i);
+        } catch (IndexOutOfBoundsException ignored) {
+          break;
+        }
+        copies.add(layer.copy());
+      }
+    }
+    return copies;
+  }
+
+  /**
+   * XGram: a copy (with copies of its layers, and no undo) that draws the drawings and only the layers below
+   * {@code drawLayersBelow}: the still part of the GIF of an edit. It keeps the others, so it is as edited (isEmpty).
+   */
+  public PaintState copyForAnimatedExport (int drawLayersBelow) {
+    final PaintState copy = new PaintState();
+    final List<SimpleDrawing> drawings = this.drawingsList;
+    if (drawings != null && !drawings.isEmpty()) {
+      copy.drawingsList = new ArrayList<>(drawings);
+    }
+    final List<XgramLayer> layers = this.layers;
+    if (layers != null && !layers.isEmpty()) {
+      final List<XgramLayer> copies = new ArrayList<>(layers.size());
+      for (int i = 0; i < layers.size(); i++) {
+        final XgramLayer layer;
+        try {
+          layer = layers.get(i);
+        } catch (IndexOutOfBoundsException ignored) {
+          break;
+        }
+        copies.add(layer.copy());
+      }
+      copy.setLayers(copies);
+    }
+    copy.drawLayersBelow = Math.max(0, drawLayersBelow);
+    return copy;
+  }
+
   /** The topmost layer at (x, y) in a view of width x height, within {@code tolerance} pixels, or null. */
   @Nullable
   public XgramLayer findLayer (float x, float y, int width, int height, float tolerance) {
@@ -932,10 +1111,12 @@ public class PaintState {
         drawing.draw(c, x, y, x + viewWidth, y + viewHeight, paintBase);
       }
     }
-    // XGram: the layers over the drawings, the last on top (by index: the editor may change the list meanwhile)
+    // XGram: the layers over the drawings, the last on top (by index: the editor may change the list meanwhile); a copy
+    // for the GIF of an edit only those below the animated ones
     final List<XgramLayer> layers = this.layers;
     if (layers != null) {
-      for (int i = 0; i < layers.size(); i++) {
+      final int count = drawLayersBelow >= 0 ? Math.min(drawLayersBelow, layers.size()) : layers.size();
+      for (int i = 0; i < count && i < layers.size(); i++) {
         final XgramLayer layer;
         try {
           layer = layers.get(i);

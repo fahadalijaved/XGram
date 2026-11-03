@@ -2072,6 +2072,11 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
   private static final float GENERATION_PROGRESS_PART = .35f;
 
   private float getVisualProgress (float progress) {
+    // XGram: a photo edit being made into a GIF: its encoding fills the ring's first part, the upload the rest
+    final float xgramEncoding = com.fahadali.xgram.editor.XgramAnimatedEditExport.getEncodingProgress(tdlib, file);
+    if (xgramEncoding >= 0f) {
+      return progress > 0f ? GENERATION_PROGRESS_PART + progress * (1f - GENERATION_PROGRESS_PART) : xgramEncoding * GENERATION_PROGRESS_PART;
+    }
     if (useGenerationProgress) {
       if (progress > 0f) {
         return GENERATION_PROGRESS_PART + progress * (1f - GENERATION_PROGRESS_PART);

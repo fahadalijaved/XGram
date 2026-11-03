@@ -8333,6 +8333,20 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     }
     layer.preload();
     paintView.getContentWrap().addLayer(layer, paintView.getContentWrap().getDefaultLayerScreenSize());
+    // XGram: a GIF or an animated sticker plays here, and the photo goes as a GIF, except as a profile photo, with a
+    // timer and in builds that can't make one: there it goes on still, which a hint says
+    if (layer.isAnimated() && !xgramCanSendAsGif()) {
+      com.fahadali.xgram.editor.XgramAnimatedEdit.showStillHintOnce();
+    }
+  }
+
+  /** XGram: whether the photo being edited can be sent as a GIF (animated layers on it). */
+  private boolean xgramCanSendAsGif () {
+    if (!com.fahadali.xgram.editor.XgramAnimatedEdit.isSupported() || getArgumentsStrict().avatarPickerMode != AvatarPickerMode.NONE) {
+      return false;
+    }
+    final MediaItem item = stack != null ? stack.getCurrent() : null;
+    return item == null || item.getSelfDestructType() == null;
   }
 
   /** The section is closing: a held layer goes back, and the text editor and the picker close. */

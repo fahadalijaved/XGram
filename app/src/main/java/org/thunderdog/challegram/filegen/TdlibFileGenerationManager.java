@@ -191,6 +191,20 @@ public final class TdlibFileGenerationManager {
     return _videoGen;
   }
 
+  // XGram: the GIFs that photo edits with animated layers are sent as
+  private com.fahadali.xgram.editor.XgramAnimatedEditExport _xgramAnimatedEditExport;
+
+  private com.fahadali.xgram.editor.XgramAnimatedEditExport xgramAnimatedEditExport () {
+    if (_xgramAnimatedEditExport == null) {
+      synchronized (this) {
+        if (_xgramAnimatedEditExport == null) {
+          _xgramAnimatedEditExport = new com.fahadali.xgram.editor.XgramAnimatedEditExport(tdlib);
+        }
+      }
+    }
+    return _xgramAnimatedEditExport;
+  }
+
   private void process (Message msg) {
     switch (msg.what) {
       case TASK_GENERATE_PHOTO: {
@@ -400,6 +414,19 @@ public final class TdlibFileGenerationManager {
     }
     if (conversion.startsWith("content://")) {
       copyContentStream(originalPath, conversion, generationId, destinationPath);
+      return;
+    }
+    // XGram: a photo edit with GIFs or animated stickers on it, sent as a GIF (XgramAnimatedEdit)
+    if (com.fahadali.xgram.editor.XgramAnimatedEdit.isConversion(conversion)) {
+      if (tdlib.settings().isKnownConversion(originalPath, conversion)) {
+        // the last try didn't end (the app closed or crashed on it): the photo goes instead, if it can
+        com.fahadali.xgram.editor.XgramAnimatedEdit.onExportFailed(tdlib, conversion, () ->
+          failGeneration(originalPath, conversion, generationId, ERROR_APP_FAILURE, "Failing GIF generation because previous attempt did not finish.")
+        );
+        return;
+      }
+      tdlib.settings().rememberConversion(originalPath, conversion);
+      pendingTasks.put(generationId, xgramAnimatedEditExport().start(generationId, originalPath, destinationPath, conversion));
       return;
     }
     String thumbPrefix =
@@ -1030,7 +1057,7 @@ public final class TdlibFileGenerationManager {
     boolean isTransparent = info.getAllowTransparency() || (!applyLessCompression && isTransparent(originalPath, uri));
 
     final int maxSize = info.getResolutionLimit() != 0 ? info.getResolutionLimit() : PhotoGenerationInfo.SIZE_LIMIT;
-    final boolean saveToGallery = Settings.instance().needSaveEditedMediaToGallery() && info.isEdited();
+    final boolean saveToGallery = Settings.instance().needSaveEditedMediaToGallery() && info.isEdited() && !(info.getResolutionLimit() > 0 && info.getResolutionLimit() <= BIG_THUMB_RESOLUTION); // XGram: a thumbnail (a GIF edit's, a secret chat photo's) isn't saved
 
     Bitmap bitmap = null;
     boolean needRotate = false;
@@ -1575,7 +1602,9 @@ public final class TdlibFileGenerationManager {
             throw new UnsupportedOperationException();
         }
         if (currentThumbnail == null) {
-          TdApi.InputFile thumbnail = newThumbnailFile(sourceFile, file, (originalPath, originalConversion) -> {
+          // XGram: a photo edit sent as a GIF has the edited photo for its thumbnail
+          TdApi.InputFile xgramThumbnail = com.fahadali.xgram.editor.XgramAnimatedEdit.newThumbnailFile(sourceFile, resolution);
+          TdApi.InputFile thumbnail = xgramThumbnail != null ? xgramThumbnail : newThumbnailFile(sourceFile, file, (originalPath, originalConversion) -> {
             if (originalConversion == null || originalConversion.startsWith(GenerationInfo.TYPE_VIDEO)) {
               return ThumbGenerationInfo.makeConversion(ThumbGenerationInfo.TYPE_VIDEO, originalConversion, resolution);
             }

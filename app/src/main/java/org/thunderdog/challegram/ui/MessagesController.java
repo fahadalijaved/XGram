@@ -12589,9 +12589,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
     );
 
     final boolean isSecretChat = isSecretChat();
+    final boolean xgramCanSendGifs = hasSendMessagePermission(RightId.SEND_OTHER_MESSAGES); // XGram: GIFs need this right
 
     Media.instance().post(() -> {
       final TdApi.InputMessageContent[] inputContent = new TdApi.InputMessageContent[files.length];
+      boolean xgramSentAsStill = false; // XGram: an edit with animated layers that stays a still photo
       int i = 0;
       for (ImageGalleryFile file : files) {
         if (file.getSelfDestructType() != null && asFiles)
@@ -12657,14 +12659,34 @@ public class MessagesController extends ViewController<MessagesController.Argume
           } else {
             content = tdlib.filegen().createThumbnail(new TdApi.InputMessagePhoto(new TdApi.InputPhoto(inputFile, null, null, null, width, height), caption, showCaptionAboveMedia, file.getSelfDestructType(), hasSpoiler), isSecretChat);
           }
+
+          // XGram: an edit with a GIF or an animated sticker on it goes as a GIF made of it (the photo above is sent
+          // if that fails); as a file, with a timer (a GIF has none) or where GIFs can't be sent it stays the photo
+          if (com.fahadali.xgram.editor.XgramAnimatedEdit.hasAnimatedLayers(file)) {
+            final boolean xgramAsGif = !asFiles && file.getSelfDestructType() == null && xgramCanSendGifs;
+            TdApi.InputMessageAnimation animation = null;
+            if (xgramAsGif && inputFile instanceof TdApi.InputFileGenerated) {
+              animation = com.fahadali.xgram.editor.XgramAnimatedEdit.newContent(tdlib, file, (TdApi.InputFileGenerated) inputFile, width, height, caption, showCaptionAboveMedia, hasSpoiler, isSecretChat);
+            }
+            if (animation != null) {
+              com.fahadali.xgram.editor.XgramAnimatedEdit.registerFallback(tdlib, animation, content);
+              content = animation;
+            } else if (!xgramAsGif) {
+              xgramSentAsStill = true;
+            }
+          }
         }
         inputContent[i] = content;
         i++;
       }
-      List<TdApi.Function<?>> functions = TD.toFunctions(chatId, topicId, replyTo, finalSendOptions, inputContent, needGroupMedia);
+      // XGram: the GIFs made of edits go after an album, each its own message (an album has photos and videos only)
+      List<TdApi.Function<?>> functions = com.fahadali.xgram.editor.XgramAnimatedEdit.toFunctions(chatId, topicId, replyTo, finalSendOptions, inputContent, needGroupMedia);
       com.fahadali.xgram.chats.XgramUndoSend.flushBefore(tdlib, chatId); // XGram: what waits goes first
       for (TdApi.Function<?> function : functions) {
-        tdlib.client().send(function, tdlib.messageHandler());
+        tdlib.client().send(function, com.fahadali.xgram.editor.XgramAnimatedEdit.wrapHandler(tdlib, function, tdlib.messageHandler())); // XGram: notes a GIF's message
+      }
+      if (xgramSentAsStill) {
+        com.fahadali.xgram.editor.XgramAnimatedEdit.showSentAsStillHint();
       }
     });
 

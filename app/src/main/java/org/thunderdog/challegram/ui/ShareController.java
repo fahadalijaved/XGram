@@ -4042,6 +4042,16 @@ public class ShareController extends TelegramViewController<ShareController.Args
       UI.showToast(R.string.Done, Toast.LENGTH_SHORT);
     }
 
+    // XGram: an edited photo with GIFs or animated stickers on it goes from here as a still photo: the hint says so
+    if (mode == MODE_TELEGRAM_FILES && args.telegramFiles != null) {
+      for (MediaItem item : args.telegramFiles) {
+        if (item.getType() == MediaItem.TYPE_GALLERY_PHOTO && com.fahadali.xgram.editor.XgramAnimatedEdit.hasAnimatedLayers(item.getSourceGalleryFile())) {
+          com.fahadali.xgram.editor.XgramAnimatedEdit.showSentAsStillHint();
+          break;
+        }
+      }
+    }
+
     popupLayout.hideWindow(true);
   }
 

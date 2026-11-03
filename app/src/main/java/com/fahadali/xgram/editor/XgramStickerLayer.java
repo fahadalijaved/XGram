@@ -35,9 +35,11 @@ import me.vkryl.core.util.Blob;
 
 /**
  * A picture layer of the photo editor: an emoji (drawn with the phone's emoji font), or a sticker or a GIF from the
- * picker, kept as its file's path. Animated stickers and GIFs give their first frame. The picture is decoded once,
- * off the main thread in the editor (the layer shows once it is ready) and right away while the photo is made, and
- * kept for the layer and its copies (undo).
+ * picker, kept as its file's path. The picture is decoded once, off the main thread in the editor (the layer shows once
+ * it is ready) and right away while the photo is made, and kept for the layer and its copies (undo). For animated
+ * stickers and GIFs it is the first frame: they play in the editor's preview ({@link #updateAnimation}, while a view
+ * showing the drawing plays it), and in the GIF a sent edit becomes (XgramAnimatedEditExport, on copies of the layer
+ * given each frame: {@link #setExportFrame}), and show their first frame everywhere else.
  */
 public final class XgramStickerLayer extends XgramLayer {
   public static final int KIND_EMOJI = 0, KIND_FILE = 1;
@@ -125,8 +127,15 @@ public final class XgramStickerLayer extends XgramLayer {
       if (!samePicture) {
         this.bitmap = source.bitmap;
         this.failed = false;
-      } else if (bitmap == null) {
-        this.bitmap = source.bitmap;
+        this.knownStill = source.knownStill;
+        stopAnimation(); // it played another picture
+      } else {
+        if (bitmap == null) {
+          this.bitmap = source.bitmap;
+        }
+        if (source.knownStill) {
+          this.knownStill = true;
+        }
       }
     }
   }
@@ -145,14 +154,116 @@ public final class XgramStickerLayer extends XgramLayer {
 
   @Override
   protected void drawContent (@NonNull Canvas c, float unit, float alpha) {
-    Bitmap bitmap = obtainBitmap();
+    // a copy made for the GIF of an edit draws the frame it was given (on the thread making the GIF); else the still
+    // loads even while a frame shows, for when the animation stops, and the playing frame shows on the main thread
+    // only, where frames change: the photo is made with the first frame
+    final Bitmap exportFrame = this.exportFrame;
+    final XgramLayerAnimation animation = this.animation;
+    final Bitmap still = exportFrame == null ? obtainBitmap() : null;
+    final Bitmap frame = exportFrame != null ? exportFrame : animation != null && UI.inUiThread() ? animation.getFrame() : null;
+    final Bitmap bitmap = frame != null ? frame : still;
     if (bitmap == null || bitmap.isRecycled()) {
       return;
     }
     final float width = unit * (aspect >= 1f ? 1f : aspect), height = unit * (aspect >= 1f ? 1f / aspect : 1f);
-    rect.set(-width / 2f, -height / 2f, width / 2f, height / 2f);
+    // the still is turned already
+    final int frameRotation = exportFrame != null ? exportFrameRotation : frame != null ? animation.getRotation() : 0;
+    if (frameRotation == 90 || frameRotation == 270) {
+      rect.set(-height / 2f, -width / 2f, height / 2f, width / 2f);
+    } else {
+      rect.set(-width / 2f, -height / 2f, width / 2f, height / 2f);
+    }
     bitmapPaint.setAlpha((int) (255f * Math.max(0f, Math.min(1f, alpha))));
-    c.drawBitmap(bitmap, null, rect, bitmapPaint);
+    if (frameRotation != 0) {
+      final int saveCount = c.save();
+      c.rotate(frameRotation);
+      c.drawBitmap(bitmap, null, rect, bitmapPaint);
+      c.restoreToCount(saveCount);
+    } else {
+      c.drawBitmap(bitmap, null, rect, bitmapPaint);
+    }
+  }
+
+  // The animation: GIFs and animated stickers play in the editor's preview while a view showing the drawing plays them
+  // (PaintState.tickAnimations, from SimpleDrawingView), each layer with a decoder of its own (XgramLayerAnimation)
+
+  /** Found to have one frame only, or not to be readable as an animation: never played. */
+  private volatile boolean knownStill;
+  private volatile @Nullable XgramLayerAnimation animation;
+  /** The GIF of an edit: the frame its copy of the layer draws, and that frame's turn (a video's rotation tag). */
+  private volatile @Nullable Bitmap exportFrame;
+  private volatile int exportFrameRotation;
+
+  /** The file played, read as {@link #getFormat()}. */
+  @NonNull
+  String getFilePath () {
+    return path != null ? path : "";
+  }
+
+  int getFormat () {
+    return format;
+  }
+
+  /**
+   * A copy of the layer made for the GIF of an edit (never the editor's own) draws {@code frame}, turned
+   * {@code rotation} degrees, instead of its picture; null draws the picture again.
+   */
+  void setExportFrame (@Nullable Bitmap frame, int rotation) {
+    this.exportFrameRotation = rotation;
+    this.exportFrame = frame;
+  }
+
+  /** Whether it is a GIF or an animated (TGS or WebM) sticker, which plays in the editor's preview. */
+  public boolean isAnimated () {
+    return kind == KIND_FILE && format != FORMAT_STATIC && !knownStill && !StringUtils.isEmpty(path);
+  }
+
+  /**
+   * Main thread: plays the animation at {@code now} (uptime milliseconds), starting it the first time. True when the
+   * frame shown changed (the drawing needs drawing again).
+   */
+  public boolean updateAnimation (long now) {
+    XgramLayerAnimation animation = this.animation;
+    if (animation != null && !animation.isFor(path, format)) {
+      stopAnimation(); // the layer became another picture (undo)
+      animation = null;
+    }
+    if (!isAnimated()) {
+      if (animation != null) {
+        final boolean wasShowing = animation.getFrame() != null;
+        stopAnimation();
+        return wasShowing;
+      }
+      return false;
+    }
+    if (animation == null) {
+      animation = new XgramLayerAnimation(path, format);
+      this.animation = animation;
+    }
+    final boolean changed = animation.update(now);
+    if (animation.isStill()) {
+      // one frame, or unreadable: the still picture shows instead
+      knownStill = true;
+      final boolean wasShowing = animation.getFrame() != null;
+      stopAnimation();
+      return changed || wasShowing;
+    }
+    return changed;
+  }
+
+  /** Main thread: milliseconds until {@link #updateAnimation} is needed again, or -1 when it doesn't play. */
+  public long getAnimationDelay (long now) {
+    final XgramLayerAnimation animation = this.animation;
+    return animation != null ? animation.getDelay(now) : -1;
+  }
+
+  /** Stops the animation and frees its decoder: the first frame shows again. */
+  public void stopAnimation () {
+    final XgramLayerAnimation animation = this.animation;
+    if (animation != null) {
+      this.animation = null;
+      animation.release();
+    }
   }
 
   // The picture

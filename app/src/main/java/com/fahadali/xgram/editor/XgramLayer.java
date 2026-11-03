@@ -29,10 +29,11 @@ import me.vkryl.core.util.Blob;
 
 /**
  * A movable layer of the photo editor's drawing (PaintState): text ({@link XgramTextLayer}), or an emoji, a sticker or
- * a GIF's first frame ({@link XgramStickerLayer}). Layers are drawn over the brush strokes, in the order they were
- * added. A layer lives in the drawing's own space, as the strokes do (the photo's pixels before its rotation, crop and
- * mirror): its centre as 0..1 of the drawing, its size as a share of the drawing's width and its turn in degrees, so
- * the editor, thumbnails and the sent photo draw it alike at any size. The editor moves, scales and turns a layer in
+ * a GIF ({@link XgramStickerLayer}; animated ones play in the editor, and the edit is sent as a GIF:
+ * {@link XgramAnimatedEdit}). Layers are drawn over the brush strokes, in the order they were added. A layer lives in
+ * the drawing's own space, as the strokes do (the photo's pixels before its rotation, crop and mirror): its centre as
+ * 0..1 of the drawing, its size as a share of the drawing's width and its turn in degrees, so the editor, thumbnails,
+ * the sent photo and the frames of its GIF draw it alike at any size. The editor moves, scales and turns a layer in
  * place, so undo keeps copies of it ({@link #copy()}).
  */
 public abstract class XgramLayer {

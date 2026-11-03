@@ -51,9 +51,10 @@ import me.vkryl.core.StringUtils;
  * The photo editor's picker for picture layers: Telegram X's emoji, sticker and GIF keyboard (EmojiLayout, its recent
  * and favourite stickers, sets and saved GIFs) in a panel rising from the bottom over the dimmed photo, as tall as the
  * keyboard. A tap on an emoji, a sticker, a custom emoji or a GIF closes it and puts the picture on the photo (a sticker
- * or a GIF once its file is downloaded; its first frame when it moves); a tap above the panel closes it. Made once per
- * viewer and kept (its pages and scroll), destroyed with it. Its look is the keyboard's: Material 3 Expressive gives it
- * surfaceContainerLow with 28dp top corners and the Emoji / Stickers / GIFs button group. While it shows, a sticker set
+ * or a GIF once its file is downloaded; one that moves plays, and the photo is sent as a GIF: XgramAnimatedEdit); a tap
+ * above the panel closes it. Made once per viewer and kept (its pages and scroll), destroyed with it. Its look is the
+ * keyboard's: Material 3 Expressive gives it surfaceContainerLow with 28dp top corners and the Emoji / Stickers / GIFs
+ * button group. While it shows, a sticker set
  * opened from it (a trending sticker, View pack in a sticker's preview) puts its stickers on the photo too
  * ({@link #pickFromStickerSet}), never in the chat behind the viewer, and TalkBack reads only the picker.
  */
@@ -269,14 +270,8 @@ public final class XgramStickerPicker extends FrameLayoutFix implements EmojiLay
     return width > 0 && height > 0 ? (float) width / (float) height : 1f;
   }
 
-  /** Said once per app run: the editor sends a photo, so animated stickers and GIFs go on it as a still image. */
-  private static boolean stillHintShown;
-
+  // where the photo can't be sent as a GIF, the viewer says an animated one goes on still (XgramAnimatedEdit)
   private void pickFile (@NonNull TdApi.File file, int format, float aspect) {
-    if (format != XgramStickerLayer.FORMAT_STATIC && !stillHintShown) {
-      stillHintShown = true;
-      UI.showToast(R.string.XgramEditorAnimatedAsStill, Toast.LENGTH_LONG);
-    }
     if (TD.isFileLoaded(file)) {
       callback.onStickerPicked(this, XgramStickerLayer.newFile(file.local.path, format, aspect));
       return;

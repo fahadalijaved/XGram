@@ -20,6 +20,7 @@ import android.graphics.BitmapRegionDecoder;
 import android.graphics.Canvas;
 import android.graphics.Matrix;
 import android.graphics.Rect;
+import android.graphics.RectF;
 import android.os.Build;
 
 import org.drinkless.tdlib.TdApi;
@@ -109,6 +110,33 @@ public class PhotoGenerationInfo extends GenerationInfo {
 
   public PaintState getPaintState () {
     return paintState != null && !paintState.isEmpty() ? paintState : null;
+  }
+
+  // XGram: the GIF a sent edit with animated layers becomes (XgramAnimatedEditExport) bakes its still part through
+  // process() with another drawing (xgramSetPaintState: the drawings and the layers under the animated ones), and
+  // draws the rest on each frame where process() put the drawing (xgramGetPaintPlacement)
+
+  private final Matrix xgramPaintMatrix = new Matrix();
+  private final RectF xgramPaintRect = new RectF();
+  private boolean xgramPaintPlaced;
+
+  /** XGram: the drawing process() draws instead of the conversion's. */
+  public void xgramSetPaintState (PaintState paintState) {
+    this.paintState = paintState;
+  }
+
+  /**
+   * XGram, after process(): {@code outMatrix} takes the drawing's canvas to the processed bitmap (the turn around the
+   * centre, the mirror, the crop and the rotation it went through), and {@code outRect} is the drawing's own rect on
+   * that canvas, as given to PaintState.draw. False when process() drew no drawing.
+   */
+  public boolean xgramGetPaintPlacement (Matrix outMatrix, RectF outRect) {
+    if (!xgramPaintPlaced) {
+      return false;
+    }
+    outMatrix.set(xgramPaintMatrix);
+    outRect.set(xgramPaintRect);
+    return true;
   }
 
   public boolean needSpecialProcessing (boolean needRotate) {
@@ -246,9 +274,12 @@ public class PhotoGenerationInfo extends GenerationInfo {
 
         // XGram: the region bitmap covers its own rect, inside the whole photo's drawing
         paintState.draw(c, -left, -top, baseWidth, baseHeight, source, sourceMirrorHorizontally, sourceMirrorVertically, new android.graphics.RectF(0, 0, bitmapWidth, bitmapHeight));
+        xgramPaintRect.set(-left, -top, -left + baseWidth, -top + baseHeight); // XGram
       } else {
         paintState.draw(c, 0,0, bitmapWidth, bitmapHeight, source, sourceMirrorHorizontally, sourceMirrorVertically);
+        xgramPaintRect.set(0, 0, bitmapWidth, bitmapHeight); // XGram
       }
+      xgramPaintPlaced = true; // XGram
     }
   }
 
@@ -264,6 +295,8 @@ public class PhotoGenerationInfo extends GenerationInfo {
     boolean drawingComplete = false;
     boolean needMirrorHorizontal = false;
     boolean needMirrorVertical = false;
+    xgramPaintMatrix.reset(); // XGram: the drawing's canvas, as the source's until a step below changes it
+    xgramPaintPlaced = false;
 
     if (cropState != null && !cropState.isEmpty()) {
       needMirrorHorizontal = cropState.needMirrorHorizontally();
@@ -318,6 +351,9 @@ public class PhotoGenerationInfo extends GenerationInfo {
           needMirrorVertical = false;
         }
         if (paintState != null) {
+          // XGram: the drawing goes on turned and scaled as the photo, not mirrored
+          xgramPaintMatrix.setRotate(preRotate, w / 2, h / 2);
+          xgramPaintMatrix.preScale(scale, scale, w / 2, h / 2);
           drawPaintState(c, source.getWidth(), source.getHeight(), source, drawnMirrorHorizontal, drawnMirrorVertical);
           drawingComplete = true;
         }
@@ -359,9 +395,20 @@ public class PhotoGenerationInfo extends GenerationInfo {
       Matrix flipMatrix = new Matrix();
       flipMatrix.preScale(needMirrorHorizontal ? -1.0f : 1.0f, needMirrorVertical ? -1.0f : 1.0f);
 
+      xgramPaintMatrix.postScale(needMirrorHorizontal ? -1f : 1f, needMirrorVertical ? -1f : 1f, source.getWidth() / 2f, source.getHeight() / 2f); // XGram
+
       Bitmap flipped = Bitmap.createBitmap(source, 0, 0, source.getWidth(), source.getHeight(), flipMatrix, false);
       source.recycle();
       source = flipped;
+    }
+
+    // XGram: the crop, then the rotation (createBitmap puts the turned crop at 0, 0)
+    xgramPaintMatrix.postTranslate(-bitmapLeft, -bitmapTop);
+    if (matrix != null) {
+      RectF turned = new RectF(0, 0, bitmapRight - bitmapLeft, bitmapBottom - bitmapTop);
+      matrix.mapRect(turned);
+      xgramPaintMatrix.postConcat(matrix);
+      xgramPaintMatrix.postTranslate(-turned.left, -turned.top);
     }
 
     return Bitmap.createBitmap(source, bitmapLeft, bitmapTop, bitmapRight - bitmapLeft, bitmapBottom - bitmapTop, matrix, false);
