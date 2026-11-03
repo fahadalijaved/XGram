@@ -104,8 +104,9 @@ import tgx.td.MessageId;
 import tgx.td.Td;
 
 /**
- * Play videos in chat (Messages page): a video message plays in place instead of in the media viewer, muted while
- * on screen or after a tap, with a seek track, the time, a sound switch and a button to the full screen viewer.
+ * Play videos in chat (Messages page): a video message plays in place, muted while on screen (or with sound after a tap
+ * when Start playing is On tap), with a seek track, the time, a sound switch and a button to the full screen viewer. A
+ * tap on a video playing here opens it in the media viewer, as in Telegram.
  *
  * One player at a time, made the way Telegram X makes its own ({@link U#newExoPlayer}, streamed from TDLib with
  * {@link U#newMediaSource}) and released as soon as it stops. The picture is a TextureView inside the message's
@@ -253,7 +254,10 @@ public final class XgramInlineVideo {
 
   // Hooks: MediaWrapper
 
-  /** A tap on a video cell. True when it was handled here instead of opening the media viewer. */
+  /**
+   * A tap on a video cell. True when it was handled here: started here (Start playing: On tap), or opened in the media
+   * viewer at the place this player is at. False: the caller opens the media viewer.
+   */
   public static boolean onClick (MediaWrapper wrapper, View view) {
     if (!isEnabled() || !wrapper.isVideo()) {
       if (wrapper.isVideo()) {
@@ -263,9 +267,25 @@ public final class XgramInlineVideo {
     }
     Session s = current;
     if (s != null && s.wrapper == wrapper) {
-      s.onVideoTap();
+      // A tap on the picture opens the media viewer where the video is, with sound, as in Telegram. The player's own
+      // controls (play or pause, sound, the sound hint, seek, expand) take their taps first (PlayerLayer.findTarget).
+      handler.post(s::expand); // it removes the player's view: not while the message handles this touch
       return true;
     }
+    if (startsAutomatically()) {
+      // Start playing: Auto: a video that isn't playing here opens in the media viewer, as in Telegram (the one most on
+      // screen plays here by itself). One playing here for another cell stops first: no second sound under the viewer.
+      if (s != null) {
+        handler.post(() -> {
+          if (current == s) {
+            stop();
+          }
+        });
+      }
+      logRejected(wrapper, "not-playing");
+      return false;
+    }
+    // Start playing: On tap. The first tap plays it here; a tap on it then opens the media viewer (above)
     ViewParent parent = view.getParent();
     if (!(parent instanceof MessageViewGroup)) {
       logRejected(wrapper, "not-view-group"); // a message made while the switch was off: it opens in the media viewer
@@ -976,27 +996,6 @@ public final class XgramInlineVideo {
       layer.invalidate();
     }
 
-    /**
-     * A tap on the picture: sound on or off, or play again when it's paused or over. With the controls hidden while the
-     * user's video plays, it only brings them back (a muted autoplay still gets its sound at once).
-     */
-    void onVideoTap () {
-      if (released) {
-        return;
-      }
-      final boolean wasHidden = !layer.chromeShown();
-      touchChrome();
-      if (wasHidden && engaged && isPlaying()) {
-        return;
-      }
-      if (!isPlaying()) {
-        resume();
-        setMuted(false);
-      } else {
-        setMuted(!muted);
-      }
-    }
-
     void resume () {
       if (released || player == null) {
         return;
@@ -1181,6 +1180,8 @@ public final class XgramInlineVideo {
     private final TextPaint text = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final RectF rect = new RectF();
     private final RectF pillRect = new RectF(), playRect = new RectF(), soundRect = new RectF(), expandRect = new RectF();
+    /** The big play or replay button in the middle of a paused or finished video: plays it here, empty when not drawn. */
+    private final RectF centerRect = new RectF();
     private final Drawable playIcon, pauseIcon, soundOnIcon, soundOffIcon, expandIcon, replayIcon;
 
     private int touchTarget;
@@ -1496,9 +1497,11 @@ public final class XgramInlineVideo {
       // Middle: paused, over, or loading
       float cx = cell.exactCenterX(), cy = cell.exactCenterY();
       fill.setColor(0x66000000); // the chip's, also while the chip is hidden
+      centerRect.setEmpty(); // set below while the play or replay button is drawn
       if (!playing && !dragging) {
         float radius = Screen.dp(24f);
         c.drawCircle(cx, cy, radius, fill);
+        centerRect.set(cx - radius, cy - radius, cx + radius, cy + radius);
         drawIcon(c, s.ended ? replayIcon : playIcon, cx, cy, s.ended ? Screen.dp(24f) : Screen.dp(36f));
       } else if (playing && s.buffering) {
         float radius = Screen.dp(11f);
@@ -1739,7 +1742,11 @@ public final class XgramInlineVideo {
       final float diskHalf = Math.min(half, (bottom - Screen.dp(8f) - topLimit) / 2f);
       final float cx = cell.exactCenterX(), cy = Math.max(cell.exactCenterY(), topLimit + Math.max(0f, diskHalf));
       final float fade = Math.max(0f, Math.min(1f, m3Fade.getValue()));
+      centerRect.setEmpty(); // set below while the paused (or finished) disk is drawn
       if (fade > 0f && diskHalf >= Screen.dp(16f)) {
+        if (!playing) {
+          centerRect.set(cx - diskHalf, cy - diskHalf, cx + diskHalf, cy + diskHalf);
+        }
         final float morph = Math.max(-.2f, Math.min(1.2f, m3Centre.getValue()));
         final float corner = Math.min(half, half + (Screen.dp(XgramExpressive.CORNER_L) - half) * morph);
         final float scale = (1f - .15f * Math.max(0f, morph)) * (diskHalf / half);
@@ -1787,16 +1794,25 @@ public final class XgramInlineVideo {
       }
     }
 
-    // Touch: only the controls; a tap anywhere else goes to the message (sound on or off, long press menu)
+    // Touch: only the controls and the big play or replay button; a tap anywhere else goes to the message (the media
+    // viewer, long press menu)
 
     private int findTarget (float x, float y) {
       if (cell.isEmpty() || !cell.contains((int) x, (int) y)) {
         return TARGET_NONE;
       }
       float slop = Screen.dp(6f);
+      // The big play or replay button of a paused or finished video plays it here (it is not one of the controls that
+      // hide); a tap anywhere else on the video still opens the media viewer. The top controls go first where a short
+      // cell (an album tile) puts them over it.
+      final boolean onCenter = !session.isPlaying() && !centerRect.isEmpty() &&
+        x >= centerRect.left - slop && x <= centerRect.right + slop && y >= centerRect.top - slop && y <= centerRect.bottom + slop;
       if (!chrome.getValue()) {
+        if (onCenter) {
+          return TARGET_PLAY;
+        }
         // Hide controls while playing: hidden, only the sound hint takes a tap. One anywhere else goes to the message,
-        // which brings the controls back (Session.onVideoTap).
+        // which opens the media viewer (XgramInlineVideo.onClick).
         if (session.isSilent()) {
           layoutHint(hintSize());
           if (x >= hintRect.left - slop && x <= hintRect.right + slop && y >= hintRect.top - slop && y <= hintRect.bottom + slop) {
@@ -1812,6 +1828,9 @@ public final class XgramInlineVideo {
         return TARGET_SOUND;
       }
       if (!playRect.isEmpty() && playRect.contains(x, y)) {
+        return TARGET_PLAY;
+      }
+      if (onCenter) {
         return TARGET_PLAY;
       }
       // The track's own 32dp band, in both designs, so a tap on the bubble time chip beside it doesn't seek: the

@@ -67,6 +67,21 @@ public abstract class PreviewLayout extends FrameLayoutFix implements View.OnCli
     if (xgramSheet) {
       xgramAddActions();
       setWillNotDraw(false);
+      if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+        // XGram: the sheet's own padding. The web preview fits system windows (UI.setFullscreenIfNeeded), so by default
+        // the window insets become its padding: the status bar on top pushed the video down into the actions row,
+        // under a gap, because the sheet's height leaves the status bar out (onMeasure). Full screen keeps that default.
+        setOnApplyWindowInsetsListener((v, insets) -> {
+          if (xgramIsFullscreen()) {
+            return v.onApplyWindowInsets(insets);
+          }
+          xgramInsetLeft = insets.getSystemWindowInsetLeft();
+          xgramInsetRight = insets.getSystemWindowInsetRight();
+          xgramInsetBottom = insets.getSystemWindowInsetBottom();
+          setPadding(xgramPaddingLeft, 0, xgramPaddingRight, xgramPaddingBottom()); // the sides as onMeasure last set them: stable
+          return insets.consumeSystemWindowInsets();
+        });
+      }
     } else {
     addFooterItem(R.id.btn_share, R.string.Share, R.drawable.baseline_forward_24);
     addFooterItem(R.id.btn_openLink, R.string.OpenInExternalApp,  R.drawable.baseline_open_in_browser_24);
@@ -94,9 +109,33 @@ public abstract class PreviewLayout extends FrameLayoutFix implements View.OnCli
     open.setOnClickListener(this);
     android.widget.LinearLayout row = com.fahadali.xgram.appearance.XgramR5Sheets.actionsRow(getContext(), null, share, open);
     final int height = Screen.dp(com.fahadali.xgram.appearance.XgramR5Sheets.ACTIONS_HEIGHT);
-    row.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, height, Gravity.BOTTOM));
-    footerHeight = height;
+    FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, height, Gravity.BOTTOM);
+    params.bottomMargin = Screen.dp(com.fahadali.xgram.appearance.XgramR5Sheets.ACTIONS_BOTTOM); // XGram: as in the other sheets
+    row.setLayoutParams(params);
+    footerHeight = height + params.bottomMargin;
     addView(row);
+  }
+
+  /** XGram: the side system insets (a navigation bar on the side in landscape), and the part of them the sheet reaches. */
+  private int xgramInsetLeft, xgramInsetRight, xgramInsetBottom, xgramPaddingLeft, xgramPaddingRight;
+
+  /** XGram: the bottom padding as before: the navigation bar inset edge-to-edge (setVerticalInsets), otherwise the window's. */
+  private int xgramPaddingBottom () {
+    return Settings.instance().useEdgeToEdge() ? bottomInset : xgramInsetBottom;
+  }
+
+  /**
+   * XGram: the sheet is centered and at most 640dp wide, so its content keeps clear of a side inset only where the
+   * sheet reaches into it. No top padding: the sheet's height (onMeasure) has no status bar in it.
+   */
+  private void xgramUpdateSheetPadding (int availableWidth) {
+    final int free = Math.max(0, (availableWidth - com.fahadali.xgram.appearance.XgramM3Sheets.sheetWidth(availableWidth)) / 2);
+    xgramPaddingLeft = Math.max(0, xgramInsetLeft - free);
+    xgramPaddingRight = Math.max(0, xgramInsetRight - free);
+    final int bottom = xgramPaddingBottom();
+    if (getPaddingLeft() != xgramPaddingLeft || getPaddingTop() != 0 || getPaddingRight() != xgramPaddingRight || getPaddingBottom() != bottom) {
+      setPadding(xgramPaddingLeft, 0, xgramPaddingRight, bottom);
+    }
   }
 
   /** XGram M3E r5: true while the preview plays full screen (the status bar inset then counts again). */
@@ -247,9 +286,16 @@ public abstract class PreviewLayout extends FrameLayoutFix implements View.OnCli
   @Override
   protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
     if (xgramSheet) {
+      final boolean fullscreen = xgramIsFullscreen();
+      if (!fullscreen && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP && MeasureSpec.getMode(widthMeasureSpec) != MeasureSpec.UNSPECIFIED) {
+        xgramUpdateSheetPadding(MeasureSpec.getSize(widthMeasureSpec)); // XGram: before computeHeight, which sizes the preview to the padded width
+      }
       widthMeasureSpec = com.fahadali.xgram.appearance.XgramM3Sheets.sheetWidthSpec(widthMeasureSpec);
-      final int top = xgramIsFullscreen() ? topInset : 0;
-      super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(computeHeight(MeasureSpec.getSize(widthMeasureSpec)) + bottomInset + top, MeasureSpec.EXACTLY));
+      final int top = fullscreen ? topInset : 0;
+      // XGram: the sheet's bottom padding as it really is (xgramPaddingBottom(), just set above): with edge-to-edge off
+      // it is the window's inset, not bottomInset, and a height with the other one let the actions row overlap the video
+      final int bottom = fullscreen ? bottomInset : getPaddingBottom();
+      super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(computeHeight(MeasureSpec.getSize(widthMeasureSpec)) + bottom + top, MeasureSpec.EXACTLY));
       return;
     }
     super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(computeHeight(MeasureSpec.getSize(widthMeasureSpec)) + bottomInset + topInset, MeasureSpec.EXACTLY));

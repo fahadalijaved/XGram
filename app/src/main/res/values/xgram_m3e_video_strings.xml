@@ -2,7 +2,7 @@
 <resources>
   <!-- XGram: Play videos in chat (Settings > XGram > Messages > Videos, see com.fahadali.xgram.chats.XgramInlineVideo) -->
   <!-- The note under the video rows while Start playing is Automatically but Telegram X's Autoplay GIFs is off -->
-  <string name="XgramInlineVideoInfoNoAutoplay">Videos play inside the message with a seek bar, and a tap turns the sound on or off. Autoplay GIFs is off, so videos start only when you tap them.</string>
+  <string name="XgramInlineVideoInfoNoAutoplay">Videos play inside the message with a seek bar and a sound button. Autoplay GIFs is off, so videos don\'t start by themselves and a tap opens them full screen. To play them here with a tap, set Start playing to On tap.</string>
   <!-- The note under the video rows, updated when the switches change -->
   <item type="id" name="btn_xgramInlineVideoInfo" />
 </resources>

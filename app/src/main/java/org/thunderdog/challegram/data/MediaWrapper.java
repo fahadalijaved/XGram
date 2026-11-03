@@ -1205,6 +1205,11 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
       c.restore();
       paint.setAlpha(existingAlpha);
     } else if (isVideo() && Config.VIDEO_CLOUD_PLAYBACK_AVAILABLE) {
+      if (xgramPlaying) {
+        // XGram: Play videos in chat: no duration chip under the player, so its old place takes no download tap (a tap
+        // there started or cancelled the download instead of opening the media viewer)
+        durationRect.setEmpty();
+      }
       getFileProgress().setVideoStreamingOptions(needTopOffset, true, isSmallStreamingUI ? FileProgressComponent.STREAMING_UI_MODE_SMALL : FileProgressComponent.STREAMING_UI_MODE_LARGE, durationRect, downloadedAnimator);
     }
 

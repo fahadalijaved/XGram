@@ -237,7 +237,8 @@ public final class XgramSettingDeps {
 
   /**
    * Starting automatically also needs Telegram X's Autoplay GIFs (XgramInlineVideo.autoplay): with it off, videos
-   * only start on a tap. Nothing is changed or saved.
+   * don't start by themselves and a tap opens them in the media viewer (On tap plays them here). Nothing is changed or
+   * saved.
    */
   public static boolean inlineVideoAutoplayBlocked () {
     XgramSettings settings = s();

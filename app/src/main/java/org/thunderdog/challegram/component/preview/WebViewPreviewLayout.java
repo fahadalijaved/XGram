@@ -183,8 +183,21 @@ public class WebViewPreviewLayout extends PreviewLayout {
       // XGram M3E r5: under the 48dp handle band, 16dp in from the sides (the sheet is at most 640dp wide)
       final int inset = Screen.dp(16f);
       final int sheetWidth = com.fahadali.xgram.appearance.XgramM3Sheets.sheetWidth(currentWidth);
-      lastHeight = getWebViewHeight(Math.max(1, sheetWidth - inset * 2));
-      FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, lastHeight, Gravity.TOP);
+      // XGram: the width the page really gets, inside the sheet's side padding (a side navigation bar in landscape)
+      final int contentWidth = Math.max(1, sheetWidth - inset * 2 - (inFullScreen() ? 0 : getPaddingLeft() + getPaddingRight()));
+      lastHeight = getWebViewHeight(contentWidth);
+      // XGram: when the height is capped (half the screen, landscape), the page is as wide as the video at that height and
+      // centered, so the player gets no side bars. XGram: only for a real video size (YouTube, Vimeo, Dailymotion from
+      // Telegram's preview): never custom embeds (music players) or the 1x1 placeholder size (EmbeddedService gives it to
+      // music players and to YouTube links opened without a Telegram preview), which would squeeze them into a square
+      int width = ViewGroup.LayoutParams.MATCH_PARENT;
+      if (nativeEmbed.type != EmbeddedService.TYPE_CUSTOM_EMBED && !(nativeEmbed.width == 1 && nativeEmbed.height == 1) && nativeEmbed.width > 0 && nativeEmbed.height > 0) {
+        final int fitWidth = Math.round(lastHeight * (nativeEmbed.width / (float) nativeEmbed.height));
+        if (fitWidth < contentWidth - Screen.dp(8f)) {
+          width = Math.max(1, fitWidth);
+        }
+      }
+      FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(width, lastHeight, Gravity.TOP | Gravity.CENTER_HORIZONTAL);
       params.topMargin = Screen.dp(XGRAM_BAND_DP);
       params.leftMargin = params.rightMargin = inset;
       container.setLayoutParams(params);
