@@ -168,6 +168,9 @@ public class CameraManagerX extends CameraManager<PreviewView> {
     cameraProvider.unbindAll();
     xgramVideoCaptureBound = false; // XGram
     xgramLockedFocus = null; // XGram: the lock goes with this binding (onCameraBound hides its mark)
+    xgramStopZoom(); // XGram: a new binding starts at 1×: a pinch starts from the camera's zoom again
+    xgramZoomTarget = -1f;
+    onZoomChanged(1f); // XGram: a new binding starts at 1x (CameraX's default ratio): the shutter's drag goes on from there
 
     AspectRatioStrategy aspectRatioStrategy;
     int aspectRatioMode = Settings.instance().getCameraAspectRatioMode();
@@ -322,6 +325,7 @@ public class CameraManagerX extends CameraManager<PreviewView> {
   public void closeCamera () {
     if (this.isOpen) {
       xgramStopZoom(); // XGram
+      xgramZoomTarget = -1f; // XGram
       xgramCancelFirstFrame(); // XGram: no first frame lifts the blur over a closed camera
       if (cameraProvider != null) {
         cameraProvider.unbindAll();
@@ -487,6 +491,12 @@ public class CameraManagerX extends CameraManager<PreviewView> {
 
   @Override
   protected void onRequestZoom (float zoom) {
+    if (camera != null) {
+      // XGram: the volume keys and the shutter's drag: a pinch goes on from here, and a pinch's waiting request
+      // doesn't undo it
+      xgramStopZoom();
+      xgramZoomTarget = zoom;
+    }
     if (camera != null && getCurrentZoom() != zoom) {
       camera.getCameraControl().setZoomRatio(zoom);
       onZoomChanged(zoom);
@@ -1090,6 +1100,30 @@ public class CameraManagerX extends CameraManager<PreviewView> {
   /** The zoom the controls asked for last (a pinch builds on it, not on the camera's late state); 0 before any. */
   public float xgramZoomTarget () {
     return xgramZoomTarget > 0f ? xgramZoomTarget : getCurrentZoom();
+  }
+
+  // Pinch to zoom without XGram's controls (CameraX (beta): CameraController.xgramPinch): the same requests as theirs
+
+  @Override
+  public float xgramZoomRatio () {
+    return camera != null && !isPaused ? xgramZoomTarget() : 0f;
+  }
+
+  @Override
+  public float xgramMinZoomRatio () {
+    return getMinZoom();
+  }
+
+  @Override
+  public float xgramMaxZoomRatio () {
+    return getMaxZoom();
+  }
+
+  @Override
+  public void xgramPinchZoom (float ratio) {
+    if (!isPaused) {
+      xgramSetZoom(ratio, true);
+    }
   }
 
   /**

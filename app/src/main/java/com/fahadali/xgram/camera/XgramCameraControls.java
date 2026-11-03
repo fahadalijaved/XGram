@@ -124,7 +124,9 @@ public final class XgramCameraControls extends FrameLayout implements CameraMana
       @Override
       public boolean onScaleBegin (@NonNull ScaleGestureDetector detector) {
         scaling = true;
-        pinchZoom = camera != null ? camera.getCurrentZoom() : 0f;
+        // From the zoom asked for last (a lens tap, the volume keys), not the camera's state: right after a lens tap
+        // that is still the old ratio, and the pinch jumped back to it
+        pinchZoom = camera != null ? camera.xgramZoomTarget() : 0f;
         return camera != null && pinchZoom > 0f;
       }
 

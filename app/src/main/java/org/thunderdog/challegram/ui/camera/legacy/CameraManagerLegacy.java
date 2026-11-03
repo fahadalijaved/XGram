@@ -113,6 +113,66 @@ public class CameraManagerLegacy extends CameraManagerTexture {
     return 1;
   }
 
+  // XGram: pinch to zoom (CameraController.xgramPinch). Each Camera1 zoom is a setParameters call on the camera thread,
+  // so a pinch asks at most 20 times a second, always for the latest ratio, mapped to the camera's own zoom steps.
+
+  private static final long XGRAM_PINCH_INTERVAL_MS = 50L;
+  private float xgramPinchIndex = -1f; // the index waiting for its turn, -1: none
+  private long xgramPinchSentAt;
+  private final Runnable xgramPinchSend = this::xgramSendPinch;
+
+  @Override
+  public float xgramZoomRatio () {
+    if (!isCameraActive()) {
+      return 0f;
+    }
+    return api.xgramZoomRatioAt(xgramPinchIndex >= 0f ? xgramPinchIndex : getCurrentZoom());
+  }
+
+  @Override
+  public float xgramMinZoomRatio () {
+    return api.xgramZoomRatioAt(0f);
+  }
+
+  @Override
+  public float xgramMaxZoomRatio () {
+    return api.xgramZoomRatioAt(getMaxZoom());
+  }
+
+  @Override
+  @UiThread
+  public void xgramPinchZoom (float ratio) {
+    final float index = api.xgramZoomIndexOf(ratio);
+    if (index < 0f || !isCameraActive()) {
+      return;
+    }
+    final boolean waiting = xgramPinchIndex >= 0f;
+    xgramPinchIndex = index;
+    final long wait = XGRAM_PINCH_INTERVAL_MS - (android.os.SystemClock.uptimeMillis() - xgramPinchSentAt);
+    if (wait <= 0) {
+      UI.removePendingRunnable(xgramPinchSend);
+      xgramSendPinch();
+    } else if (!waiting) {
+      UI.post(xgramPinchSend, wait);
+    }
+  }
+
+  private void xgramSendPinch () {
+    if (xgramPinchIndex < 0f) {
+      return;
+    }
+    final float index = xgramPinchIndex;
+    xgramPinchIndex = -1f;
+    xgramPinchSentAt = android.os.SystemClock.uptimeMillis();
+    onRequestZoom(index);
+  }
+
+  /** The pinch's waiting zoom is dropped: the camera switches, closes or pauses (it would zoom the next one). */
+  private void xgramCancelPinch () {
+    xgramPinchIndex = -1f;
+    UI.removePendingRunnable(xgramPinchSend);
+  }
+
   @Override
   @UiThread
   public void onResetPreferences () {
@@ -182,6 +242,7 @@ public class CameraManagerLegacy extends CameraManagerTexture {
 
   @UiThread
   public void switchToNextCameraDevice () {
+    xgramCancelPinch(); // XGram
     if (availableCameraCount != -1) {
       api.switchToNextCameraDevice();
     }
@@ -196,11 +257,13 @@ public class CameraManagerLegacy extends CameraManagerTexture {
   }
 
   public void closeCamera () {
+    xgramCancelPinch(); // XGram
     isCameraOpen = false;
     checkCameraState();
   }
 
   public void pauseCamera () {
+    xgramCancelPinch(); // XGram
     isCameraPaused = true;
     checkCameraState();
   }
@@ -211,6 +274,7 @@ public class CameraManagerLegacy extends CameraManagerTexture {
   }
 
   public void destroy () {
+    xgramCancelPinch(); // XGram
     if (cameraQrBridge != null) {
       cameraQrBridge.destroy();
       cameraQrBridge = null;
@@ -407,7 +471,9 @@ public class CameraManagerLegacy extends CameraManagerTexture {
 
   @Override
   public float getMaxZoom () {
-    return api.getMaxZoom();
+    // XGram: 0, not -1 (MAX_ZOOM_UNKNOWN), for a camera without zoom (often the front one): clamping to 0..-1 throws,
+    // as the volume keys or a pinch's last request after the switch did
+    return Math.max(0f, api.getMaxZoom());
   }
 
   @Override

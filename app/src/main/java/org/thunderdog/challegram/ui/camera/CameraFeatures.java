@@ -62,6 +62,69 @@ public class CameraFeatures {
     return maxZoom;
   }
 
+  // XGram: pinch to zoom on Camera1, whose zoom is an index (0 to maxZoom) into the camera's own ratios
+  // (Parameters.getZoomRatios(): 100 is 1×, 200 is 2×, rising, one per index). A pinch scales the ratio.
+
+  /** When a camera gives no ratios, its last index is taken as 4× (indexes spread evenly). */
+  private static final float XGRAM_ASSUMED_MAX_RATIO = 4f;
+  private int[] xgramZoomRatios;
+
+  /** The ratio of each zoom index (Parameters.getZoomRatios()); ignored unless there is one per index. */
+  public void xgramSetZoomRatios (java.util.List<Integer> ratios) {
+    xgramZoomRatios = null;
+    if (ratios == null || maxZoom <= 0 || ratios.size() != maxZoom + 1) {
+      return;
+    }
+    int[] result = new int[ratios.size()];
+    for (int i = 0; i < result.length; i++) {
+      Integer ratio = ratios.get(i);
+      if (ratio == null || ratio <= 0 || (i > 0 && ratio < result[i - 1])) {
+        return; // not a rising list of ratios: the even spread instead
+      }
+      result[i] = ratio;
+    }
+    xgramZoomRatios = result;
+  }
+
+  /** The zoom ratio (1 = none) at a zoom index; a fraction lies between two of them. */
+  public float xgramRatioAt (float index) {
+    if (maxZoom <= 0) {
+      return 1f;
+    }
+    index = Math.max(0f, Math.min(maxZoom, index));
+    final int[] ratios = xgramZoomRatios;
+    if (ratios == null) {
+      return 1f + index / maxZoom * (XGRAM_ASSUMED_MAX_RATIO - 1f);
+    }
+    int i = (int) index;
+    if (i >= ratios.length - 1) {
+      return ratios[ratios.length - 1] / 100f;
+    }
+    return (ratios[i] + (ratios[i + 1] - ratios[i]) * (index - i)) / 100f;
+  }
+
+  /** The zoom index (a fraction between two of them) closest to a zoom ratio. */
+  public float xgramIndexOf (float ratio) {
+    if (maxZoom <= 0) {
+      return 0f;
+    }
+    final int[] ratios = xgramZoomRatios;
+    if (ratios == null) {
+      return Math.max(0f, Math.min(maxZoom, (ratio - 1f) / (XGRAM_ASSUMED_MAX_RATIO - 1f) * maxZoom));
+    }
+    final float value = ratio * 100f;
+    if (value <= ratios[0]) {
+      return 0f;
+    }
+    for (int i = 0; i < ratios.length - 1; i++) {
+      // value is above ratios[i] here, so ratios[i + 1] is above ratios[i] when it is reached
+      if (value <= ratios[i + 1]) {
+        return i + (value - ratios[i]) / (ratios[i + 1] - ratios[i]);
+      }
+    }
+    return ratios.length - 1;
+  }
+
   // Specific
 
   public boolean canFocus () {

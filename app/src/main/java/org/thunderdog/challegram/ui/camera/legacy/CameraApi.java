@@ -217,14 +217,27 @@ public abstract class CameraApi {
    * */
   public final void requestZoom (float zoom) {
     if (!checkCameraThread()) {
+      cameraThread.getHandler().removeMessages(ACTION_REQUEST_ZOOM); // XGram: only the newest zoom waits (a pinch asks often)
       sendMessage(ACTION_REQUEST_ZOOM, Float.floatToIntBits(zoom), 0);
       return;
     }
-    if (isCameraActive && mFeatures.canZoom()) {
+    if (isCameraActive && mFeatures != null && mFeatures.canZoom()) { // XGram: mFeatures null before the first setup
       setZoom(zoom);
     }
   }
   protected abstract void onZoomChanged (float zoom);
+
+  /** XGram: the zoom ratio (1 = none) at a zoom index (a fraction lies between two); 0: this camera can't zoom. */
+  public final float xgramZoomRatioAt (float index) {
+    final CameraFeatures features = mFeatures;
+    return features != null && features.canZoom() ? features.xgramRatioAt(index) : 0f;
+  }
+
+  /** XGram: the zoom index (a fraction between two) for a zoom ratio; -1: this camera can't zoom. */
+  public final float xgramZoomIndexOf (float ratio) {
+    final CameraFeatures features = mFeatures;
+    return features != null && features.canZoom() ? features.xgramIndexOf(ratio) : -1f;
+  }
 
   public void resetRequestedSettings () {
     if (!checkCameraThread()) {

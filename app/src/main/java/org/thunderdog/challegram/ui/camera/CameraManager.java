@@ -226,6 +226,26 @@ public abstract class CameraManager <T extends View> {
     return false;
   }
 
+  // XGram: pinch to zoom on the preview (CameraController.xgramPinch), in zoom ratios (1 = none, 2 = twice as close):
+  // CameraX zooms by ratio, Camera1 by an index into its own list of ratios. 0: this camera can't zoom now.
+
+  /** The ratio a pinch starts from: the one asked for last (the camera's own state is a request or more late). */
+  public float xgramZoomRatio () {
+    return 0f;
+  }
+
+  public float xgramMinZoomRatio () {
+    return 0f;
+  }
+
+  public float xgramMaxZoomRatio () {
+    return 0f;
+  }
+
+  /** Zooms to {@code ratio} for a pinch: at most one request every 50 ms, always the latest ratio. */
+  @UiThread
+  public void xgramPinchZoom (float ratio) { }
+
   public final void setTakingPhoto (boolean isTakingPhoto) {
     if (this.takingPhoto != isTakingPhoto) {
       this.takingPhoto = isTakingPhoto;

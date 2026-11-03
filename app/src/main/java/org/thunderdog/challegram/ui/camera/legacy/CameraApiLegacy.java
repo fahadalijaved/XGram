@@ -286,6 +286,11 @@ public class CameraApiLegacy extends CameraApi implements Camera.PreviewCallback
     }
     if (zoomSupported) {
       features.setMaxZoom(params.getMaxZoom());
+      try {
+        features.xgramSetZoomRatios(params.getZoomRatios()); // XGram: the ratio of each zoom step, for pinch to zoom
+      } catch (Throwable t) {
+        Log.w(Log.TAG_CAMERA, "XGram: no zoom ratios", t);
+      }
     }
 
     int numFocusAreas = params.getMaxNumFocusAreas();

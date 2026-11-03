@@ -474,9 +474,65 @@ public class CameraController extends ViewController<Void> implements CameraDele
 
   /** XGram: a touch on the preview (CameraRootLayout): pinch, tap to focus, long press to lock. */
   void xgramOnPreviewTouch (android.view.MotionEvent event) {
-    if (xgramControls != null && xgramControls.getVisibility() == View.VISIBLE && isFocused()) {
-      xgramControls.onPreviewTouch(event);
+    if (xgramControls != null && xgramControls.getVisibility() == View.VISIBLE) {
+      if (isFocused()) {
+        xgramControls.onPreviewTouch(event);
+      }
+    } else {
+      xgramPinch(event);
     }
+  }
+
+  // XGram: pinch to zoom on the default camera (Camera1) and CameraX (beta), which have no XGram controls (Camera X
+  // (test) pinches in them, with its lens chips). The main camera only: a round video's camera is a circle in the chat,
+  // and the QR scanner zooms by nothing else either.
+
+  private @Nullable android.view.ScaleGestureDetector xgramPinchDetector;
+  /** The ratio the fingers ask for: a pinch follows them, not the camera's state (a request or more late). */
+  private float xgramPinchRatio;
+
+  private void xgramPinch (android.view.MotionEvent event) {
+    if (cameraMode != MODE_MAIN || manager == null || !isFocused()) {
+      return;
+    }
+    if (xgramPinchDetector == null) {
+      xgramPinchDetector = new android.view.ScaleGestureDetector(context(), new android.view.ScaleGestureDetector.SimpleOnScaleGestureListener() {
+        @Override
+        public boolean onScaleBegin (@NonNull android.view.ScaleGestureDetector detector) {
+          if (!xgramCanPinch()) {
+            return false;
+          }
+          final float ratio = manager.xgramZoomRatio();
+          if (ratio <= 0f || manager.xgramMaxZoomRatio() <= manager.xgramMinZoomRatio()) {
+            return false; // this camera (often the front one) can't zoom
+          }
+          xgramPinchRatio = ratio;
+          return true;
+        }
+
+        @Override
+        public boolean onScale (@NonNull android.view.ScaleGestureDetector detector) {
+          if (xgramCanPinch()) {
+            final float min = manager.xgramMinZoomRatio(), max = manager.xgramMaxZoomRatio();
+            if (max > min) {
+              xgramPinchRatio = MathUtils.clamp(xgramPinchRatio * detector.getScaleFactor(), min, max);
+              manager.xgramPinchZoom(xgramPinchRatio);
+            }
+          }
+          return true; // the next factor is from this span
+        }
+      });
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+        // No double-tap-and-drag zoom: a drag on the preview closes the camera
+        xgramPinchDetector.setQuickScaleEnabled(false);
+      }
+    }
+    xgramPinchDetector.onTouchEvent(event);
+  }
+
+  /** Not while the camera switches (the next one starts at 1×) or a photo is on its way. */
+  private boolean xgramCanPinch () {
+    return manager != null && manager.isCameraActive() && !isSwitchingCamera && !manager.isTakingPhoto();
   }
 
   public void takeCameraLayout (ViewGroup toGroup, int index) {
