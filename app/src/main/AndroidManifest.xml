@@ -137,6 +137,10 @@
     <intent>
       <action android:name="android.intent.action.VIEW_DOWNLOADS" />
     </intent>
+    <!-- XGram: Add to WhatsApp (sticker packs, com.fahadali.xgram.wastickers): whether WhatsApp or WhatsApp Business is
+         installed, its Add sheet and its sticker_whitelist_check provider (whether it has a pack already) -->
+    <package android:name="com.whatsapp" />
+    <package android:name="com.whatsapp.w4b" />
   </queries>
 
   <application
@@ -735,6 +739,16 @@
         android:name="android.support.FILE_PROVIDER_PATHS"
         android:resource="@xml/provider_paths" />
     </provider>
+
+    <!-- XGram: the sticker packs exported for WhatsApp (sticker pack sheet ⋮ → Add to WhatsApp), served the way WhatsApp's
+         third-party sticker API reads them. Exported for WhatsApp, readable only with its com.whatsapp.sticker.READ; read
+         only, and only the files of the listed packs (com.fahadali.xgram.wastickers.XgramWaStickerProvider) -->
+    <provider
+      android:name="com.fahadali.xgram.wastickers.XgramWaStickerProvider"
+      android:authorities="${applicationId}.wastickers"
+      android:enabled="true"
+      android:exported="true"
+      android:readPermission="com.whatsapp.sticker.READ" />
 
     <uses-library
       android:name="com.sec.android.app.multiwindow"

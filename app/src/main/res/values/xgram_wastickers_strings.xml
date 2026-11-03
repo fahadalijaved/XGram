@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: Add to WhatsApp in the sticker pack sheet's ⋮ (StickersListController, com.fahadali.xgram.wastickers):
+     still sticker packs go to WhatsApp through its third-party sticker API; animated packs come later -->
+<resources>
+  <string name="XgramWaAddToWhatsApp">Add to WhatsApp</string>
+  <!-- With WhatsApp and WhatsApp Business both installed -->
+  <string name="XgramWaChooseApp">Which WhatsApp should get this pack?</string>
+  <string name="XgramWaWhatsApp">WhatsApp</string>
+  <string name="XgramWaWhatsAppBusiness">WhatsApp Business</string>
+  <!-- Why it can't start -->
+  <string name="XgramWaNotInstalled">WhatsApp isn\'t installed on this phone.</string>
+  <string name="XgramWaBusy">Another pack is being prepared for WhatsApp</string>
+  <string name="XgramWaAnimatedSoon">This pack has only animated or video stickers. Animated packs can\'t be added to WhatsApp yet: that is coming soon.</string>
+  <string name="XgramWaTooFewStill">WhatsApp needs at least 3 stickers in a pack, and this pack has only %1$s still stickers. Animated packs can\'t be added yet: that is coming soon.</string>
+  <string name="XgramWaTooFew">WhatsApp needs at least 3 stickers in a pack, and this pack has %1$s.</string>
+  <string name="XgramWaNotStickers">Only sticker packs can be added to WhatsApp, not masks or emoji.</string>
+  <!-- The progress dialog: 2 lines in Telegram X's, 3 in the M3E one, so the second line is short -->
+  <string name="XgramWaPreparing">Preparing stickers for WhatsApp…</string>
+  <string name="XgramWaPreparingCount">Preparing for WhatsApp: %1$s of %2$s</string>
+  <string name="XgramWaPreparingParts">Split into %1$s packs of up to 30</string>
+  <string name="XgramWaPreparingAnimated">%1$s animated stickers left out</string>
+  <!-- A part's name in WhatsApp: the pack's title, then (1/3) -->
+  <string name="XgramWaPartName">%1$s (%2$s/%3$s)</string>
+  <!-- After WhatsApp's own Add sheet: a toast of two lines at most (Android 12+ toasts and the M3E snackbar) -->
+  <string name="XgramWaAdded">Added to WhatsApp</string>
+  <string name="XgramWaAddedParts">Added to WhatsApp: %1$s of %2$s packs</string>
+  <string name="XgramWaAlreadyAdded">Already in WhatsApp</string>
+  <string name="XgramWaNotAdded">Not added to WhatsApp</string>
+  <string name="XgramWaLeftOutAnimated">Left out: %1$s animated (coming soon)</string>
+  <string name="XgramWaLeftOutFailed">Left out: %1$s that couldn\'t be downloaded or converted</string>
+  <string name="XgramWaLeftOutBoth">Left out: %1$s animated, %2$s failed</string>
+  <string name="XgramWaNextPart">%1$s wasn\'t added. Add %2$s?</string>
+  <string name="XgramWaNextPartAdd">Add</string>
+  <string name="XgramWaStop">Stop</string>
+  <!-- Errors -->
+  <string name="XgramWaRejected">WhatsApp didn\'t accept %1$s:\n%2$s</string>
+  <string name="XgramWaOpenFailed">Couldn\'t open WhatsApp. Update WhatsApp and try again.</string>
+  <string name="XgramWaNotEnough">Not enough stickers could be downloaded: WhatsApp needs at least 3. Check the connection and try again.</string>
+  <string name="XgramWaFailed">Couldn\'t prepare the stickers for WhatsApp: %1$s</string>
+</resources>

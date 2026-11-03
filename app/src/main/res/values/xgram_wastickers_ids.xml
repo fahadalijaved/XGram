@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: Add to WhatsApp in the sticker pack sheet's ⋮ (StickersListController, com.fahadali.xgram.wastickers) -->
+  <item type="id" name="btn_xgramAddToWhatsApp" />
+  <!-- XGram: which WhatsApp gets the pack, when both are installed (XgramWaStickerExport.start) -->
+  <item type="id" name="btn_xgramWhatsApp" />
+  <item type="id" name="btn_xgramWhatsAppBusiness" />
+</resources>

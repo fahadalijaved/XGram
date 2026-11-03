@@ -857,6 +857,13 @@ public class StickerSetWrap extends FrameLayoutFix implements StickersListContro
 
   private PopupLayout popupLayout;
 
+  /** XGram: closes the sheet (Add to WhatsApp, so its progress dialog, which shows under popups, can be seen). */
+  public void xgramHideSheet () {
+    if (popupLayout != null) {
+      popupLayout.hideWindow(true);
+    }
+  }
+
   public void showStickerSet () {
     tdlib.listeners().subscribeToStickerUpdates(this);
     popupLayout = new PopupLayout(getContext());

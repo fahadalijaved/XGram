@@ -149,6 +149,13 @@ public class StickersListController extends ViewController<StickersListControlle
       strings.append(R.string.CopyLink);
       icons.append(R.drawable.baseline_link_24);
 
+      // XGram: Add to WhatsApp, for regular sticker sets (not masks or custom emoji); com.fahadali.xgram.wastickers
+      if (com.fahadali.xgram.wastickers.XgramWaStickerExport.canOffer(stickerSetInfoToLoad)) {
+        ids.append(R.id.btn_xgramAddToWhatsApp);
+        strings.append(R.string.XgramWaAddToWhatsApp);
+        icons.append(R.drawable.deproko_baseline_insert_sticker_24);
+      }
+
       if (stickerSetInfoToLoad != null) {
         if (getArguments().canArchiveStickerSet(stickerSetInfoToLoad != null ? stickerSetInfoToLoad.id : -1)) {
           ids.append(R.id.btn_archive);
@@ -191,7 +198,16 @@ public class StickersListController extends ViewController<StickersListControlle
 
   @Override
   public void onMoreItemPressed (int id) {
-    if (id == R.id.btn_share) {
+    if (id == R.id.btn_xgramAddToWhatsApp) {
+      // XGram: the checks first (sheet still open), then the sheet closes for the progress dialog under it
+      if (stickerSetInfoToLoad != null) {
+        com.fahadali.xgram.wastickers.XgramWaStickerExport.start(this, stickerSetInfoToLoad, xgramWaStickers, () -> {
+          if (getArguments() instanceof org.thunderdog.challegram.component.sticker.StickerSetWrap) {
+            ((org.thunderdog.challegram.component.sticker.StickerSetWrap) getArguments()).xgramHideSheet();
+          }
+        });
+      }
+    } else if (id == R.id.btn_share) {
       tdlib.ui().shareStickerSetUrl(this, stickerSetInfoToLoad);
     } else if (id == R.id.btn_copyLink) {
       if (stickerSetInfoToLoad != null) {
@@ -287,7 +303,11 @@ public class StickersListController extends ViewController<StickersListControlle
     this.stickerSetIdsToLoad = stickerSetIds;
   }
 
+  /** XGram: the single set's stickers once loaded (set on TDLib's thread), for Add to WhatsApp's checks. */
+  private volatile @Nullable TdApi.Sticker[] xgramWaStickers;
+
   public void setStickers (TdApi.Sticker[] stickers, TdApi.StickerType stickerType, TdApi.Emojis[] emojis) {
+    this.xgramWaStickers = stickers; // XGram
     boolean canViewPack = getArguments() == null || getArguments().canViewPack();
     this.stickerSections.clear();
     this.stickerSections.add(new StickerSection(tdlib, stickers, stickerType, emojis, canViewPack));
