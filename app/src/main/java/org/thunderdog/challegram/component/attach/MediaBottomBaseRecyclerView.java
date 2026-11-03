@@ -52,8 +52,21 @@ public class MediaBottomBaseRecyclerView extends RecyclerView {
         isDown = false;
         break;
       }
+      case MotionEvent.ACTION_CANCEL: {
+        if (xgramCancelListener != null) {
+          xgramCancelListener.run(); // XGram: the item touch listeners never get this cancel (see below)
+        }
+        break;
+      }
     }
     return e.getAction() != MotionEvent.ACTION_CANCEL && super.onTouchEvent(e);
+  }
+
+  private @androidx.annotation.Nullable Runnable xgramCancelListener;
+
+  /** XGram: told when this list swallows a cancel, which its item touch listeners (drag-select) then never see. */
+  public void xgramSetCancelListener (@androidx.annotation.Nullable Runnable listener) {
+    this.xgramCancelListener = listener;
   }
 
   public void processEvent (MotionEvent e) {

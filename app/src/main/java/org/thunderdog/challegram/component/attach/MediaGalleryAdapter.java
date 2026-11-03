@@ -18,6 +18,7 @@ import android.content.Context;
 import android.view.View;
 import android.view.ViewGroup;
 
+import androidx.annotation.Nullable;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -354,11 +355,25 @@ public class MediaGalleryAdapter extends RecyclerView.Adapter<MediaGalleryAdapte
   }
 
   public void setSelected (ImageFile imageFile, boolean isSelected) {
+    xgramApplySelected(imageFile, isSelected, -1, false);
+  }
+
+  /**
+   * XGram: {@link #setSelected(ImageFile, boolean)}, which can also put a selected item back at {@code insertAt} in the
+   * selection order (the numbers after it move down one) and animate its check, for drag-select.
+   */
+  private void xgramApplySelected (ImageFile imageFile, boolean isSelected, int insertAt, boolean animated) {
     int selectionIndex;
     int shiftIndex = -1;
     if (isSelected) {
-      selectionIndex = selected.size();
-      selected.add(imageFile);
+      if (insertAt >= 0 && insertAt < selected.size()) {
+        selectionIndex = insertAt;
+        selected.add(insertAt, imageFile);
+        shiftIndex = insertAt + 1;
+      } else {
+        selectionIndex = selected.size();
+        selected.add(imageFile);
+      }
     } else {
       selectionIndex = -1;
       shiftIndex = selected.indexOf(imageFile);
@@ -376,7 +391,7 @@ public class MediaGalleryAdapter extends RecyclerView.Adapter<MediaGalleryAdapte
       int adapterPosition = i + (showCamera ? 1 : 0);
       View view = manager.findViewByPosition(adapterPosition);
       if (view != null) {
-        ((MediaGalleryImageView) view).setChecked(selectionIndex, false);
+        ((MediaGalleryImageView) view).setChecked(selectionIndex, animated);
       } else {
         notifyItemChanged(adapterPosition);
       }
@@ -440,7 +455,68 @@ public class MediaGalleryAdapter extends RecyclerView.Adapter<MediaGalleryAdapte
 
     shiftCounters(shiftIndex);
 
+    if (xgramDragSelect != null) {
+      // XGram: a drag from here selects (or, from a tile this press unselected, unselects) the range, see XgramDragSelect
+      xgramDragSelect.start(parent.getChildAdapterPosition(v), selectionIndex >= 0);
+    }
+
     return true;
+  }
+
+  // XGram: long-press drag-select (com.fahadali.xgram.layout.XgramDragSelect, set up by MediaBottomGalleryController).
+  // Every change goes through xgramApplySelected, so the 1..n numbers and the counter stay right; a tile the drag
+  // unselects and then gives back returns to its old place in the order (the drag gives tiles back last out, first in)
+
+  private @Nullable com.fahadali.xgram.layout.XgramDragSelect xgramDragSelect;
+  private @Nullable java.util.HashMap<ImageFile, Integer> xgramDragRemovedAt;
+
+  public void xgramSetDragSelect (@Nullable com.fahadali.xgram.layout.XgramDragSelect dragSelect) {
+    this.xgramDragSelect = dragSelect;
+  }
+
+  /** The photo or video at an adapter position; null for the camera and counter tiles. */
+  private @Nullable ImageFile xgramImageAt (int position) {
+    if (images == null || position < 0 || position >= getItemCount() || getItemViewType(position) != MediaHolder.VIEW_TYPE_MEDIA) {
+      return null;
+    }
+    final int index = showCamera ? position - 1 : position;
+    return index >= 0 && index < images.size() ? images.get(index) : null;
+  }
+
+  public boolean xgramIsSelectable (int position) {
+    return isSelectable && !isNeverSelectable && xgramImageAt(position) != null;
+  }
+
+  public boolean xgramIsSelected (int position) {
+    final ImageFile image = xgramImageAt(position);
+    return image != null && selected.indexOf(image) >= 0;
+  }
+
+  public boolean xgramSetSelected (int position, boolean isSelected) {
+    final ImageFile image = xgramImageAt(position);
+    if (image == null || !isSelectable || isNeverSelectable) {
+      return false;
+    }
+    final int index = selected.indexOf(image);
+    if ((index >= 0) == isSelected) {
+      return true;
+    }
+    if (isSelected) {
+      final Integer insertAt = xgramDragRemovedAt != null ? xgramDragRemovedAt.remove(image) : null;
+      xgramApplySelected(image, true, insertAt != null ? insertAt : -1, true);
+    } else {
+      if (xgramDragRemovedAt == null) {
+        xgramDragRemovedAt = new java.util.HashMap<>();
+      }
+      xgramDragRemovedAt.put(image, index);
+      xgramApplySelected(image, false, -1, true);
+    }
+    return true;
+  }
+
+  /** The drag ended: tiles it unselected keep no claim on their old places. */
+  public void xgramEndDragSelect () {
+    xgramDragRemovedAt = null;
   }
 
 

@@ -255,6 +255,7 @@ public abstract class SharedBaseController <T extends MessageSourceProvider> ext
       }
     });
     onCreateView(context, recyclerView, adapter);
+    xgramSetupDragSelect(); // XGram: long press and drag to select a range (the media grid)
     buildCells();
     recyclerView.setAdapter(adapter);
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
@@ -963,7 +964,12 @@ public abstract class SharedBaseController <T extends MessageSourceProvider> ext
         if (needsCustomLongClickListener()) {
           return onLongClick(v, item);
         } else {
+          final boolean xgramWasSelected = xgramIsSelected(item); // XGram: drag-select
           toggleSelected(item);
+          if (xgramDragSelect != null) {
+            // XGram: a drag from here selects (or, from a tile this press unselected, unselects) the range
+            xgramDragSelect.start(recyclerView.getChildAdapterPosition(v), !xgramWasSelected);
+          }
           return true;
         }
       }
@@ -1047,33 +1053,52 @@ public abstract class SharedBaseController <T extends MessageSourceProvider> ext
     return inSelectMode;
   }
 
-  @SuppressWarnings("unchecked")
   protected final void toggleSelected (ListItem item) {
+    xgramSetSelected(item, null); // XGram: one path for a toggle and a drag-select's set, see xgramSetSelected
+  }
+
+  /**
+   * XGram: selects ({@code select} true), unselects (false) or toggles (null) an item; false for one that can't be
+   * selected. The message's properties come asynchronously, so until they do the state asked for last is kept per
+   * message (xgramPendingSelection) and read as its state: a drag-select (XgramDragSelect) that crosses an item and
+   * comes back before then applies the latest state, never a second toggle of a stale one.
+   */
+  @SuppressWarnings("unchecked")
+  private boolean xgramSetSelected (ListItem item, @Nullable Boolean select) {
     final long messageId = item.getLongId();
 
     final T data = (T) item.getData();
 
     if (data == null || messageId == 0 || (item.getViewType() != ListItem.TYPE_SMALL_MEDIA && item.getViewType() != ListItem.TYPE_CUSTOM_INLINE)) {
-      return;
+      return false;
     }
 
     TdApi.Message message = data.getMessage();
-    final boolean isSelected;
     final String key = message.chatId + "_" + message.id;
     if (selectedMessages == null) {
-      isSelected = false;
       selectedMessages = new HashMap<>();
-    } else {
-      isSelected = selectedMessages.containsKey(key);
     }
+    final boolean wasSelected = xgramIsSelected(key);
+    final boolean wantSelected = select != null ? select : !wasSelected;
+    if (wantSelected == wasSelected) {
+      return true;
+    }
+    xgramPendingSelection.put(key, wantSelected);
 
     tdlib.getMessageProperties(message, properties -> runOnUiThreadOptional(() -> {
+      final Boolean want = xgramPendingSelection.remove(key);
+      if (want == null || want == selectedMessages.containsKey(key)) {
+        xgramCloseIfEmpty(); // XGram: the last answer after a drag that kept select mode with nothing selected
+        return; // an earlier answer applied the latest state already, or it is the state now
+      }
+      final boolean isSelected = !want;
       if (isSelected) {
         selectedMessages.remove(key);
       } else {
         selectedMessages.put(key, new MessageWithProperties(message, properties));
       }
-      if (setInMediaSelectMode(!selectedMessages.isEmpty())) {
+      final boolean xgramKeepMode = selectedMessages.isEmpty() && inSelectMode && xgramDragSelect != null && xgramDragSelect.isActive(); // XGram: a drag that unselects everything keeps select mode until the finger lifts
+      if (!xgramKeepMode && setInMediaSelectMode(!selectedMessages.isEmpty())) {
         if (inSelectMode) {
           if (parent != null) {
             parent.updateItemsAbility(canCopyMessages(), canDeleteMessages(), canShareMessages(), canClearMessages(), selectedMessages.size() == 1);
@@ -1097,6 +1122,95 @@ public abstract class SharedBaseController <T extends MessageSourceProvider> ext
         adapter.setIsSelected(i, !isSelected, -1);
       }
     }));
+    return true;
+  }
+
+  // XGram: long-press drag-select on the pages that allow it (the media grid, SharedMediaController), see
+  // com.fahadali.xgram.layout.XgramDragSelect: a long press that selects (or unselects) a tile, then a drag over the
+  // grid gives every tile from it to the finger the same state; the date headers between are skipped. In a profile
+  // the profile list behind the pages stops taking the gesture (ProfileController#xgramOnDragSelectStarted) and the
+  // auto-scroll zone starts under the tabs.
+
+  protected @Nullable com.fahadali.xgram.layout.XgramDragSelect xgramDragSelect;
+  /** The selection state asked for last per message key ("chatId_messageId") while its properties load. */
+  private final Map<String, Boolean> xgramPendingSelection = new HashMap<>();
+
+  protected boolean xgramSupportsDragSelect () {
+    return false;
+  }
+
+  private void xgramSetupDragSelect () {
+    if (!xgramSupportsDragSelect()) {
+      return;
+    }
+    xgramDragSelect = new com.fahadali.xgram.layout.XgramDragSelect(recyclerView, new com.fahadali.xgram.layout.XgramDragSelect.Host() {
+      @Override
+      public boolean isDragSelectable (int position) {
+        return xgramIsDragSelectable(xgramItemAt(position));
+      }
+
+      @Override
+      public boolean isDragSelected (int position) {
+        final ListItem item = xgramItemAt(position);
+        return item != null && xgramIsSelected(item);
+      }
+
+      @Override
+      public boolean setDragSelected (int position, boolean isSelected) {
+        final ListItem item = xgramItemAt(position);
+        return xgramIsDragSelectable(item) && xgramSetSelected(item, isSelected);
+      }
+
+      @Override
+      public void onDragSelectStarted () {
+        if (parent != null) {
+          parent.xgramOnDragSelectStarted();
+        }
+      }
+
+      @Override
+      public void onDragSelectFinished () {
+        xgramCloseIfEmpty(); // isActive() is false by now
+      }
+
+      @Override
+      public int getDragSelectTop (@NonNull RecyclerView list) {
+        return parent != null ? parent.xgramDragSelectTop(list) : list.getPaddingTop();
+      }
+    });
+  }
+
+  /** XGram: closes select mode a drag kept open with nothing selected, once the finger lifted and every answer came. */
+  private void xgramCloseIfEmpty () {
+    if (inSelectMode && (selectedMessages == null || selectedMessages.isEmpty()) && xgramPendingSelection.isEmpty() && (xgramDragSelect == null || !xgramDragSelect.isActive())) {
+      setInMediaSelectMode(false);
+    }
+  }
+
+  private @Nullable ListItem xgramItemAt (int position) {
+    final List<ListItem> items = adapter.getItems();
+    return position >= 0 && position < items.size() ? items.get(position) : null;
+  }
+
+  @SuppressWarnings("unchecked")
+  private boolean xgramIsDragSelectable (@Nullable ListItem item) {
+    if (item == null || item.getViewType() != ListItem.TYPE_SMALL_MEDIA || item.getLongId() == 0) {
+      return false; // the date headers, their shadows and the footer
+    }
+    final T data = (T) item.getData();
+    return data != null && data.getMessage() != null;
+  }
+
+  @SuppressWarnings("unchecked")
+  private boolean xgramIsSelected (ListItem item) {
+    final T data = (T) item.getData();
+    final TdApi.Message message = data != null ? data.getMessage() : null;
+    return message != null && xgramIsSelected(message.chatId + "_" + message.id);
+  }
+
+  private boolean xgramIsSelected (String key) {
+    final Boolean pending = xgramPendingSelection.get(key);
+    return pending != null ? pending : selectedMessages != null && selectedMessages.containsKey(key);
   }
 
   protected boolean supportsMessageClearing (MessageWithProperties message) {

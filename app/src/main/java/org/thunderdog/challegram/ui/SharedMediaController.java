@@ -548,8 +548,17 @@ public class SharedMediaController extends SharedBaseController<MediaItem> imple
 
   @Override
   public void onLongPressFinish (View view, float x, float y) {
-    getRecyclerView().requestDisallowInterceptTouchEvent(false);
+    if (xgramDragSelect == null || !xgramDragSelect.isActive()) {
+      // XGram: not when a drag-select took over the gesture (its cancel ends this long press): the release would let
+      // the pager and the profile take the drag back
+      getRecyclerView().requestDisallowInterceptTouchEvent(false);
+    }
     context().closeForceTouch();
+  }
+
+  @Override
+  protected boolean xgramSupportsDragSelect () {
+    return true; // XGram: long press a tile (in select mode, or a round video) and drag to select a range
   }
 
   @Override

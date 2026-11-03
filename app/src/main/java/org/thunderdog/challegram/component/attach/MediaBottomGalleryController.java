@@ -222,6 +222,7 @@ public class MediaBottomGalleryController extends MediaBottomBaseController<Medi
     setLayoutManager(manager);
     setAdapter(adapter);
     addItemDecoration(decoration);
+    xgramSetupDragSelect(); // XGram: long press and drag to select a range
 
     if (galleryLoaded) {
       if (gallery == null/* && !U.deviceHasAnyCamera(context)*/) {
@@ -646,6 +647,73 @@ public class MediaBottomGalleryController extends MediaBottomBaseController<Medi
 
   private boolean inSingleMediaMode () {
     return mediaLayout.inSingleMediaMode();
+  }
+
+  // XGram: long-press drag-select over the grid, as in Google Photos (com.fahadali.xgram.layout.XgramDragSelect). The
+  // long press selects (or unselects) its tile as before, then the drag gives the range from it to the finger the same
+  // state through the adapter (numbers and counter). The sheet keeps its height while the finger stays in sight; when
+  // the finger reaches the bottom edge of the visible grid (above the bar and the caption field) the sheet first grows
+  // to full height, the tiles moving up under the finger, and then the list scrolls. Not in single media mode (the
+  // avatar picker and the like), whose tiles have no long press.
+
+  private boolean xgramDragExpanding;
+
+  private void xgramSetupDragSelect () {
+    if (inSingleMediaMode()) {
+      return;
+    }
+    final com.fahadali.xgram.layout.XgramDragSelect dragSelect = new com.fahadali.xgram.layout.XgramDragSelect(recyclerView, new com.fahadali.xgram.layout.XgramDragSelect.Host() {
+      @Override
+      public boolean isDragSelectable (int position) {
+        return adapter.xgramIsSelectable(position);
+      }
+
+      @Override
+      public boolean isDragSelected (int position) {
+        return adapter.xgramIsSelected(position);
+      }
+
+      @Override
+      public boolean setDragSelected (int position, boolean isSelected) {
+        return adapter.xgramSetSelected(position, isSelected);
+      }
+
+      @Override
+      public void onDragSelectStarted () {
+        xgramDragExpanding = false;
+      }
+
+      @Override
+      public void onDragSelectFinished () {
+        xgramDragExpanding = false;
+        adapter.xgramEndDragSelect();
+      }
+
+      @Override
+      public int getDragSelectBottom (@NonNull RecyclerView list) {
+        // the bar (the selection bar once a tile is selected) and the caption field above it cover the sheet's bottom
+        final int[] location = new int[2];
+        mediaLayout.getLocationOnScreen(location);
+        final int visibleBottom = location[1] + mediaLayout.getHeight() - mediaLayout.getCurrentBottomBarHeight() - mediaLayout.xgramCaptionPillHeight();
+        list.getLocationOnScreen(location);
+        return Math.min(list.getHeight() - list.getPaddingBottom(), visibleBottom - location[1]);
+      }
+
+      @Override
+      public boolean onDragSelectEdge (int direction) {
+        if (direction > 0 && !isExpanded() && canExpandHeight()) {
+          if (!xgramDragExpanding) {
+            xgramDragExpanding = true;
+            expandFully();
+            return true;
+          }
+          return xgramIsSettling() || isAnimating(); // growing; once it settled short of full height, the list scrolls
+        }
+        return false;
+      }
+    });
+    adapter.xgramSetDragSelect(dragSelect);
+    recyclerView.xgramSetCancelListener(dragSelect::cancel);
   }
 
   @Override

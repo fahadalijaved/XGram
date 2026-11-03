@@ -2420,6 +2420,37 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     }
   }
 
+  /**
+   * XGram: a long-press drag-select started on the current shared media page (com.fahadali.xgram.layout.XgramDragSelect,
+   * SharedBaseController). While the profile list behind the pages still scrolls (the header not collapsed) every
+   * event goes to both lists, so that list would scroll the header with the selecting finger: it gets a cancel and the
+   * rest of the gesture goes to the page alone, which keeps the header in step as it auto-scrolls (eventsBelongToPager).
+   * The pager can't turn pages meanwhile: the page keeps its parents' intercepts off, and select mode stops paging.
+   */
+  public void xgramOnDragSelectStarted () {
+    if (touchingMode == TOUCH_MODE_BASE_RECYCLER && baseRecyclerView != null) {
+      final long now = android.os.SystemClock.uptimeMillis();
+      final MotionEvent cancel = MotionEvent.obtain(now, now, MotionEvent.ACTION_CANCEL, 0f, 0f, 0);
+      baseRecyclerView.dispatchTouchEvent(cancel);
+      cancel.recycle();
+      baseRecyclerView.stopScroll();
+      touchingMode = TOUCH_MODE_CONTENT_RECYCLER;
+      setEventsBelongToPager(true);
+    }
+  }
+
+  /** XGram: where a shared media page shows below the tabs (and the collapsed header), in {@code list}'s coordinates. */
+  public int xgramDragSelectTop (View list) {
+    if (topWrap == null || topWrap.getParent() == null || topWrap.getVisibility() != View.VISIBLE) {
+      return list.getPaddingTop();
+    }
+    final int[] location = new int[2];
+    topWrap.getLocationOnScreen(location);
+    final int tabsBottom = location[1] + topWrap.getHeight();
+    list.getLocationOnScreen(location);
+    return Math.max(list.getPaddingTop(), tabsBottom - location[1]);
+  }
+
   private boolean inSelectMode;
   private FrameLayoutFix pseudoHeaderWrap;
   private CounterHeaderView counterView;
