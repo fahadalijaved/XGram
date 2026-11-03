@@ -73,14 +73,19 @@ public class EmojiHeaderViewNonPremium extends FrameLayoutFix {
   }
 
   public void setSelectedIndex (int index, boolean animated) {
+    // XGram: past the categories (custom emoji packs below Flags, which this row has no icon for; the Stickers switch is
+    // not one) nothing is lit, and that is remembered: the old index stayed, so back on Flags the early return left it unlit
+    if (index < 0 || index >= emojiSections.size() || emojiSections.get(index).index < 0) {
+      index = -1;
+    }
     if (index == currentSelectedIndex) {
       return;
     }
     if (currentSelectedIndex != -1) {
       emojiSections.get(currentSelectedIndex).setFactor(0f, animated);
     }
-    if (index >= 0 && index < emojiSections.size()) {
-      this.currentSelectedIndex = index;
+    this.currentSelectedIndex = index; // XGram: -1 too
+    if (index != -1) {
       emojiSections.get(currentSelectedIndex).setFactor(1f, animated);
     }
   }

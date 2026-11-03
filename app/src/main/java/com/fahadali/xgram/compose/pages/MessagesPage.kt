@@ -86,6 +86,10 @@ fun MessagesPage() {
       switch(R.id.btn_xgramDoubleTapReact, s(R.string.XgramDoubleTapReact), s(R.string.XgramDoubleTapReactSub), checked = settings.doubleTapReact()) {
         settings.setDoubleTapReact(it)
       }
+      // Swipe between emoji categories: a sideways swipe on the emoji panel's grid jumps a category (XgramEmojiCategorySwipe)
+      switch(R.id.btn_xgramEmojiCategorySwipe, s(R.string.XgramEmojiCategorySwipe), s(R.string.XgramEmojiCategorySwipeSub), checked = settings.emojiCategorySwipe()) {
+        settings.setEmojiCategorySwipe(it)
+      }
       switch(R.id.btn_xgramPullToNext, s(R.string.XgramPullToNext), s(R.string.XgramPullToNextSub), checked = settings.pullToNext()) {
         settings.setPullToNext(it)
       }

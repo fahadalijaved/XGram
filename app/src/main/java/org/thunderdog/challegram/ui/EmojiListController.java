@@ -298,6 +298,16 @@ public class EmojiListController extends ViewController<EmojiLayout> implements 
     emojiController.checkSpanCount();
   }
 
+  /** XGram: Swipe between emoji categories can act: the grid of installed emoji shows (not Trending, no slide to it). */
+  public boolean xgramCanSwipeCategories () {
+    return contentView != null && contentView.getCurrentSection() == SECTION_STICKERS && contentView.canChangeSection();
+  }
+
+  /** XGram: a category swipe {@code step} (+1 the next, -1 the previous) has somewhere to go. */
+  public boolean xgramHasEmojiCategory (int step) {
+    return emojiController.xgramHasCategory(step);
+  }
+
   public void showEmojiSection (int section) {
     if (contentView.canChangeSection()) {
       TGStickerSetInfo info = emojiController.getStickerSetBySectionIndex(section);

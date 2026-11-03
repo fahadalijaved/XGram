@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: Swipe between emoji categories (Messages > Gestures, XgramSettings.emojiCategorySwipe; com.fahadali.xgram.chats.XgramEmojiCategorySwipe) -->
+<resources>
+  <string name="XgramEmojiCategorySwipe">Swipe between emoji categories</string>
+  <string name="XgramEmojiCategorySwipeSub">Swipe left or right on the emoji panel for the next or previous category</string>
+  <string name="XgramSearchKwEmojiSwipe">emoji|emoji category|emoji categories|emoji panel|emoji keyboard|swipe|smileys|flags</string>
+</resources>

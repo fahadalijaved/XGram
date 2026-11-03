@@ -52,6 +52,8 @@ public final class XgramSettings {
   public static final String KEY_TEXT_SELECT_DRAG = "xgram_text_select_drag";
   /** Double tap to react (Messages > Gestures), off by default: see {@link #doubleTapReact}. */
   public static final String KEY_DOUBLE_TAP_REACT = "xgram_double_tap_react";
+  /** Swipe between emoji categories (Messages > Gestures), on by default: see {@link #emojiCategorySwipe}. */
+  public static final String KEY_EMOJI_CATEGORY_SWIPE = "xgram_emoji_category_swipe";
   public static final String KEY_CLEAN_LINKS = "xgram_clean_links";
   public static final String KEY_FIX_LINK_PREVIEWS = "xgram_fix_link_previews";
   public static final String KEY_ALLOW_SCREENSHOTS = "xgram_allow_screenshots";
@@ -127,6 +129,7 @@ public final class XgramSettings {
   private volatile boolean tapTimeForDetails;
   private volatile boolean textSelectDrag;
   private volatile boolean doubleTapReact;
+  private volatile boolean emojiCategorySwipe;
   private volatile boolean tapToRecord;
   private volatile boolean systemEmoji;
   private volatile boolean downloadBoost;
@@ -154,6 +157,7 @@ public final class XgramSettings {
     tapTimeForDetails = pmc.getBoolean(KEY_TAP_TIME_DETAILS, false); // off by default (as NagramX): the time pill sits over media corners
     textSelectDrag = pmc.getBoolean(KEY_TEXT_SELECT_DRAG, false); // off by default: a long press keeps what it does
     doubleTapReact = pmc.getBoolean(KEY_DOUBLE_TAP_REACT, false); // off by default: a tap opens the menu at once
+    emojiCategorySwipe = pmc.getBoolean(KEY_EMOJI_CATEGORY_SWIPE, true); // on by default (the owner's request)
     videoAutoHide = pmc.getBoolean(KEY_VIDEO_AUTO_HIDE, true);
     cleanLinks = pmc.getBoolean(KEY_CLEAN_LINKS, true);
     fixLinkPreviews = pmc.getBoolean(KEY_FIX_LINK_PREVIEWS, true);
@@ -361,6 +365,20 @@ public final class XgramSettings {
   public void setDoubleTapReact (boolean value) {
     doubleTapReact = value;
     put(KEY_DOUBLE_TAP_REACT, value);
+  }
+
+  /**
+   * Swipe between emoji categories: a sideways swipe on the emoji grid jumps to the next or previous category
+   * (com.fahadali.xgram.chats.XgramEmojiCategorySwipe); past the last one it still opens Stickers. Off, a sideways
+   * swipe there only switches to Stickers, as in Telegram X. Read at every touch.
+   */
+  public boolean emojiCategorySwipe () {
+    return emojiCategorySwipe;
+  }
+
+  public void setEmojiCategorySwipe (boolean value) {
+    emojiCategorySwipe = value;
+    put(KEY_EMOJI_CATEGORY_SWIPE, value);
   }
 
   /** Remove tracking parameters (utm_*, fbclid, si…) from links before opening them. */

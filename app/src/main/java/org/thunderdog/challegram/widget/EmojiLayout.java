@@ -722,6 +722,75 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
     return getHeaderSize() / 2 + xgramVisibleClearance();
   }
 
+  // XGram: Swipe between emoji categories (Messages > Gestures, com.fahadali.xgram.chats.XgramEmojiCategorySwipe on the
+  // emoji page's grid). It acts only with the emoji page at rest on screen and its grid showing (not Trending).
+
+  /** XGram: the category tabs have icons for the custom emoji packs (Premium's row), so a swipe steps into them. */
+  public boolean xgramPackTabsShown () {
+    return emojiHeaderView != null && emojiHeaderView.xgramIsPremium();
+  }
+
+  public boolean xgramCanSwipeEmojiCategories () {
+    if (animatedEmojiOnly || pager == null || adapter == null || !com.fahadali.xgram.XgramSettings.instance().emojiCategorySwipe()) {
+      return false;
+    }
+    if (pager.getCurrentItem() != 0 || scrollState != ViewPager.SCROLL_STATE_IDLE || currentPageFactor != 0f) {
+      return false;
+    }
+    final ViewController<?> c = adapter.getCachedItem(0);
+    return c instanceof EmojiListController && ((EmojiListController) c).xgramCanSwipeCategories();
+  }
+
+  /**
+   * XGram: a swipe toward the previous emoji category starting at ({@code x}, {@code y}), in this layout, is the grid's
+   * and not the back swipe's: there is such a category, and it starts on the grid (below the tabs and the switch),
+   * away from the screen's left edge, where the back swipe still starts. The chat asks before it lets a back swipe
+   * start on the emoji panel.
+   */
+  public boolean xgramCategorySwipeTakesBackSwipe (float x, float y) {
+    if (x <= Screen.dp(com.fahadali.xgram.chats.XgramEmojiCategorySwipe.BACK_EDGE_DP) || y < getHeaderBottom() - Screen.dp(12f) || !xgramCanSwipeEmojiCategories()) {
+      return false;
+    }
+    final ViewController<?> c = adapter.getCachedItem(0);
+    return c instanceof EmojiListController && ((EmojiListController) c).xgramHasEmojiCategory(-1);
+  }
+
+  /** XGram: a category swipe jumps: as a tap on the category's icon (the switch's row comes back, the chat's action). */
+  public void xgramOnEmojiCategorySwiped () {
+    final int prevSection = getCurrentEmojiSection();
+    if (xgramTypeGroup != null) {
+      xgramClearPending("category swipe");
+      xgramShowTypeGroup();
+    }
+    if (headerHideFactor != 0f) {
+      // XGram: the tabs come back with the jump (it ignores the grid's movement), so the lit category shows and the
+      // title lands under them, not under a gap where the hidden tabs were
+      moveHeaderImpl(0f, true);
+    }
+    if (listener != null) {
+      listener.onSectionSwitched(this, EmojiMediaType.EMOJI, prevSection);
+    }
+  }
+
+  /**
+   * XGram: a swipe past the last emoji category that the pager sat out (XgramEmojiCategorySwipe): Stickers or GIFs,
+   * as the row's switch opens them. False where there is no such page.
+   */
+  public boolean xgramSwipeToMediaPage () {
+    if (!allowMedia || animatedEmojiOnly || pager == null || adapter == null || adapter.getCount() < 2 || pager.getCurrentItem() != 0 || scrollState != ViewPager.SCROLL_STATE_IDLE) {
+      return false;
+    }
+    final int prevSection = getCurrentEmojiSection();
+    if (xgramTypeGroup != null) {
+      xgramClearPending("category swipe");
+    }
+    pager.setCurrentItem(1, true);
+    if (listener != null) {
+      listener.onSectionSwitched(this, getCurrentMediaEmojiSection(), prevSection);
+    }
+    return true;
+  }
+
   private void xgramOnTypeSelected (int type) {
     if (xgramTypeGroup == null || pager == null || adapter == null || !allowMedia) {
       return;

@@ -69,8 +69,9 @@ public final class XgramBackup {
     XgramSettings.KEY_HEADER_BUTTON_HIDDEN,
     // Forwarding (Messages): the last choice, for Remember my last choice (messages, and selected text)
     XgramSettings.KEY_FORWARD_LAST_HIDDEN, XgramSettings.KEY_FORWARD_LAST_TEXT_ONLY,
-    // Long press on text selects it, Double tap to react (Messages > Gestures)
-    XgramSettings.KEY_TEXT_SELECT_DRAG, XgramSettings.KEY_DOUBLE_TAP_REACT,
+    // Long press on text selects it, Double tap to react, Swipe between emoji categories (on by default, so turning it
+    // off is kept too) (Messages > Gestures)
+    XgramSettings.KEY_TEXT_SELECT_DRAG, XgramSettings.KEY_DOUBLE_TAP_REACT, XgramSettings.KEY_EMOJI_CATEGORY_SWIPE,
     // Add to group or channel (a bot's profile): as an admin, with every right
     XgramSettings.KEY_ADD_BOT_ADMIN, XgramSettings.KEY_ADD_BOT_ALL_RIGHTS,
     // Expressive design and New look for Telegram X pages (Appearance): on by default, so turning one off is kept too

@@ -4014,6 +4014,15 @@ public class MessagesController extends ViewController<MessagesController.Argume
     int bound = (getSlideBackBound());
 
     if (emojiLayout != null && emojiLayout.getVisibility() == View.VISIBLE && y >= Views.getLocationInWindow(emojiLayout)[1] - baseY) {
+      // XGram: with Swipe between emoji categories a swipe right on the emoji grid goes to the previous category while
+      // there is one (left with RTL, the back swipe's way there too): the back swipe starts there only from the
+      // screen's edge then, as on the topic tabs (XgramEmojiCategorySwipe)
+      final int[] xgramAt = Views.getLocationInWindow(emojiLayout); // a shared array: read before the next call
+      final int xgramEmojiX = xgramAt[0], xgramEmojiY = xgramAt[1];
+      final int xgramBaseX = Views.getLocationInWindow(navigationController.getValue())[0];
+      if (emojiLayout.xgramCategorySwipeTakesBackSwipe(x - (xgramEmojiX - xgramBaseX), y - (xgramEmojiY - baseY))) {
+        return false;
+      }
       return emojiLayout.canSlideBack() && x <= bound;
     }
 

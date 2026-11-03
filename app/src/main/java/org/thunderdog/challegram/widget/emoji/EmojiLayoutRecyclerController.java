@@ -16,10 +16,12 @@ package org.thunderdog.challegram.widget.emoji;
 
 import android.content.Context;
 import android.os.Build;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 
 import androidx.annotation.IdRes;
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -77,6 +79,14 @@ public class EmojiLayoutRecyclerController extends ViewController<EmojiLayoutRec
   private ArrayList<TGStickerSetInfo> classicEmojiSets;
   public ArrayList<TGStickerSetInfo> stickerSets;
 
+  /** XGram: Swipe between emoji categories, on the emoji page's grid (EmojiLayout.EMOJI_INSTALLED_CONTROLLER_ID) only. */
+  private @Nullable com.fahadali.xgram.chats.XgramEmojiCategorySwipe xgramCategorySwipe;
+  /**
+   * XGram: the section the last jump went to (scrollToStickerSet), until the user scrolls the grid: the tabs light it
+   * (also when the grid's end keeps it from the top) and a category swipe steps from it, so quick swipes keep going.
+   */
+  private @Nullable TGStickerSetInfo xgramJumpTarget;
+
   public EmojiLayoutRecyclerController (Context context, Tdlib tdlib, @IdRes int controllerId) {
     super(context, tdlib);
     this.controllerId = controllerId;
@@ -122,7 +132,78 @@ public class EmojiLayoutRecyclerController extends ViewController<EmojiLayoutRec
         super.onMeasure(widthSpec, heightSpec);
         checkWidth(getMeasuredWidth());
       }
+
+      // XGram: Swipe between emoji categories (the emoji page's grid only, see xgramCategorySwipe): it sees every
+      // touch first; with it off (or on other grids) everything below is Telegram X's
+
+      /** The swipe kept a down the grid dropped (a jump was running): the grid sits that gesture out. */
+      private boolean xgramDownWithoutGrid;
+
+      @Override
+      public boolean onInterceptTouchEvent (MotionEvent e) {
+        if (xgramCategorySwipe != null && xgramCategorySwipe.onInterceptTouchEvent(e)) {
+          xgramLetGo(e);
+          return true;
+        }
+        return super.onInterceptTouchEvent(e);
+      }
+
+      @Override
+      public boolean onTouchEvent (MotionEvent e) {
+        if (xgramCategorySwipe == null) {
+          return super.onTouchEvent(e);
+        }
+        final boolean swipe = xgramCategorySwipe.onTouchEvent(e);
+        final int action = e.getActionMasked();
+        if (action == MotionEvent.ACTION_DOWN) {
+          final boolean grid = super.onTouchEvent(e);
+          xgramDownWithoutGrid = swipe && !grid;
+          return grid || swipe;
+        }
+        if (xgramDownWithoutGrid) {
+          // Its scroll never saw the down: nothing of it may run until the next one
+          xgramCategorySwipe.takeClaimed();
+          if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            xgramDownWithoutGrid = false;
+          }
+          return true;
+        }
+        if (swipe) {
+          xgramLetGo(e);
+          return true;
+        }
+        return super.onTouchEvent(e);
+      }
+
+      @Override
+      public boolean canScrollHorizontally (int direction) {
+        // A category that way: the pager leaves the swipe to the grid
+        return super.canScrollHorizontally(direction) || (xgramCategorySwipe != null && xgramCategorySwipe.canScrollHorizontally(direction));
+      }
+
+      /** The swipe just became the grid's: the grid's own touch handling lets go (no scroll, no fling from it). */
+      private void xgramLetGo (MotionEvent e) {
+        if (xgramCategorySwipe != null && xgramCategorySwipe.takeClaimed()) {
+          final MotionEvent cancel = MotionEvent.obtain(e);
+          cancel.setAction(MotionEvent.ACTION_CANCEL);
+          super.onTouchEvent(cancel);
+          cancel.recycle();
+        }
+      }
     };
+    if (controllerId == EmojiLayout.EMOJI_INSTALLED_CONTROLLER_ID) {
+      // XGram: Swipe between emoji categories. Any other scroll (a drag, a fling, a mouse wheel) ends "where the last
+      // jump went": an animated jump's own steps come while it runs, a jump without one scrolls by 0
+      xgramCategorySwipe = new com.fahadali.xgram.chats.XgramEmojiCategorySwipe(recyclerView, xgramCategorySwipeDelegate());
+      recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
+        @Override
+        public void onScrolled (@NonNull RecyclerView recyclerView, int dx, int dy) {
+          if (dy != 0 && !scrollAnimationIsActive()) {
+            xgramJumpTarget = null;
+          }
+        }
+      });
+    }
     Views.applyBottomInset(recyclerView, extraBottomInset);
     recyclerView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     recyclerView.setOverScrollMode(Config.HAS_NICE_OVER_SCROLL_EFFECT ? View.OVER_SCROLL_IF_CONTENT_SCROLLS :View.OVER_SCROLL_NEVER);
@@ -556,6 +637,9 @@ public class EmojiLayoutRecyclerController extends ViewController<EmojiLayoutRec
     if (futureSection == -1) {
       return;
     }
+    if (xgramCategorySwipe != null && stickerSets != null && futureSection < stickerSets.size()) {
+      xgramJumpTarget = stickerSets.get(futureSection); // XGram: where a category swipe steps from (the emoji grid only)
+    }
 
     recyclerView.stopScroll();
 
@@ -597,6 +681,81 @@ public class EmojiLayoutRecyclerController extends ViewController<EmojiLayoutRec
       }
     }
     return null;
+  }
+
+  // XGram: Swipe between emoji categories (com.fahadali.xgram.chats.XgramEmojiCategorySwipe). The categories are this
+  // grid's sections in order (Recent, the six emoji categories, the custom emoji packs); a swipe steps from the one the
+  // section tabs light: where the last jump went until the grid is scrolled, else the section under the same probe. It
+  // jumps as a tap on its icon does.
+
+  private com.fahadali.xgram.chats.XgramEmojiCategorySwipe.Delegate xgramCategorySwipeDelegate () {
+    return new com.fahadali.xgram.chats.XgramEmojiCategorySwipe.Delegate() {
+      @Override
+      public boolean canSwipeCategories () {
+        return callbacks instanceof EmojiLayout && ((EmojiLayout) callbacks).xgramCanSwipeEmojiCategories();
+      }
+
+      @Override
+      public boolean hasCategory (int step) {
+        return xgramHasCategory(step);
+      }
+
+      @Override
+      public void showCategory (int step) {
+        xgramShowCategory(step);
+      }
+
+      @Override
+      public boolean showNextPage () {
+        return callbacks instanceof EmojiLayout && ((EmojiLayout) callbacks).xgramSwipeToMediaPage();
+      }
+    };
+  }
+
+  /** The section a category swipe steps from, or -1. */
+  private int xgramCurrentCategory () {
+    if (stickerSets == null || stickerSets.isEmpty() || manager == null || recyclerView == null) {
+      return -1;
+    }
+    if (xgramJumpTarget != null) {
+      final int jumped = stickerSets.indexOf(xgramJumpTarget);
+      if (jumped != -1) {
+        return jumped;
+      }
+      xgramJumpTarget = null; // its pack is gone, or the list was built again
+    }
+    final int section = getStickerSetSection(callbacks instanceof EmojiLayout ? ((EmojiLayout) callbacks).xgramSectionProbe() : 0);
+    return section >= 0 && section < stickerSets.size() ? section : -1;
+  }
+
+  /** XGram: there is a category {@code step} (+1 the next, -1 the previous) from the current one, and a jump gets there. */
+  public boolean xgramHasCategory (int step) {
+    final int current = xgramCurrentCategory();
+    if (current == -1) {
+      return false;
+    }
+    if (step > 0 && classicEmojiSets != null && current == classicEmojiSets.size() - 1 && callbacks instanceof EmojiLayout && !((EmojiLayout) callbacks).xgramPackTabsShown()) {
+      // The non-Premium row ends at Flags (no icons for the packs below it): past it the pager's swipe goes to
+      // Stickers, as the row's switch does. The packs are still there to scroll to, and swipes step inside them.
+      return false;
+    }
+    // Near the grid's end a jump may not move it (short last packs never reach the top): it still lights the next
+    // pack and steps from there, so each swipe is one category until the last one
+    final int target = current + step;
+    return target >= 0 && target < stickerSets.size();
+  }
+
+  private void xgramShowCategory (int step) {
+    final int current = xgramCurrentCategory();
+    final int target = current != -1 ? current + step : -1;
+    if (target < 0 || target >= stickerSets.size()) {
+      return;
+    }
+    if (callbacks instanceof EmojiLayout) {
+      ((EmojiLayout) callbacks).xgramOnEmojiCategorySwiped();
+    }
+    // As EmojiListController.showEmojiSection / showStickerSet: the first section is the grid's top (the search field)
+    scrollToStickerSet(target == 0 ? 0 : stickerSets.get(target).getStartIndex(), false, true);
   }
 
   /* * */

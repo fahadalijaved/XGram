@@ -390,6 +390,11 @@ public class EmojiHeaderView extends FrameLayout implements FactorAnimator.Targe
     checkStickerSections(animated);
   }
 
+  /** XGram: the row shows the custom emoji packs' icons (else the non-Premium row: Recent to Flags, then the switch). */
+  public boolean xgramIsPremium () {
+    return isPremium;
+  }
+
   private int shadowColor;
 
   private void updatePaints (int color) {
