@@ -896,12 +896,21 @@ public class TGCallService extends Service implements
 
   // XGram M3E: on Android 12 and newer the call notifications use Notification.CallStyle (a person with the
   // circular avatar, the system's decline / answer and hang up buttons, a chronometer from the moment the call
-  // connects). Telegram X's builder stays below Android 12 and with Expressive design off.
+  // connects). Telegram X's builder stays below Android 12 and, for the incoming call, with Expressive design off.
 
   private boolean xgramOngoingConnected;
 
   private static boolean xgramCallStyle () {
     return Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  }
+
+  /**
+   * XGram: the ongoing call is a CallStyle notification on Android 12 and newer with Expressive design on or off, as in
+   * Telegram: the status bar's ongoing call chip (the green pill with the call's timer, SystemUI's OngoingCallController)
+   * only shows for a notification of CallStyle.forOngoingCall.
+   */
+  private static boolean xgramOngoingCallStyle () {
+    return Build.VERSION.SDK_INT >= Build.VERSION_CODES.S;
   }
 
   @androidx.annotation.RequiresApi(Build.VERSION_CODES.S)
@@ -920,7 +929,7 @@ public class TGCallService extends Service implements
   private void showNotification () {
     boolean needNotification = call != null && (call.isOutgoing || call.state.getConstructor() == TdApi.CallStateExchangingKeys.CONSTRUCTOR || call.state.getConstructor() == TdApi.CallStateReady.CONSTRUCTOR) && !TD.isFinished(call);
     // XGram: the CallStyle notification is built again once the call connects, to start its chronometer
-    final boolean xgramConnected = needNotification && xgramCallStyle() && call.state.getConstructor() == TdApi.CallStateReady.CONSTRUCTOR && getCallDuration() >= 0;
+    final boolean xgramConnected = needNotification && xgramOngoingCallStyle() && call.state.getConstructor() == TdApi.CallStateReady.CONSTRUCTOR && getCallDuration() >= 0;
 
     if (needNotification == (ongoingCallNotification != null) && (!needNotification || xgramConnected == xgramOngoingConnected)) {
       return;
@@ -942,7 +951,12 @@ public class TGCallService extends Service implements
       NotificationManager m = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
       cleanupChannels(m);
       // final String channelId = "call_" + call.id + "_" + System.currentTimeMillis();
-      android.app.NotificationChannel channel = new android.app.NotificationChannel(callChannelId, Lang.getString(R.string.NotificationChannelOutgoingCall), NotificationManager.IMPORTANCE_LOW);
+      // XGram: IMPORTANCE_DEFAULT (no sound, vibration or lights, as Telegram's call channel), not Telegram X's LOW: a
+      // LOW notification is silent, and a silent notification's icon is kept out of the status bar (NotificationManager
+      // .shouldHideSilentStatusBarIcons; One UI does it), so a voice or video call left only Samsung's "•" there.
+      // For an answered call this is the ringing channel (IMPORTANCE_HIGH, same id): lowered to DEFAULT here, so the
+      // ongoing notification posts without a heads-up.
+      android.app.NotificationChannel channel = new android.app.NotificationChannel(callChannelId, Lang.getString(R.string.NotificationChannelOutgoingCall), NotificationManager.IMPORTANCE_DEFAULT);
       channel.enableVibration(false);
       channel.enableLights(false);
       channel.setSound(null, null);
@@ -959,7 +973,9 @@ public class TGCallService extends Service implements
     builder
       .setContentTitle(Lang.getString(R.string.OutgoingCall))
       .setContentText(TD.getUserName(user))
-      .setSmallIcon(CALL_ICON_RES)
+      // XGram: a camera in the status bar for a video call (an alpha mask from Android 5, so the black vector works there)
+      .setSmallIcon(xgramIsVideoCall() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP ? R.drawable.baseline_videocam_24 : CALL_ICON_RES)
+      .setOnlyAlertOnce(true) // XGram: rebuilt on connect and on video (same id): no alert again on the DEFAULT channel
       .setContentIntent(PendingIntent.getActivity(UI.getContext(), 0, Intents.valueOfCall(), PendingIntent.FLAG_ONE_SHOT | Intents.mutabilityFlags(false)));
     if (tdlib.context().isMultiUser()) {
       String shortName = tdlib.accountShortName();
@@ -967,7 +983,7 @@ public class TGCallService extends Service implements
         builder.setSubText(shortName);
       }
     }
-    final boolean xgramStyle = xgramCallStyle();
+    final boolean xgramStyle = xgramOngoingCallStyle();
     PendingIntent xgramHangUp = null;
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
       Intent endIntent = new Intent();
