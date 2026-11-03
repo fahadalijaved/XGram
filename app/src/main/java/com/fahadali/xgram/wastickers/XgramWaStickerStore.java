@@ -42,7 +42,9 @@ import java.util.Set;
  * {@code filesDir/wastickers/packs.json} lists the packs; {@link XgramWaStickerProvider} serves exactly that list to
  * WhatsApp. The files dir, not the cache, so clearing the cache can't break packs WhatsApp already has.
  * <p>
- * Identifiers are {@code tg_<setId>_<part>}: a set over 30 stickers is split into parts "Title (1/N)". Re-exporting a
+ * Identifiers are {@code tg_<setId>_<part>} for still packs and {@code tg_<setId>_a<part>} for animated ones (WhatsApp
+ * wants a pack all still or all animated, so a set with both kinds can become both); a set over 30 stickers is split
+ * into parts "Title (1/N)". Re-exporting a
  * set replaces its parts and gives them a new {@code image_data_version} (one serial for all packs, so a version is
  * never reused, even for a pack removed and exported again). At most {@link #MAX_PACKS} packs stay: the oldest
  * exported go first.
@@ -86,8 +88,10 @@ public final class XgramWaStickerStore {
     public final long version;
     public final long exportedAt;
     public final Sticker[] stickers;
+    /** Animated WebP stickers (WhatsApp's animated_sticker_pack); else still ones. */
+    public final boolean animated;
 
-    public Pack (String identifier, long setId, int part, int parts, String name, String publisher, String tray, long version, long exportedAt, Sticker[] stickers) {
+    public Pack (String identifier, long setId, int part, int parts, String name, String publisher, String tray, long version, long exportedAt, Sticker[] stickers, boolean animated) {
       this.identifier = identifier;
       this.setId = setId;
       this.part = part;
@@ -98,10 +102,11 @@ public final class XgramWaStickerStore {
       this.version = version;
       this.exportedAt = exportedAt;
       this.stickers = stickers;
+      this.animated = animated;
     }
 
     Pack withVersion (long version, long exportedAt) {
-      return new Pack(identifier, setId, part, parts, name, publisher, tray, version, exportedAt, stickers);
+      return new Pack(identifier, setId, part, parts, name, publisher, tray, version, exportedAt, stickers, animated);
     }
 
     /** Whether {@code fileName} is one of this pack's files (the tray icon or a sticker): the provider serves only those. */
@@ -144,6 +149,11 @@ public final class XgramWaStickerStore {
   /** {@code tg_<setId>_<part>}: only [a-zA-Z0-9_], as WhatsApp allows (a negative id gets "n" for its minus). */
   public static String identifier (long setId, int part) {
     return "tg_" + String.valueOf(setId).replace('-', 'n') + "_" + part;
+  }
+
+  /** {@code tg_<setId>_a<part>}: an animated pack's, never the same as a still one's (WhatsApp keeps a pack's kind). */
+  public static String animatedIdentifier (long setId, int part) {
+    return "tg_" + String.valueOf(setId).replace('-', 'n') + "_a" + part;
   }
 
   static File rootDir (@NonNull Context context) {
@@ -261,7 +271,8 @@ public final class XgramWaStickerStore {
         packs.add(new Pack(
           p.getString("id"), p.getLong("setId"), p.getInt("part"), p.getInt("parts"),
           p.getString("name"), p.getString("publisher"), p.getString("tray"),
-          p.getLong("version"), p.getLong("exportedAt"), stickers
+          p.getLong("version"), p.getLong("exportedAt"), stickers,
+          p.optBoolean("animated", false) // packs from before animated ones are still
         ));
       }
     }
@@ -283,6 +294,7 @@ public final class XgramWaStickerStore {
       p.put("tray", pack.tray);
       p.put("version", pack.version);
       p.put("exportedAt", pack.exportedAt);
+      p.put("animated", pack.animated);
       JSONArray stickersJson = new JSONArray();
       for (Sticker sticker : pack.stickers) {
         JSONObject s = new JSONObject();

@@ -88,7 +88,7 @@ final class XgramWaStickerImages {
   static byte[] toSticker (byte[] source) {
     final int kind = webpKind(source);
     if (kind == WEBP_ANIMATED) {
-      return null; // animated packs come later; a still pack must not hold an animated WebP
+      return null; // a still pack must not hold an animated WebP (animated stickers: XgramWaStickerAnimator)
     }
     BitmapFactory.Options bounds = new BitmapFactory.Options();
     bounds.inJustDecodeBounds = true;
@@ -129,8 +129,21 @@ final class XgramWaStickerImages {
     if (bitmap == null) {
       return null;
     }
+    try {
+      return toTray(bitmap);
+    } finally {
+      bitmap.recycle();
+    }
+  }
+
+  /** The tray icon: {@code bitmap} (any size, kept as it is) fitted on a 96x96 transparent PNG, or null. */
+  @Nullable
+  @WorkerThread
+  static byte[] toTray (Bitmap bitmap) {
+    if (bitmap.getWidth() <= 0 || bitmap.getHeight() <= 0) {
+      return null;
+    }
     Bitmap canvas = fit(bitmap, TRAY_SIZE);
-    bitmap.recycle();
     try {
       ByteArrayOutputStream out = new ByteArrayOutputStream(16 * 1024);
       if (!canvas.compress(Bitmap.CompressFormat.PNG, 100, out) || out.size() > TRAY_MAX_BYTES) {

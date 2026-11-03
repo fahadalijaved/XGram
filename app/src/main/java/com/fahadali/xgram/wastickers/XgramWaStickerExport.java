@@ -46,6 +46,7 @@ import org.thunderdog.challegram.unsorted.AppContext;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -56,15 +57,21 @@ import java.util.concurrent.atomic.AtomicReference;
 import me.vkryl.core.StringUtils;
 
 /**
- * XGram: Add to WhatsApp, from the sticker pack sheet's ⋮ (StickersListController). Step 1: still (WebP) stickers.
+ * XGram: Add to WhatsApp, from the sticker pack sheet's ⋮ (StickersListController): still (WebP) and animated (Lottie
+ * .tgs, video .webm) stickers.
  * <ol>
- *   <li>Checks first, while the sheet is open: at least 3 still stickers (animated packs are coming), and WhatsApp or
- *   WhatsApp Business installed; with both, the user picks one.</li>
+ *   <li>Checks first, while the sheet is open: at least 3 stickers, and WhatsApp or WhatsApp Business installed; with
+ *   both, the user picks one.</li>
  *   <li>The sheet closes and a progress dialog (Cancel, or back) shows while a worker thread fetches the set, downloads
- *   each still sticker with a synchronous DownloadFile and converts it ({@link XgramWaStickerImages}); stickers that
- *   fail to download or convert are left out.</li>
- *   <li>The stickers are split into packs of up to 30 ("Title (1/N)", ids {@code tg_<setId>_<part>}), each with a tray
- *   icon, and put in place for {@link XgramWaStickerProvider} ({@link XgramWaStickerStore#commit}).</li>
+ *   each sticker with a synchronous DownloadFile and converts it: still ones with {@link XgramWaStickerImages}, animated
+ *   ones into animated WebP with {@link XgramWaStickerAnimator}. Stickers that fail to download or convert, and
+ *   animated ones that can't be made to fit 500 KB, are left out and counted.</li>
+ *   <li>WhatsApp wants a pack all still or all animated. A set with 3 or more of each becomes a still pack ("Title")
+ *   and an animated one ("Title (animated)"); otherwise all of it goes in one pack, animated as soon as one sticker is
+ *   (its still stickers then become two-frame animations that look the same), so no sticker is left out for its kind.</li>
+ *   <li>Each kind is split into packs of up to 30 ("Title (1/N)", ids {@code tg_<setId>_<part>}, animated
+ *   {@code tg_<setId>_a<part>}), each with a tray icon, and put in place for {@link XgramWaStickerProvider}
+ *   ({@link XgramWaStickerStore#commit}).</li>
  *   <li>For each pack in turn WhatsApp's own Add sheet opens (ENABLE_STICKER_PACK with startActivityForResult, which
  *   WhatsApp needs to know the caller); one WhatsApp already has is skipped (it re-reads the pack for the new
  *   image_data_version). A validation error from WhatsApp is shown, a cancel asks whether to go on to the next part.</li>
@@ -119,12 +126,9 @@ public final class XgramWaStickerExport {
       UI.showToast(R.string.XgramWaBusy, Toast.LENGTH_SHORT);
       return;
     }
-    if (loadedStickers != null) {
-      String problem = countProblem(countStill(loadedStickers), loadedStickers.length);
-      if (problem != null) {
-        c.openAlert(R.string.XgramWaAddToWhatsApp, problem);
-        return;
-      }
+    if (loadedStickers != null && loadedStickers.length < XgramWaStickerStore.MIN_STICKERS) {
+      c.openAlert(R.string.XgramWaAddToWhatsApp, Lang.getString(R.string.XgramWaTooFew, loadedStickers.length));
+      return;
     }
     final Context context = c.context();
     final boolean consumer = isInstalled(context, WHATSAPP);
@@ -154,33 +158,38 @@ public final class XgramWaStickerExport {
     }
   }
 
-  private static int countStill (TdApi.Sticker[] stickers) {
-    int count = 0;
-    for (TdApi.Sticker sticker : stickers) {
-      if (isStill(sticker)) {
-        count++;
-      }
+  private static final int KIND_UNKNOWN = 0, KIND_STILL = 1, KIND_LOTTIE = 2, KIND_VIDEO = 3;
+
+  private static int kindOf (@Nullable TdApi.Sticker sticker) {
+    if (sticker == null || sticker.format == null) {
+      return KIND_UNKNOWN;
     }
-    return count;
+    switch (sticker.format.getConstructor()) {
+      case TdApi.StickerFormatWebp.CONSTRUCTOR:
+        return KIND_STILL;
+      case TdApi.StickerFormatTgs.CONSTRUCTOR:
+        return KIND_LOTTIE;
+      case TdApi.StickerFormatWebm.CONSTRUCTOR:
+        return KIND_VIDEO;
+    }
+    return KIND_UNKNOWN;
   }
 
-  private static boolean isStill (TdApi.Sticker sticker) {
-    return sticker != null && sticker.format != null && sticker.format.getConstructor() == TdApi.StickerFormatWebp.CONSTRUCTOR;
+  /**
+   * How the stickers go into packs, by kind: a still group and an animated group when each has at least 3; otherwise
+   * one group, animated when there is any animated sticker (still ones are made two-frame animations).
+   */
+  private static boolean splitByKind (int still, int animated) {
+    return still >= XgramWaStickerStore.MIN_STICKERS && animated >= XgramWaStickerStore.MIN_STICKERS;
   }
 
-  /** Why a set with {@code still} still stickers of {@code total} can't go to WhatsApp, or null when it can. */
-  @Nullable
-  private static String countProblem (int still, int total) {
-    if (still >= XgramWaStickerStore.MIN_STICKERS) {
-      return null;
-    }
-    if (still == 0 && total > 0) {
-      return Lang.getString(R.string.XgramWaAnimatedSoon);
-    }
-    if (still < total) {
-      return Lang.getString(R.string.XgramWaTooFewStill, still);
-    }
-    return Lang.getString(R.string.XgramWaTooFew, total);
+  private static int partsFor (int count) {
+    return (count + XgramWaStickerStore.MAX_STICKERS - 1) / XgramWaStickerStore.MAX_STICKERS;
+  }
+
+  /** The packs {@code still} still and {@code animated} animated stickers make. */
+  private static int countPacks (int still, int animated) {
+    return splitByKind(still, animated) ? partsFor(still) + partsFor(animated) : partsFor(still + animated);
   }
 
   private static boolean isInstalled (Context context, String packageName) {
@@ -261,12 +270,35 @@ public final class XgramWaStickerExport {
   }
 
   private static final class Converted {
+    /** The sticker's place in the set, which the packs keep. */
+    final int index;
     final String file;
     final String[] emojis;
+    /** An animated WebP; else a still one. */
+    final boolean animated;
+    /** An animated sticker's tray icon (96x96 PNG of its fullest frame) in the staging folder, or null. */
+    final @Nullable String trayFile;
+    /** The still WebP a tray icon can be made from (a still sticker's own file, or what an animated copy was made of). */
+    final @Nullable String stillFile;
 
-    Converted (String file, String[] emojis) {
+    Converted (int index, String file, String[] emojis, boolean animated, @Nullable String trayFile, @Nullable String stillFile) {
+      this.index = index;
       this.file = file;
       this.emojis = emojis;
+      this.animated = animated;
+      this.trayFile = trayFile;
+      this.stillFile = stillFile;
+    }
+  }
+
+  /** Stickers that go in packs of one kind. */
+  private static final class Group {
+    final List<Converted> stickers;
+    final boolean animated;
+
+    Group (List<Converted> stickers, boolean animated) {
+      this.stickers = stickers;
+      this.animated = animated;
     }
   }
 
@@ -282,7 +314,7 @@ public final class XgramWaStickerExport {
   private List<XgramWaStickerStore.Pack> packs;
   private boolean[] alreadyAdded;
   private int index, added, skipped;
-  private int failedStickers, leftOutAnimated;
+  private int failedStickers, tooBigStickers;
   private boolean waitingForResume;
   /** Held here: UI keeps its state listeners weakly. */
   private final UI.StateListener resumeListener = this::onUiStateChanged;
@@ -336,13 +368,16 @@ public final class XgramWaStickerExport {
     progressActivity = null;
   }
 
-  private void postProgress (int done, int total, int parts, int leftOutAnimated) {
+  private void postProgress (int done, int total, int stillCount, int animatedCount) {
     // One short second line at most: Telegram X's progress dialog shows 2 lines, the M3E one 3
     StringBuilder b = new StringBuilder(Lang.getString(R.string.XgramWaPreparingCount, done, total));
-    if (parts > 1) {
-      b.append('\n').append(Lang.getString(R.string.XgramWaPreparingParts, parts));
-    } else if (leftOutAnimated > 0) {
-      b.append('\n').append(Lang.getString(R.string.XgramWaPreparingAnimated, leftOutAnimated));
+    final int packs = countPacks(stillCount, animatedCount);
+    if (splitByKind(stillCount, animatedCount)) {
+      b.append('\n').append(Lang.getString(R.string.XgramWaPreparingKinds, packs));
+    } else if (packs > 1) {
+      b.append('\n').append(Lang.getString(R.string.XgramWaPreparingParts, packs));
+    } else if (animatedCount > 0) {
+      b.append('\n').append(Lang.getString(R.string.XgramWaPreparingAnimated));
     }
     final String text = b.toString();
     UI.post(() -> showProgress(text));
@@ -473,6 +508,31 @@ public final class XgramWaStickerExport {
     }
   }
 
+  /** The tray icon of a pack that starts with {@code c}: an animated sticker's fullest frame, or the still image. */
+  @Nullable
+  @WorkerThread
+  private static byte[] trayOf (File staging, Converted c) {
+    try {
+      if (c.trayFile != null) {
+        return XgramWaStickerStore.readFully(new File(staging, c.trayFile));
+      }
+      if (c.stillFile != null) {
+        return XgramWaStickerImages.toTray(XgramWaStickerStore.readFully(new File(staging, c.stillFile)));
+      }
+    } catch (Throwable t) {
+      Log.w("XGram WhatsApp stickers: no tray icon from %s", t, c.file);
+    }
+    return null;
+  }
+
+  /** "Title", "Title (1/3)"; the animated packs of a set that has both kinds: "Title (animated)", "Title (animated 1/3)". */
+  private static String packName (String title, boolean animatedOfBoth, int part, int parts) {
+    if (animatedOfBoth) {
+      return parts == 1 ? Lang.getString(R.string.XgramWaAnimatedName, title) : Lang.getString(R.string.XgramWaAnimatedPartName, title, part, parts);
+    }
+    return parts == 1 ? title : Lang.getString(R.string.XgramWaPartName, title, part, parts);
+  }
+
   @WorkerThread
   private void work () {
     final Context context = AppContext.get();
@@ -482,89 +542,171 @@ public final class XgramWaStickerExport {
       if (set.stickerType == null || set.stickerType.getConstructor() != TdApi.StickerTypeRegular.CONSTRUCTOR) {
         throw new Failure(Lang.getString(R.string.XgramWaNotStickers));
       }
-      final List<Integer> still = new ArrayList<>();
-      for (int i = 0; i < set.stickers.length; i++) {
-        if (isStill(set.stickers[i])) {
-          still.add(i);
+      final int total = set.stickers.length;
+      if (total < XgramWaStickerStore.MIN_STICKERS) {
+        throw new Failure(Lang.getString(R.string.XgramWaTooFew, total));
+      }
+      int stillCount = 0, animatedCount = 0;
+      for (TdApi.Sticker sticker : set.stickers) {
+        final int kind = kindOf(sticker);
+        if (kind == KIND_STILL) {
+          stillCount++;
+        } else if (kind != KIND_UNKNOWN) {
+          animatedCount++;
         }
       }
-      final int leftOutAnimated = set.stickers.length - still.size();
-      String problem = countProblem(still.size(), set.stickers.length);
-      if (problem != null) {
-        throw new Failure(problem);
-      }
-      final int expectedParts = (still.size() + XgramWaStickerStore.MAX_STICKERS - 1) / XgramWaStickerStore.MAX_STICKERS;
 
       staging = XgramWaStickerStore.newStagingDir(context, setId);
-      final List<Converted> converted = new ArrayList<>(still.size());
-      int failed = 0;
-      for (int k = 0; k < still.size(); k++) {
+      final List<Converted> still = new ArrayList<>(stillCount);
+      final List<Converted> animated = new ArrayList<>(animatedCount);
+      int failed = 0, tooBig = 0;
+      int lastRung = 0;
+      for (int i = 0; i < total; i++) {
         checkCanceled();
-        postProgress(k, still.size(), expectedParts, leftOutAnimated);
-        final int i = still.get(k);
+        postProgress(i, total, stillCount, animatedCount);
         final TdApi.Sticker sticker = set.stickers[i];
-        byte[] webp = null;
-        File file = download(sticker.sticker);
+        final int kind = kindOf(sticker);
+        if (kind == KIND_UNKNOWN) {
+          failed++;
+          continue;
+        }
+        final File file = download(sticker.sticker);
         checkCanceled();
-        if (file != null) {
+        if (file == null) {
+          failed++;
+          continue;
+        }
+        final String name = String.format(Locale.US, "%03d.webp", i + 1);
+        if (kind == KIND_STILL) {
+          byte[] webp = null;
           try {
             webp = XgramWaStickerImages.toSticker(XgramWaStickerStore.readFully(file));
           } catch (Throwable e) { // any decode or compress failure leaves out only this sticker
             Log.w("XGram WhatsApp stickers: sticker %d unreadable", e, sticker.id);
           }
+          if (webp == null) {
+            failed++;
+            continue;
+          }
+          XgramWaStickerStore.writeFully(new File(staging, name), webp);
+          still.add(new Converted(i, name, emojis(set, i, sticker), false, null, name));
+        } else {
+          // Animated: rendered frame by frame into an animated WebP of 500 KB at most (seconds, not milliseconds)
+          XgramWaStickerAnimator.Result result = null;
+          try {
+            result = XgramWaStickerAnimator.convert(file,
+              kind == KIND_LOTTIE ? XgramWaStickerAnimator.KIND_LOTTIE : XgramWaStickerAnimator.KIND_VIDEO,
+              XgramWaStickerAnimator.startRung(lastRung),
+              this::checkCanceled
+            );
+          } catch (Canceled e) {
+            throw e;
+          } catch (Throwable e) { // as above: only this sticker is left out
+            Log.w("XGram WhatsApp stickers: sticker %d can't be animated", e, sticker.id);
+          }
+          if (result == null) {
+            failed++;
+            continue;
+          }
+          if (result.webp == null) {
+            tooBig++; // over 500 KB even at 5 frames a second
+            continue;
+          }
+          lastRung = result.rung;
+          XgramWaStickerStore.writeFully(new File(staging, name), result.webp);
+          String trayName = null;
+          if (result.tray != null) {
+            trayName = String.format(Locale.US, "%03d_tray.png", i + 1);
+            XgramWaStickerStore.writeFully(new File(staging, trayName), result.tray);
+          }
+          animated.add(new Converted(i, name, emojis(set, i, sticker), true, trayName, null));
         }
-        if (webp == null) {
-          failed++;
-          continue;
-        }
-        final String name = String.format(Locale.US, "%03d.webp", k + 1);
-        XgramWaStickerStore.writeFully(new File(staging, name), webp);
-        converted.add(new Converted(name, emojis(set, i, sticker)));
       }
-      postProgress(still.size(), still.size(), expectedParts, leftOutAnimated);
-      if (converted.size() < XgramWaStickerStore.MIN_STICKERS) {
-        throw new Failure(Lang.getString(R.string.XgramWaNotEnough));
-      }
+      postProgress(total, total, stillCount, animatedCount);
       checkCanceled();
 
-      // Parts of up to 30, as even as they can be (31 stickers: 16 and 15, never 30 and 1)
-      final int parts = (converted.size() + XgramWaStickerStore.MAX_STICKERS - 1) / XgramWaStickerStore.MAX_STICKERS;
+      // By kind: WhatsApp wants a pack all still or all animated
+      final List<Group> groups = new ArrayList<>(2);
+      if (splitByKind(still.size(), animated.size())) {
+        groups.add(new Group(still, false));
+        groups.add(new Group(animated, true));
+      } else if (animated.isEmpty()) {
+        groups.add(new Group(still, false));
+      } else {
+        // Too few of one kind for a pack of its own: one animated pack, the still stickers as two equal frames
+        final List<Converted> all = new ArrayList<>(still.size() + animated.size());
+        for (Converted c : still) {
+          checkCanceled();
+          final String name = String.format(Locale.US, "%03d_a.webp", c.index + 1);
+          try {
+            final byte[] webp = XgramWaAnimatedWebp.stillToAnimated(
+              XgramWaStickerStore.readFully(new File(staging, c.file)),
+              XgramWaStickerAnimator.SIZE, XgramWaStickerAnimator.SINGLE_FRAME_MS
+            );
+            XgramWaStickerStore.writeFully(new File(staging, name), webp);
+          } catch (IOException e) {
+            Log.w("XGram WhatsApp stickers: still sticker %s can't be animated", e, c.file);
+            failed++;
+            continue;
+          }
+          all.add(new Converted(c.index, name, c.emojis, true, null, c.file));
+        }
+        all.addAll(animated);
+        Collections.sort(all, (a, b) -> Integer.compare(a.index, b.index));
+        groups.add(new Group(all, true));
+      }
+      for (Group group : groups) {
+        if (group.stickers.size() < XgramWaStickerStore.MIN_STICKERS) {
+          throw new Failure(tooBig > 0 ? Lang.getString(R.string.XgramWaNotEnoughTooBig, tooBig) : Lang.getString(R.string.XgramWaNotEnough));
+        }
+      }
+
+      int packCount = 0;
+      for (Group group : groups) {
+        packCount += partsFor(group.stickers.size());
+      }
       final byte[] setTray = trayFromThumbnail(set);
       final String title = StringUtils.isEmpty(set.title) ? set.name : set.title;
       final String publisher = clip(tdlib.tMeStickerSetUrl(set.name).replaceFirst("^https?://", ""));
-      final List<XgramWaStickerStore.Pack> newPacks = new ArrayList<>(parts);
-      final List<File> dirs = new ArrayList<>(parts);
-      for (int p = 0; p < parts; p++) {
-        checkCanceled();
-        final int from = p * converted.size() / parts, to = (p + 1) * converted.size() / parts;
-        final String identifier = XgramWaStickerStore.identifier(setId, p + 1);
-        final File dir = new File(staging, identifier);
-        if (!dir.mkdirs() && !dir.isDirectory()) {
-          throw new IOException("Cannot create " + dir);
-        }
-        final XgramWaStickerStore.Sticker[] stickers = new XgramWaStickerStore.Sticker[to - from];
-        for (int j = from; j < to; j++) {
-          Converted c = converted.get(j);
-          if (!new File(staging, c.file).renameTo(new File(dir, c.file))) {
-            throw new IOException("Cannot move " + c.file);
+      final List<XgramWaStickerStore.Pack> newPacks = new ArrayList<>(packCount);
+      final List<File> dirs = new ArrayList<>(packCount);
+      for (Group group : groups) {
+        // Parts of up to 30, as even as they can be (31 stickers: 16 and 15, never 30 and 1)
+        final List<Converted> list = group.stickers;
+        final int parts = partsFor(list.size());
+        for (int p = 0; p < parts; p++) {
+          checkCanceled();
+          final int from = p * list.size() / parts, to = (p + 1) * list.size() / parts;
+          final String identifier = group.animated ? XgramWaStickerStore.animatedIdentifier(setId, p + 1) : XgramWaStickerStore.identifier(setId, p + 1);
+          final File dir = new File(staging, identifier);
+          if (!dir.mkdirs() && !dir.isDirectory()) {
+            throw new IOException("Cannot create " + dir);
           }
-          stickers[j - from] = new XgramWaStickerStore.Sticker(c.file, c.emojis);
+          // One pack: the set's thumbnail. More: each its own first sticker, so they look different in WhatsApp's tray
+          // (the next one when an animation has no frame with anything in it)
+          byte[] tray = packCount == 1 ? setTray : null;
+          for (int j = from; tray == null && j < to; j++) {
+            tray = trayOf(staging, list.get(j));
+          }
+          if (tray == null) {
+            tray = setTray;
+          }
+          if (tray == null) {
+            throw new IOException("No tray icon");
+          }
+          final XgramWaStickerStore.Sticker[] stickers = new XgramWaStickerStore.Sticker[to - from];
+          for (int j = from; j < to; j++) {
+            Converted c = list.get(j);
+            if (!new File(staging, c.file).renameTo(new File(dir, c.file))) {
+              throw new IOException("Cannot move " + c.file);
+            }
+            stickers[j - from] = new XgramWaStickerStore.Sticker(c.file, c.emojis);
+          }
+          XgramWaStickerStore.writeFully(new File(dir, XgramWaStickerStore.TRAY_FILE), tray);
+          final String name = packName(title, group.animated && groups.size() > 1, p + 1, parts);
+          newPacks.add(new XgramWaStickerStore.Pack(identifier, setId, p + 1, parts, clip(name), publisher, XgramWaStickerStore.TRAY_FILE, 0, 0, stickers, group.animated));
+          dirs.add(dir);
         }
-        // One pack: the set's thumbnail. Parts: each its own first sticker, so they look different in WhatsApp's tray
-        byte[] tray = parts == 1 ? setTray : null;
-        if (tray == null) {
-          tray = XgramWaStickerImages.toTray(XgramWaStickerStore.readFully(new File(dir, stickers[0].file)));
-        }
-        if (tray == null) {
-          tray = setTray;
-        }
-        if (tray == null) {
-          throw new IOException("No tray icon");
-        }
-        XgramWaStickerStore.writeFully(new File(dir, XgramWaStickerStore.TRAY_FILE), tray);
-        final String name = parts == 1 ? title : Lang.getString(R.string.XgramWaPartName, title, p + 1, parts);
-        newPacks.add(new XgramWaStickerStore.Pack(identifier, setId, p + 1, parts, clip(name), publisher, XgramWaStickerStore.TRAY_FILE, 0, 0, stickers));
-        dirs.add(dir);
       }
       checkCanceled();
 
@@ -576,8 +718,8 @@ public final class XgramWaStickerExport {
       for (int i = 0; i < committed.size(); i++) {
         alreadyAdded[i] = isAddedTo(context, targetPackage, committed.get(i).identifier);
       }
-      final int failedFinal = failed;
-      UI.post(() -> onPrepared(committed, alreadyAdded, failedFinal, leftOutAnimated));
+      final int failedFinal = failed, tooBigFinal = tooBig;
+      UI.post(() -> onPrepared(committed, alreadyAdded, failedFinal, tooBigFinal));
     } catch (Canceled e) {
       UI.post(this::end);
     } catch (Failure e) {
@@ -609,7 +751,7 @@ public final class XgramWaStickerExport {
   }
 
   @UiThread
-  private void onPrepared (List<XgramWaStickerStore.Pack> packs, boolean[] alreadyAdded, int failedStickers, int leftOutAnimated) {
+  private void onPrepared (List<XgramWaStickerStore.Pack> packs, boolean[] alreadyAdded, int failedStickers, int tooBigStickers) {
     hideProgress();
     if (canceled) {
       end();
@@ -618,7 +760,7 @@ public final class XgramWaStickerExport {
     this.packs = packs;
     this.alreadyAdded = alreadyAdded;
     this.failedStickers = failedStickers;
-    this.leftOutAnimated = leftOutAnimated;
+    this.tooBigStickers = tooBigStickers;
     this.index = 0;
     launchNext();
   }
@@ -759,12 +901,12 @@ public final class XgramWaStickerExport {
     }
     // Two lines at most (Android 12+ toasts and the M3E snackbar): the result, then what was left out
     if (inWhatsApp > 0) {
-      if (failedStickers > 0 && leftOutAnimated > 0) {
-        b.append('\n').append(Lang.getString(R.string.XgramWaLeftOutBoth, leftOutAnimated, failedStickers));
+      if (failedStickers > 0 && tooBigStickers > 0) {
+        b.append('\n').append(Lang.getString(R.string.XgramWaLeftOutBoth, tooBigStickers, failedStickers));
       } else if (failedStickers > 0) {
         b.append('\n').append(Lang.getString(R.string.XgramWaLeftOutFailed, failedStickers));
-      } else if (leftOutAnimated > 0) {
-        b.append('\n').append(Lang.getString(R.string.XgramWaLeftOutAnimated, leftOutAnimated));
+      } else if (tooBigStickers > 0) {
+        b.append('\n').append(Lang.getString(R.string.XgramWaLeftOutTooBig, tooBigStickers));
       }
     }
     UI.showToast(b.toString(), Toast.LENGTH_LONG);

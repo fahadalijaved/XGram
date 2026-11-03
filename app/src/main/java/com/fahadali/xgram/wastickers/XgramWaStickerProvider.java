@@ -150,7 +150,7 @@ public final class XgramWaStickerProvider extends ContentProvider {
         "", // license agreement
         String.valueOf(pack.version),
         0, // WhatsApp may cache the stickers
-        0  // static stickers only (animated packs come later)
+        pack.animated ? 1 : 0 // a pack is all animated WebP or all still WebP
       });
     }
     return cursor;
