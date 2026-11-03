@@ -767,7 +767,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     messagesView.setManager(manager);
     messagesView.setController(this);
     if (!isInForceTouchMode()) {
-      messagesView.xgramSetPullToNext(new com.fahadali.xgram.chats.XgramPullToNext(xgramPullHost, messagesView)); // XGram
+      messagesView.xgramSetPullToNext(xgramPull = new com.fahadali.xgram.chats.XgramPullToNext(xgramPullHost, messagesView)); // XGram
     }
     messagesView.setHasFixedSize(true);
     messagesView.setLayoutManager(messagesManager);
@@ -4817,6 +4817,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
   public void onCleanAfterHide () {
     super.onCleanAfterHide();
     collapsePinnedMessagesBar(false);
+    if (xgramPull != null) {
+      xgramPull.clearHold(); // XGram: the next unread chat covered this one; its messages held up until now
+    }
   }
 
   public void collapsePinnedMessagesBar (boolean animated) {
@@ -10774,6 +10777,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (!fromTop && com.fahadali.xgram.chats.XgramTextSelection.onBackPressed(this, commit)) {
       return true; // XGram: Back ends the text selection first (no predictive back card while it shows)
     }
+    if (xgramPull != null && xgramPull.isOpening() && isFocused()) {
+      return true; // XGram: released past pull-to-next's threshold, the next unread chat is opening: Back waits for it
+    }
     BaseActivity context = context();
     if (context.getRecordAudioVideoController().isOpen()) {
       if (commit) {
@@ -13547,6 +13553,18 @@ public class MessagesController extends ViewController<MessagesController.Argume
   // XGram: pull up at the bottom of a channel (or topic) for the next unread one, as in Telegram
 
   private long xgramNextChatId;
+  @Nullable private com.fahadali.xgram.chats.XgramPullToNext xgramPull;
+
+  /**
+   * The Mute / Join bar is what covers the bottom of the list: the message box is hidden (a read-only channel) and the
+   * bar shows whole, not folded into its floating button or hidden by the search controls. Read from where the bar is
+   * going, not from its running animations: a pull that starts while the scroll button still unfolds back into the bar
+   * (just scrolled to the bottom) keeps the indicator and the hint where they end up instead of jumping 48dp mid-pull.
+   */
+  private boolean xgramPullBarInFront () {
+    return bottomBar != null && bottomBar.getVisibility() == View.VISIBLE && (bottomWrap == null || bottomWrap.getVisibility() != View.VISIBLE) &&
+      bottomBarVisible.getValue() && !scrollToBottomVisible.getValue() && searchControlsFactor <= 0f;
+  }
 
   private final com.fahadali.xgram.chats.XgramPullToNext.Host xgramPullHost = new com.fahadali.xgram.chats.XgramPullToNext.Host() {
     @Override
@@ -13577,8 +13595,39 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
 
     @Override
-    public void xgramOpenNext (com.fahadali.xgram.chats.XgramPullToNext.Target target) {
-      xgramOpenNextUnread(target);
+    public boolean xgramOpenNext (com.fahadali.xgram.chats.XgramPullToNext.Target target) {
+      return xgramOpenNextUnread(target);
+    }
+
+    @Override
+    public int xgramPullBottomCover () {
+      if (messagesView == null) {
+        return 0;
+      }
+      final int inset = Views.getAppliedBottomInset(messagesView); // the navigation bar, when the message box is hidden
+      if (xgramPullBarInFront()) {
+        // Both are children of contentView: the bar's surface starts below its top padding (the room for its FAB). Its
+        // resting place, without the slide of its fold into the FAB (see xgramPullBarInFront)
+        final float listBottom = messagesView.getBottom() + messagesView.getTranslationY();
+        final float barTop = bottomBar.getTop() + bottomBar.getPaddingTop();
+        return Math.max(inset, Math.round(listBottom - barTop));
+      }
+      return inset;
+    }
+
+    @Override
+    public boolean xgramPullHint (@Nullable String hint, float shown, boolean armed) {
+      if (bottomBar == null) {
+        return false;
+      }
+      final boolean inBar = hint != null && shown > 0f && xgramPullBarInFront();
+      bottomBar.xgramSetPullHint(inBar ? hint : null, inBar ? shown : 0f, armed);
+      return inBar;
+    }
+
+    @Override
+    public boolean xgramPullInFront () {
+      return !isDestroyed() && isFocused();
     }
 
     @Override
@@ -13598,13 +13647,13 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
   };
 
-  private void xgramOpenNextUnread (com.fahadali.xgram.chats.XgramPullToNext.Target target) {
-    if (isDestroyed() || !isFocused() || chat == null) {
-      return;
+  private boolean xgramOpenNextUnread (com.fahadali.xgram.chats.XgramPullToNext.Target target) {
+    if (isDestroyed() || !isFocused() || chat == null || context().isNavigationBusy()) {
+      return false; // TdlibUi.openChat drops an open while the navigation is busy: the held messages go back at once
     }
     TdApi.Chat next = tdlib.chat(target.chatId);
     if (next == null) {
-      return;
+      return false;
     }
     // XGram: the next topic takes this topic's place on its focus (XgramForums.replaceTopicScreensBelow); only a next
     // channel needs this screen removed once covered.
@@ -13614,6 +13663,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     } else {
       tdlib.ui().openChat(this, next, new TdlibUi.ChatOpenParameters().keepStack().chatList(openedFromChatList));
     }
+    return true;
   }
 
   /** Once the next chat slid in on top of this one, this one leaves the stack: back goes where it went before. */

@@ -83,6 +83,7 @@ public class ChatBottomBarView extends BaseView {
           c.drawRect(0, getPaddingTop(), getMeasuredWidth(), getMeasuredHeight(), Paints.fillingPaint(ColorUtils.alphaColor(barAlpha, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE))));
         }
         int color = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER);
+        color = ColorUtils.alphaColor(1f - xgramHintFactor(), color); // XGram: the button gives way to the pull hint
         RectF rectF = buildRectF();
         float radius = xgramRadius(rectF);
         c.drawRoundRect(rectF, radius, radius, Paints.fillingPaint(color));
@@ -285,7 +286,7 @@ public class ChatBottomBarView extends BaseView {
         float displayFactor = 1f - this.factor;
         float scale = SCALE + (1f - SCALE) * displayFactor;
         c.scale(scale, scale, cx, cy);
-        prevState.draw(c, view, collapseFactor, displayFactor, cx, cy);
+        prevState.draw(c, view, collapseFactor, displayFactor * factor, cx, cy); // XGram: * factor, the old label (Mute just toggled) also gives way to the pull hint
         c.restore();
       }
       factor *= this.factor;
@@ -358,6 +359,7 @@ public class ChatBottomBarView extends BaseView {
     if (state != null) {
       state.layout(getMeasuredWidth());
     }
+    xgramLayoutHints(); // XGram: the pull hint fits the new width
   }
 
   private float collapseFactor;
@@ -406,12 +408,152 @@ public class ChatBottomBarView extends BaseView {
 
   @Override
   protected void onDraw (Canvas c) {
-    if (state != null) {
+    final float xgramHintAmount = xgramHintFactor(); // XGram: the pull hint takes the label's place
+    if (state != null && xgramHintAmount < 1f) {
       RectF rectF = buildRectF();
       c.save();
       c.clipRect(rectF.left, rectF.top, rectF.right, rectF.bottom);
-      state.draw(c, this, collapseFactor, 1f, rectF.centerX(), rectF.centerY());
+      state.draw(c, this, collapseFactor, 1f - xgramHintAmount, rectF.centerX(), rectF.centerY());
       c.restore();
     }
+    if (xgramHintAmount > 0f) {
+      xgramDrawHint(c, xgramHintAmount);
+    }
+  }
+
+  // XGram: pull to the next unread channel (com.fahadali.xgram.chats.XgramPullToNext). While the messages are pulled
+  // up the action's label (Mute, Unmute, Join) gives way to the hint, as in Telegram: "Swipe up to go to the next
+  // unread channel" from the first pixel of the pull, "Release to go to the next unread channel" past the threshold.
+  // The new line slides 8dp in from below as the old one leaves upwards (the other way when the pull goes back under the
+  // threshold) on EFFECTS_FAST. With Expressive design the tonal button's container fades out with its label, so the
+  // hint reads as supporting text on the bar's surface (bodyMedium, onSurfaceVariant); without it, Telegram X's grey
+  // 15sp text on the flat bar. A hint wider than the bar shrinks to .85 of its size, then ellipsizes.
+
+  @androidx.annotation.Nullable private String xgramHint, xgramHintPrev;
+  @androidx.annotation.Nullable private String xgramHintText, xgramHintPrevText;
+  private float xgramHintWidth, xgramHintPrevWidth, xgramHintSize, xgramHintPrevSize;
+  private float xgramHintShown;
+  private boolean xgramHintUp = true;
+  @androidx.annotation.Nullable private com.fahadali.xgram.appearance.XgramExpressive.Spring xgramHintSwap;
+  @androidx.annotation.Nullable private android.text.TextPaint xgramHintPaint;
+  private float xgramFitWidth, xgramFitSize;
+
+  /** 0..1: how much the pull hint replaces the label (none once the bar folds into its floating button). */
+  private float xgramHintFactor () {
+    return xgramHint != null ? xgramHintShown * (1f - MathUtils.clamp(collapseFactor)) : 0f;
+  }
+
+  /**
+   * Shows {@code hint} in place of the label at {@code shown} (0..1); null or 0 clears it. {@code armed}: releasing
+   * opens the next chat, the new line comes up from below (down from above when it turns false).
+   */
+  public void xgramSetPullHint (@androidx.annotation.Nullable String hint, float shown, boolean armed) {
+    if (hint == null || shown <= 0f) {
+      if (xgramHint != null || xgramHintShown != 0f) {
+        xgramHint = xgramHintPrev = null;
+        xgramHintText = xgramHintPrevText = null;
+        xgramHintShown = 0f;
+        if (xgramHintSwap != null) {
+          xgramHintSwap.setValue(1f);
+        }
+        update();
+      }
+      return;
+    }
+    shown = MathUtils.clamp(shown);
+    boolean changed = false;
+    if (!hint.equals(xgramHint)) {
+      if (xgramHint != null) {
+        xgramHintPrev = xgramHint;
+        xgramHintPrevText = xgramHintText;
+        xgramHintPrevWidth = xgramHintWidth;
+        xgramHintPrevSize = xgramHintSize;
+        xgramHintUp = armed;
+        if (xgramHintSwap == null) {
+          xgramHintSwap = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, 1f, (s, value) -> invalidate());
+        }
+        xgramHintSwap.setValue(0f);
+        xgramHintSwap.animateTo(1f);
+      } else {
+        xgramHintPrev = null;
+        xgramHintPrevText = null;
+        if (xgramHintSwap != null) {
+          xgramHintSwap.setValue(1f);
+        }
+      }
+      xgramHint = hint;
+      xgramHintText = xgramFitHint(hint);
+      xgramHintWidth = xgramFitWidth;
+      xgramHintSize = xgramFitSize;
+      changed = true;
+    }
+    if (xgramHintShown != shown) {
+      xgramHintShown = shown;
+      changed = true;
+    }
+    if (changed) {
+      update(); // the Expressive container's alpha follows it
+    }
+  }
+
+  private void xgramLayoutHints () {
+    if (xgramHint != null) {
+      xgramHintText = xgramFitHint(xgramHint);
+      xgramHintWidth = xgramFitWidth;
+      xgramHintSize = xgramFitSize;
+    }
+    if (xgramHintPrev != null) {
+      xgramHintPrevText = xgramFitHint(xgramHintPrev);
+      xgramHintPrevWidth = xgramFitWidth;
+      xgramHintPrevSize = xgramFitSize;
+    }
+  }
+
+  private android.text.TextPaint xgramHintPaint (float size) {
+    if (xgramHintPaint == null) {
+      xgramHintPaint = new android.text.TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
+      xgramHintPaint.setTypeface(xgramM3 ? com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, false) : org.thunderdog.challegram.tool.Fonts.getRobotoRegular());
+    }
+    xgramHintPaint.setTextSize(size);
+    return xgramHintPaint;
+  }
+
+  /** Measures {@code hint} for this width; leaves its size and width in xgramFitSize and xgramFitWidth. */
+  private String xgramFitHint (String hint) {
+    final float max = Math.max(0, getMeasuredWidth() - Screen.dp(xgramM3 ? 64f : 32f));
+    float size = xgramM3 ? Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M)) : Screen.dp(15f);
+    android.text.TextPaint paint = xgramHintPaint(size);
+    final float width = paint.measureText(hint);
+    if (max > 0f && width > max) {
+      size *= Math.max(.85f, max / width);
+      paint.setTextSize(size);
+    }
+    final String text = max > 0f ? android.text.TextUtils.ellipsize(hint, paint, max, android.text.TextUtils.TruncateAt.END).toString() : hint;
+    xgramFitSize = size;
+    xgramFitWidth = paint.measureText(text);
+    return text;
+  }
+
+  private void xgramDrawHint (Canvas c, float factor) {
+    final float cx = getMeasuredWidth() / 2f;
+    final float cy = getPaddingTop() + (getMeasuredHeight() - getPaddingTop() - getPaddingBottom()) / 2f;
+    final int color = xgramM3 ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT) : Theme.textDecentColor();
+    final float swap = xgramHintSwap != null ? MathUtils.clamp(xgramHintSwap.getValue()) : 1f;
+    final float slide = Screen.dp(8f) * (xgramHintUp ? 1f : -1f);
+    if (xgramHintPrevText != null && swap < 1f) {
+      xgramDrawHintLine(c, xgramHintPrevText, xgramHintPrevSize, xgramHintPrevWidth, cx, cy - slide * swap, ColorUtils.alphaColor(factor * (1f - swap), color));
+    }
+    if (xgramHintText != null) {
+      xgramDrawHintLine(c, xgramHintText, xgramHintSize, xgramHintWidth, cx, cy + slide * (1f - swap), ColorUtils.alphaColor(factor * swap, color));
+    }
+  }
+
+  private void xgramDrawHintLine (Canvas c, String text, float size, float width, float cx, float cy, int color) {
+    if (android.graphics.Color.alpha(color) == 0) {
+      return;
+    }
+    android.text.TextPaint paint = xgramHintPaint(size);
+    paint.setColor(color);
+    c.drawText(text, cx - width / 2f, cy - (paint.ascent() + paint.descent()) / 2f, paint);
   }
 }

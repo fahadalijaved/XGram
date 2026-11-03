@@ -224,7 +224,8 @@
   <string name="XgramPullToNext">Pull for next channel</string>
   <string name="XgramPullNextChannel">Swipe up to go to the next unread channel</string>
   <string name="XgramPullNextTopic">Swipe up to go to the next unread topic</string>
-  <string name="XgramPullRelease">Release to open</string>
+  <string name="XgramPullRelease">Release to go to the next unread channel</string>
+  <string name="XgramPullReleaseTopic">Release to go to the next unread topic</string>
   <string name="XgramPullNoChannels">No unread channels</string>
   <string name="XgramPullNoTopics">No unread topics</string>
   <string name="XgramPullLoading">Looking for unread…</string>
