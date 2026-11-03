@@ -23,6 +23,7 @@ import android.util.Base64;
 import androidx.annotation.Nullable;
 import androidx.collection.SparseArrayCompat;
 
+import com.fahadali.xgram.editor.XgramCutout;
 import com.fahadali.xgram.editor.XgramLayer;
 import com.fahadali.xgram.editor.XgramPaintBase;
 import com.fahadali.xgram.editor.XgramStickerLayer;
@@ -60,6 +61,8 @@ public class PaintState {
   private List<PaintAction> redoActions;
   // XGram: the movable layers (text, emoji, stickers), drawn over the drawings, the last on top
   private List<XgramLayer> layers;
+  // XGram: what the Cut out tool removed of the photo (com.fahadali.xgram.editor.XgramCutout), drawn under the drawings
+  private @Nullable XgramCutout cutout;
 
   private List<Reference<SimpleDrawingChangeListener>> simpleDrawingListeners;
   private List<Reference<UndoStateListener>> undoStateListeners;
@@ -95,6 +98,10 @@ public class PaintState {
         this.redoActions.add(copyAction(action, layerCopies));
       }
     }
+    // XGram: the cut-out's mask changes in place, so the copy has its own (its edits are shared: they never change)
+    if (copy.cutout != null) {
+      this.cutout = copy.cutout.copy();
+    }
   }
 
   /** XGram: {@code layer}'s copy in a copied state (made here for a layer no longer in it, kept by undo). */
@@ -123,7 +130,7 @@ public class PaintState {
         for (XgramLayer layer : clearData.layers) {
           layers.add(copyOf(layer, copies));
         }
-        data = new PaintAction.ClearData(clearData.drawings, layers);
+        data = new PaintAction.ClearData(clearData.drawings, layers, clearData.cutout);
         break;
       }
     }
@@ -504,7 +511,7 @@ public class PaintState {
     return redoActions != null && !redoActions.isEmpty();
   }
 
-  /** Removes every drawing and layer as one action. False when there is nothing to remove. */
+  /** Removes every drawing and layer (and brings back what the cut-out removed) as one action. False when there is nothing to remove. */
   public boolean clearAll () {
     if (isEmpty()) {
       return false;
@@ -517,9 +524,47 @@ public class PaintState {
     if (layers != null) {
       layers.clear();
     }
+    final XgramCutout.Edit cutoutEdit = cutout != null ? cutout.clear() : null; // XGram
     notifySimpleDrawingChanged();
-    trackAction(new PaintAction(PaintAction.CLEAR, new PaintAction.ClearData(removed, removedLayers)));
+    trackAction(new PaintAction(PaintAction.CLEAR, new PaintAction.ClearData(removed, removedLayers, cutoutEdit)));
     return true;
+  }
+
+  // XGram: the cut-out (the Cut out tool, com.fahadali.xgram.editor.XgramCutoutEditor). Made at its first change, in the
+  // grid of the photo it was made on; each change is an action. It is drawn under the drawings where the photo is: a
+  // checkerboard where it is removed (the editor, the viewer, thumbnails), never into the sent photo by itself (draw's
+  // cutoutMode)
+
+  public static final int CUTOUT_PREVIEW = 0, CUTOUT_APPLY = 1, CUTOUT_NONE = 2;
+
+  @Nullable
+  public XgramCutout getCutout () {
+    return cutout;
+  }
+
+  /** XGram: whether the cut-out removes any of the photo. */
+  public boolean hasCutout () {
+    return cutout != null && cutout.hasRemoved();
+  }
+
+  /** XGram: the cut-out, made (nothing removed) for a photo bitmap of photoWidth x photoHeight if there is none. */
+  public XgramCutout obtainCutout (int photoWidth, int photoHeight, boolean soft) {
+    if (cutout == null) {
+      cutout = XgramCutout.create(photoWidth, photoHeight, soft);
+    }
+    return cutout;
+  }
+
+  /** XGram: whether the newest action (the one Undo reverts) is the one with {@code data}. */
+  public boolean isLastAction (@Nullable Object data) {
+    return data != null && paintActions != null && !paintActions.isEmpty() && paintActions.get(paintActions.size() - 1).getData() == data;
+  }
+
+    /** XGram: records a change of the cut-out (null: nothing changed) as an action. */
+  public void trackCutoutEdit (@Nullable XgramCutout.Edit edit) {
+    if (edit != null) {
+      trackAction(new PaintAction(PaintAction.CUTOUT, edit));
+    }
   }
 
   // XGram: the movable layers (text, emoji, stickers)
@@ -848,6 +893,9 @@ public class PaintState {
         for (int i = data.layers.size() - 1; i >= 0; i--) {
           insertLayer(data.layers.get(i), 0);
         }
+        if (data.cutout != null && cutout != null) { // XGram
+          cutout.applyEdit(data.cutout, false);
+        }
         return true;
       }
       case PaintAction.LAYER_ADD: {
@@ -870,6 +918,9 @@ public class PaintState {
         }
         return true;
       }
+      case PaintAction.CUTOUT: { // XGram
+        return cutout != null && cutout.applyEdit((XgramCutout.Edit) action.getData(), false);
+      }
     }
     return false;
   }
@@ -889,6 +940,9 @@ public class PaintState {
         PaintAction.ClearData data = (PaintAction.ClearData) action.getData();
         boolean changed = drawingsList != null && drawingsList.removeAll(data.drawings);
         if (layers != null && layers.removeAll(data.layers)) {
+          changed = true;
+        }
+        if (data.cutout != null && cutout != null && cutout.applyEdit(data.cutout, true)) { // XGram
           changed = true;
         }
         return changed;
@@ -912,6 +966,9 @@ public class PaintState {
           data.layer.set(data.after);
         }
         return true;
+      }
+      case PaintAction.CUTOUT: { // XGram
+        return cutout != null && cutout.applyEdit((XgramCutout.Edit) action.getData(), true);
       }
     }
     return false;
@@ -1047,7 +1104,17 @@ public class PaintState {
       return true;
     }
 
-    return compareDrawings(b.drawingsList, drawingsList) && compareLayers(b.layers, layers); // XGram: and the layers
+    return compareDrawings(b.drawingsList, drawingsList) && compareLayers(b.layers, layers) && compareCutouts(b.cutout, cutout); // XGram: and the layers, the cut-out
+  }
+
+  /** XGram: the same part of the photo removed, with the same edges (none removed is the same as no cut-out). */
+  private static boolean compareCutouts (@Nullable XgramCutout a, @Nullable XgramCutout b) {
+    final boolean aEmpty = a == null || !a.hasRemoved();
+    final boolean bEmpty = b == null || !b.hasRemoved();
+    if (aEmpty || bEmpty) {
+      return aEmpty == bEmpty;
+    }
+    return a.contentEquals(b);
   }
 
   /** XGram: the same layers in the same order, at the same places. */
@@ -1068,8 +1135,8 @@ public class PaintState {
   // Getters
 
   public boolean isEmpty () {
-    // XGram: layers count too (a photo with only a text on it is edited)
-    return (drawingsList == null || drawingsList.isEmpty()) && (layers == null || layers.isEmpty());
+    // XGram: layers count too (a photo with only a text on it is edited), and the cut-out
+    return (drawingsList == null || drawingsList.isEmpty()) && (layers == null || layers.isEmpty()) && !hasCutout();
   }
 
   /** XGram: whether a drawing paints with the photo under it (blur, pixelate: {@link SimpleDrawing#needsBase()}). */
@@ -1100,6 +1167,24 @@ public class PaintState {
 
   /** XGram: {@link #draw(Canvas, int, int, int, int, Bitmap, boolean, boolean)} with the photo at {@code baseRect} instead. */
   public void draw (Canvas c, final int x, final int y, final int viewWidth, final int viewHeight, @Nullable Bitmap base, boolean baseMirrorHorizontally, boolean baseMirrorVertically, @Nullable RectF baseRect) {
+    draw(c, x, y, viewWidth, viewHeight, base, baseMirrorHorizontally, baseMirrorVertically, baseRect, CUTOUT_PREVIEW);
+  }
+
+  /**
+   * XGram: {@code cutoutMode} is what the cut-out does where the photo is (at {@code baseRect}, or the drawing's rect,
+   * mirrored as the base): CUTOUT_PREVIEW a checkerboard where it removed the photo (only with a base: over the photo),
+   * CUTOUT_APPLY removes that much of what is on the canvas there (the photo, drawn first), CUTOUT_NONE nothing.
+   */
+  public void draw (Canvas c, final int x, final int y, final int viewWidth, final int viewHeight, @Nullable Bitmap base, boolean baseMirrorHorizontally, boolean baseMirrorVertically, @Nullable RectF baseRect, int cutoutMode) {
+    final XgramCutout cutout = this.cutout;
+    if (cutout != null && cutoutMode != CUTOUT_NONE && (base != null || cutoutMode == CUTOUT_APPLY)) {
+      final boolean cut = cutoutMode == CUTOUT_APPLY;
+      if (baseRect != null) {
+        cutout.draw(c, baseRect.left, baseRect.top, baseRect.right, baseRect.bottom, baseMirrorHorizontally, baseMirrorVertically, cut);
+      } else {
+        cutout.draw(c, x, y, x + viewWidth, y + viewHeight, baseMirrorHorizontally, baseMirrorVertically, cut);
+      }
+    }
     if (drawingsList != null && !drawingsList.isEmpty()) {
       XgramPaintBase paintBase = null;
       for (SimpleDrawing drawing : drawingsList) {

@@ -7899,7 +7899,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
                 return false;
               }
               // FIXME: hasSpoiler, showCationAboveMedia
-              setMessageMediaEdited(new MediaToReplacePickerManager.LocalPickedFile(imageGalleryFile));
+              // XGram: what the viewer sends (a photo editor's cut-out sends a file baked of it in its place)
+              final ImageGalleryFile xgramFile = images != null && !images.isEmpty() && images.get(0) instanceof ImageGalleryFile ? (ImageGalleryFile) images.get(0) : imageGalleryFile;
+              setMessageMediaEdited(new MediaToReplacePickerManager.LocalPickedFile(xgramFile));
               return true;
             }
           },
@@ -12392,7 +12394,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
                 new MediaSpoilerSendDelegate() {
                   @Override
                   public boolean sendSelectedItems (View view, ArrayList<ImageFile> images, TdApi.MessageSendOptions options, boolean disableMarkdown, boolean asFiles, boolean showCaptionAboveMedia, boolean hasSpoiler) {
-                    sendPhotosAndVideosCompressed(new ImageGalleryFile[] {galleryFile}, false, options, disableMarkdown, asFiles, showCaptionAboveMedia, hasSpoiler);
+                    // XGram: what the viewer sends (a photo editor's cut-out sends a file baked of it in its place)
+                    final ImageGalleryFile xgramFile = images != null && !images.isEmpty() && images.get(0) instanceof ImageGalleryFile ? (ImageGalleryFile) images.get(0) : galleryFile;
+                    sendPhotosAndVideosCompressed(new ImageGalleryFile[] {xgramFile}, false, options, disableMarkdown, asFiles, showCaptionAboveMedia, hasSpoiler);
                     return true;
                   }
                 },
@@ -12576,6 +12580,14 @@ public class MessagesController extends ViewController<MessagesController.Argume
       return false;
     }
 
+    // XGram: a photo with a cut-out (the photo editor's Cut out tool) that comes here as it is (the gallery's own Send,
+    // after the viewer closed): the viewer's choices show here, before the reply is taken, and the files baked of it
+    // come back here in its place
+    if (com.fahadali.xgram.editor.XgramCutoutExport.hasCutout(Arrays.asList(files))) {
+      xgramSendCutout(files, needGroupMedia, modifiedSendOptions, disableMarkdown, showCaptionAboveMedia, hasSpoiler);
+      return true;
+    }
+
     // TODO check RightId.SEND_PHOTOS / RightId.SEND_VIDEOS
 
     final long chatId = chat.id;
@@ -12638,6 +12650,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
           } else {
             content = tdlib.filegen().createThumbnail(new TdApi.InputMessageVideo(new TdApi.InputVideo(inputVideo, null, null, 0, null, file.getVideoDuration(true), width, height, U.canStreamVideo(inputVideo)), caption, showCaptionAboveMedia, file.getSelfDestructType(), hasSpoiler), isSecretChat);
           }
+        } else if (!asFiles && com.fahadali.xgram.editor.XgramCutoutExport.isStickerFile(file)) {
+          // XGram: a photo editor's cut-out the viewer baked to be sent as a sticker
+          content = com.fahadali.xgram.editor.XgramCutoutExport.newStickerContent(tdlib, file, isSecretChat);
         } else {
           int[] size = new int[2];
           file.getOutputSize(size);
@@ -12691,6 +12706,29 @@ public class MessagesController extends ViewController<MessagesController.Argume
     });
 
     return true;
+  }
+
+  /** XGram: sendPhotosAndVideosCompressed with a cut-out among the photos (com.fahadali.xgram.editor.XgramCutoutExport). */
+  private void xgramSendCutout (final ImageGalleryFile[] files, final boolean needGroupMedia, final TdApi.MessageSendOptions sendOptions, final boolean disableMarkdown, final boolean showCaptionAboveMedia, final boolean hasSpoiler) {
+    final ArrayList<ImageFile> list = new ArrayList<>(Arrays.asList(files));
+    com.fahadali.xgram.editor.XgramCutoutExport.showChoices(this, null, chat, true, list, new com.fahadali.xgram.editor.XgramCutoutExport.Host() {
+      @Override
+      public boolean canSend () {
+        return !isDestroyed() && chat != null;
+      }
+
+      @Override
+      public void setBusy (boolean busy) { }
+
+      @Override
+      public void send (@NonNull ArrayList<ImageFile> baked, boolean asFiles) {
+        final ImageGalleryFile[] result = new ImageGalleryFile[baked.size()];
+        for (int i = 0; i < result.length; i++) {
+          result[i] = (ImageGalleryFile) baked.get(i);
+        }
+        sendPhotosAndVideosCompressed(result, needGroupMedia, sendOptions, disableMarkdown, asFiles, showCaptionAboveMedia, hasSpoiler);
+      }
+    });
   }
 
   /*private void uploadFile (boolean isSecretChat, TdApi.InputMessageContent content) {

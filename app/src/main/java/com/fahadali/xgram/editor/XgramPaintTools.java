@@ -22,30 +22,31 @@ import org.thunderdog.challegram.mediaview.paint.PaintMode;
 /**
  * The photo editor's drawing tools (the paint section of MediaViewController): Pen (Telegram X's doodle), Marker,
  * Neon, Arrow, Shapes (rectangle or ellipse, outlined or filled), Blur and Pixelate (paint over the photo to hide what
- * is under the stroke) and Eraser (removes the drawings it touches). Each tool has its own size range and keeps its
- * size and colour; the tool picked last comes back the next time (XgramSettings).
+ * is under the stroke), Eraser (removes the drawings it touches) and Cut out (removes the photo's background:
+ * {@link XgramCutoutEditor}). Each tool has its own size range and keeps its size and colour; the tool picked last
+ * comes back the next time (XgramSettings).
  */
 public final class XgramPaintTools {
   private XgramPaintTools () { }
 
   public static final int TOOL_PEN = 0, TOOL_MARKER = 1, TOOL_NEON = 2, TOOL_ARROW = 3, TOOL_SHAPES = 4,
-    TOOL_BLUR = 5, TOOL_PIXELATE = 6, TOOL_ERASER = 7;
+    TOOL_BLUR = 5, TOOL_PIXELATE = 6, TOOL_ERASER = 7, TOOL_CUTOUT = 8;
   /** In the order of the tools row. */
-  public static final int[] TOOLS = {TOOL_PEN, TOOL_MARKER, TOOL_NEON, TOOL_ARROW, TOOL_SHAPES, TOOL_BLUR, TOOL_PIXELATE, TOOL_ERASER};
+  public static final int[] TOOLS = {TOOL_PEN, TOOL_MARKER, TOOL_NEON, TOOL_ARROW, TOOL_SHAPES, TOOL_BLUR, TOOL_PIXELATE, TOOL_ERASER, TOOL_CUTOUT};
 
   public static final int SHAPE_RECTANGLE = 0, SHAPE_ELLIPSE = 1, SHAPE_RECTANGLE_FILLED = 2, SHAPE_ELLIPSE_FILLED = 3;
   public static final int[] SHAPES = {SHAPE_RECTANGLE, SHAPE_ELLIPSE, SHAPE_RECTANGLE_FILLED, SHAPE_ELLIPSE_FILLED};
 
-  /** The size range of each tool, in dp: the stroke width (the eraser: the width it erases). */
-  private static final float[] MIN_SIZE = {4f, 10f, 4f, 4f, 3f, 16f, 16f, 12f};
-  private static final float[] MAX_SIZE = {20f, 44f, 20f, 20f, 16f, 64f, 64f, 48f};
+  /** The size range of each tool, in dp: the stroke width (the eraser: the width it erases; Cut out: its brushes'). */
+  private static final float[] MIN_SIZE = {4f, 10f, 4f, 4f, 3f, 16f, 16f, 12f, 8f};
+  private static final float[] MAX_SIZE = {20f, 44f, 20f, 20f, 16f, 64f, 64f, 48f, 88f};
   /** Where a tool's size starts, 0..1 of its range (the pen: Telegram X's .25). */
-  private static final float[] DEFAULT_SIZE = {.25f, .35f, .3f, .25f, .25f, .4f, .4f, .35f};
+  private static final float[] DEFAULT_SIZE = {.25f, .35f, .3f, .25f, .25f, .4f, .4f, .35f, .35f};
   /** Telegram X's orange; a highlighter yellow for the marker and cyan for neon. */
-  private static final int[] DEFAULT_COLOR = {0xffff3300, 0xffffeb3b, 0xff00e5ff, 0xffff3300, 0xffff3300, 0xffffffff, 0xffffffff, 0xffffffff};
+  private static final int[] DEFAULT_COLOR = {0xffff3300, 0xffffeb3b, 0xff00e5ff, 0xffff3300, 0xffff3300, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff};
 
   public static int clampTool (int tool) {
-    return tool >= TOOL_PEN && tool <= TOOL_ERASER ? tool : TOOL_PEN;
+    return tool >= TOOL_PEN && tool <= TOOL_CUTOUT ? tool : TOOL_PEN;
   }
 
   public static int clampShape (int shape) {
@@ -69,13 +70,14 @@ public final class XgramPaintTools {
       case TOOL_BLUR: return PaintMode.BLUR;
       case TOOL_PIXELATE: return PaintMode.PIXELATE;
       case TOOL_ERASER: return PaintMode.ERASER;
+      case TOOL_CUTOUT: return PaintMode.CUTOUT;
       default: return PaintMode.PATH;
     }
   }
 
-  /** Blur, Pixelate and the eraser have no colour: the colour row hides for them. */
+  /** Blur, Pixelate, the eraser and Cut out have no colour: the colour row hides for them. */
   public static boolean usesColor (int tool) {
-    return tool != TOOL_BLUR && tool != TOOL_PIXELATE && tool != TOOL_ERASER;
+    return tool != TOOL_BLUR && tool != TOOL_PIXELATE && tool != TOOL_ERASER && tool != TOOL_CUTOUT;
   }
 
   /** The tool's size in dp at {@code factor} (0..1) of its range. */
@@ -93,6 +95,7 @@ public final class XgramPaintTools {
       case TOOL_BLUR: return R.drawable.xgram_editor_blur;
       case TOOL_PIXELATE: return R.drawable.xgram_editor_pixelate;
       case TOOL_ERASER: return R.drawable.xgram_editor_eraser;
+      case TOOL_CUTOUT: return R.drawable.xgram_editor_cutout;
       default: return R.drawable.xgram_editor_pen;
     }
   }
@@ -115,6 +118,7 @@ public final class XgramPaintTools {
       case TOOL_BLUR: return R.string.XgramEditorBlur;
       case TOOL_PIXELATE: return R.string.XgramEditorPixelate;
       case TOOL_ERASER: return R.string.XgramEditorEraser;
+      case TOOL_CUTOUT: return R.string.XgramEditorCutout;
       default: return R.string.XgramEditorPen;
     }
   }
@@ -128,7 +132,7 @@ public final class XgramPaintTools {
     }
   }
 
-  /** What the colour row says while a tool without a colour is picked, or 0. */
+  /** What the colour row says while a tool without a colour is picked, or 0 (Cut out: its mode's, XgramCutoutEditor). */
   public static @StringRes int hint (int tool) {
     switch (tool) {
       case TOOL_BLUR: return R.string.XgramEditorBlurHint;

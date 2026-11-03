@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: the photo editor's Cut out: Soft edges (com.fahadali.xgram.editor.XgramCutoutEditor), drawn as the XGram Line icons -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+  android:width="24dp"
+  android:height="24dp"
+  android:viewportWidth="24"
+  android:viewportHeight="24">
+  <path
+    android:pathData="M8,12 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0 Z"
+    android:fillColor="#FF000000" />
+  <path
+    android:pathData="M17,14.49 a1,1 0 1,0 2,0 a1,1 0 1,0 -2,0 Z M13.49,18 a1,1 0 1,0 2,0 a1,1 0 1,0 -2,0 Z M8.51,18 a1,1 0 1,0 2,0 a1,1 0 1,0 -2,0 Z M5,14.49 a1,1 0 1,0 2,0 a1,1 0 1,0 -2,0 Z M5,9.51 a1,1 0 1,0 2,0 a1,1 0 1,0 -2,0 Z M8.51,6 a1,1 0 1,0 2,0 a1,1 0 1,0 -2,0 Z M13.49,6 a1,1 0 1,0 2,0 a1,1 0 1,0 -2,0 Z M17,9.51 a1,1 0 1,0 2,0 a1,1 0 1,0 -2,0 Z"
+    android:fillColor="#FF000000"
+    android:fillAlpha="0.7" />
+  <path
+    android:pathData="M20.3,12 a0.7,0.7 0 1,0 1.4,0 a0.7,0.7 0 1,0 -1.4,0 Z M17.66,18.36 a0.7,0.7 0 1,0 1.4,0 a0.7,0.7 0 1,0 -1.4,0 Z M11.3,21 a0.7,0.7 0 1,0 1.4,0 a0.7,0.7 0 1,0 -1.4,0 Z M4.94,18.36 a0.7,0.7 0 1,0 1.4,0 a0.7,0.7 0 1,0 -1.4,0 Z M2.3,12 a0.7,0.7 0 1,0 1.4,0 a0.7,0.7 0 1,0 -1.4,0 Z M4.94,5.64 a0.7,0.7 0 1,0 1.4,0 a0.7,0.7 0 1,0 -1.4,0 Z M11.3,3 a0.7,0.7 0 1,0 1.4,0 a0.7,0.7 0 1,0 -1.4,0 Z M17.66,5.64 a0.7,0.7 0 1,0 1.4,0 a0.7,0.7 0 1,0 -1.4,0 Z"
+    android:fillColor="#FF000000"
+    android:fillAlpha="0.4" />
+</vector>

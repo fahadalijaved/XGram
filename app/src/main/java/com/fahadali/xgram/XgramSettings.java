@@ -2394,4 +2394,32 @@ public final class XgramSettings {
   public void setEditorBrush (int tool, float size, int color, float hue) {
     pmc().edit().putFloat(KEY_EDITOR_SIZE + tool, size).putInt(KEY_EDITOR_COLOR + tool, color).putFloat(KEY_EDITOR_HUE + tool, hue).apply();
   }
+
+  // The photo editor's Cut out tool (com.fahadali.xgram.editor.XgramCutoutEditor): the mode, the tolerance (0..1), Global
+  // and Soft edges picked last
+
+  public static final String KEY_EDITOR_CUTOUT_MODE = "xgram_editor_cutout_mode";
+  public static final String KEY_EDITOR_CUTOUT_TOLERANCE = "xgram_editor_cutout_tolerance";
+  public static final String KEY_EDITOR_CUTOUT_GLOBAL = "xgram_editor_cutout_global";
+  public static final String KEY_EDITOR_CUTOUT_SOFT = "xgram_editor_cutout_soft";
+
+  public int editorCutoutMode (int defaultMode) {
+    return pmc().getInt(KEY_EDITOR_CUTOUT_MODE, defaultMode);
+  }
+
+  public float editorCutoutTolerance (float defaultTolerance) {
+    return pmc().getFloat(KEY_EDITOR_CUTOUT_TOLERANCE, defaultTolerance);
+  }
+
+  public boolean editorCutoutGlobal (boolean defaultGlobal) {
+    return pmc().getBoolean(KEY_EDITOR_CUTOUT_GLOBAL, defaultGlobal);
+  }
+
+  public boolean editorCutoutSoft (boolean defaultSoft) {
+    return pmc().getBoolean(KEY_EDITOR_CUTOUT_SOFT, defaultSoft);
+  }
+
+  public void setEditorCutout (int mode, float tolerance, boolean global, boolean soft) {
+    pmc().edit().putInt(KEY_EDITOR_CUTOUT_MODE, mode).putFloat(KEY_EDITOR_CUTOUT_TOLERANCE, tolerance).putBoolean(KEY_EDITOR_CUTOUT_GLOBAL, global).putBoolean(KEY_EDITOR_CUTOUT_SOFT, soft).apply();
+  }
 }

@@ -161,6 +161,16 @@ public class SimpleDrawingView extends View implements PaintState.SimpleDrawingC
     }
   }
 
+  // XGram: a + in the ring's middle (the cut-out's background eraser: the colour it removes is the one there)
+  private boolean eraserCrosshair;
+
+  public void setEraserCrosshair (boolean crosshair) {
+    if (this.eraserCrosshair != crosshair) {
+      this.eraserCrosshair = crosshair;
+      invalidate();
+    }
+  }
+
   @Override
   protected void onDraw (Canvas c) {
     if (state != null) {
@@ -180,6 +190,17 @@ public class SimpleDrawingView extends View implements PaintState.SimpleDrawingC
       eraserPaint.setStrokeWidth(Screen.dp(1.5f) / scale);
       eraserPaint.setColor(0xffffffff);
       c.drawCircle(eraserX, eraserY, eraserRadius, eraserPaint);
+      if (eraserCrosshair) { // XGram: the middle the background eraser reads its colour at
+        final float arm = Screen.dp(5f) / scale;
+        eraserPaint.setStrokeWidth(Screen.dp(3f) / scale);
+        eraserPaint.setColor(0x40000000);
+        c.drawLine(eraserX - arm, eraserY, eraserX + arm, eraserY, eraserPaint);
+        c.drawLine(eraserX, eraserY - arm, eraserX, eraserY + arm, eraserPaint);
+        eraserPaint.setStrokeWidth(Screen.dp(1.5f) / scale);
+        eraserPaint.setColor(0xffffffff);
+        c.drawLine(eraserX - arm, eraserY, eraserX + arm, eraserY, eraserPaint);
+        c.drawLine(eraserX, eraserY - arm, eraserX, eraserY + arm, eraserPaint);
+      }
     }
     if (heldLayer != null) {
       heldLayer.drawFrame(c, getMeasuredWidth(), getMeasuredHeight(), screenScale, com.fahadali.xgram.appearance.XgramExpressive.isEnabled());

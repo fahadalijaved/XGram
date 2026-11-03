@@ -125,6 +125,35 @@ public class PhotoGenerationInfo extends GenerationInfo {
     this.paintState = paintState;
   }
 
+  // XGram: what the drawing's cut-out (the Cut out tool) does in process(): nothing in a sent photo (the conversion
+  // can't hold it); a cut-out's PNG (com.fahadali.xgram.editor.XgramCutoutExport) has it cut (PaintState.CUTOUT_APPLY)
+  private int xgramCutoutMode = PaintState.CUTOUT_NONE;
+
+  /** XGram: PaintState.CUTOUT_NONE (the default) or CUTOUT_APPLY, see PaintState.draw. */
+  public void xgramSetCutoutMode (int cutoutMode) {
+    this.xgramCutoutMode = cutoutMode;
+  }
+
+  /**
+   * XGram: {@code file}'s conversion without its drawing (its rotation, filters and crop), for a PhotoGenerationInfo
+   * that gets the drawing from xgramSetPaintState (a cut-out's PNG, made from the edit itself).
+   */
+  public static String xgramMakeConversionWithoutPaint (ImageGalleryFile file) {
+    StringBuilder b = new StringBuilder(TYPE_PHOTO);
+    b.append(file.getRotation());
+    b.append(',');
+    FiltersState state = file.getFiltersState();
+    if (state != null && !state.isEmpty()) {
+      b.append(state.toString());
+    }
+    b.append(',');
+    CropState cropState = file.getCropState();
+    if (cropState != null && !cropState.isEmpty()) {
+      b.append(CropStateParser.toParsableString(cropState));
+    }
+    return b.toString();
+  }
+
   /**
    * XGram, after process(): {@code outMatrix} takes the drawing's canvas to the processed bitmap (the turn around the
    * centre, the mirror, the crop and the rotation it went through), and {@code outRect} is the drawing's own rect on
@@ -203,8 +232,9 @@ public class PhotoGenerationInfo extends GenerationInfo {
       Bitmap bitmapRegion = null;
       Rect regionRect = null;
       // XGram: not when blur or pixelate strokes paint with the photo: their copy is made from the whole photo, as in
-      // the editor (one of the crop alone shifts the pixelate grid and blurs its clamped edges); cropped in memory instead
-      if (Config.CROP_USE_REGION_READER && opts.inSampleSize > 1 && cropState.getDegreesAroundCenter() == 0 && (paintState == null || !paintState.hasBaseDrawings())) { // TODO BitmapRegionDecoder support for getDegreesAroundCenter() != 0
+      // the editor (one of the crop alone shifts the pixelate grid and blurs its clamped edges); cropped in memory instead.
+      // Nor with a cut-out: its mask covers the whole photo
+      if (Config.CROP_USE_REGION_READER && opts.inSampleSize > 1 && cropState.getDegreesAroundCenter() == 0 && (paintState == null || (!paintState.hasBaseDrawings() && !paintState.hasCutout()))) { // TODO BitmapRegionDecoder support for getDegreesAroundCenter() != 0
         BitmapRegionDecoder decoder = null;
         try {
           regionRect = new Rect();
@@ -273,10 +303,10 @@ public class PhotoGenerationInfo extends GenerationInfo {
         int top = (int) ((float) regionRect.top * scaleY);
 
         // XGram: the region bitmap covers its own rect, inside the whole photo's drawing
-        paintState.draw(c, -left, -top, baseWidth, baseHeight, source, sourceMirrorHorizontally, sourceMirrorVertically, new android.graphics.RectF(0, 0, bitmapWidth, bitmapHeight));
+        paintState.draw(c, -left, -top, baseWidth, baseHeight, source, sourceMirrorHorizontally, sourceMirrorVertically, new android.graphics.RectF(0, 0, bitmapWidth, bitmapHeight), xgramCutoutMode); // XGram: no checkerboard in the sent photo (never a region with a cut-out: readImage)
         xgramPaintRect.set(-left, -top, -left + baseWidth, -top + baseHeight); // XGram
       } else {
-        paintState.draw(c, 0,0, bitmapWidth, bitmapHeight, source, sourceMirrorHorizontally, sourceMirrorVertically);
+        paintState.draw(c, 0,0, bitmapWidth, bitmapHeight, source, sourceMirrorHorizontally, sourceMirrorVertically, null, xgramCutoutMode); // XGram: no checkerboard in the sent photo; a cut-out's PNG cut
         xgramPaintRect.set(0, 0, bitmapWidth, bitmapHeight); // XGram
       }
       xgramPaintPlaced = true; // XGram

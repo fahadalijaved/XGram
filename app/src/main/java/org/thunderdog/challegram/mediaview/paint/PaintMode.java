@@ -31,6 +31,8 @@ public class PaintMode {
   public static final int ELLIPSE_FILLED = 10;
   /** Removes the drawings it touches. */
   public static final int ERASER = 11;
+  /** Removes the photo's background (com.fahadali.xgram.editor.XgramCutoutEditor takes the touches). */
+  public static final int CUTOUT = 12;
 
   public static final int FREE_MOVEMENT = 100;
 
@@ -65,6 +67,7 @@ public class PaintMode {
       case RECTANGLE_FILLED:
       case ELLIPSE_FILLED:
       case ERASER:
+      case CUTOUT:
         return mode;
     }
     return PATH;

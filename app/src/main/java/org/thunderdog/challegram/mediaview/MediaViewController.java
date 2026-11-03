@@ -7177,7 +7177,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
           undoButton.setOnLongClickListener(v -> {
             if (paintView != null && !paintView.getContentWrap().isBusy()) {
               // XGram M3E: a headline and supporting text for the confirm sheet (Expressive design only)
-              xgramShowConfirm(null, Lang.getString(R.string.XgramConfirmClearDrawing), Lang.getString(R.string.XgramConfirmClearDrawingText), new int[]{R.id.paint_clear, R.id.btn_cancel}, new String[]{Lang.getString(R.string.ClearDrawing), Lang.getString(R.string.Cancel)}, new int[] {OptionColor.RED, OptionColor.NORMAL}, new int[] {R.drawable.baseline_delete_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
+              xgramShowConfirm(null, Lang.getString(R.string.XgramConfirmClearDrawing), Lang.getString(currentPaintState != null && currentPaintState.hasCutout() ? R.string.XgramConfirmClearDrawingCutoutText : R.string.XgramConfirmClearDrawingText) /* XGram: the cut-out comes back too */, new int[]{R.id.paint_clear, R.id.btn_cancel}, new String[]{Lang.getString(R.string.ClearDrawing), Lang.getString(R.string.Cancel)}, new int[] {OptionColor.RED, OptionColor.NORMAL}, new int[] {R.drawable.baseline_delete_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
                 if (id == R.id.paint_clear) {
                   undoAllPaintActions();
                 }
@@ -7899,7 +7899,13 @@ public class MediaViewController extends ViewController<MediaViewController.Args
 
     paintView.reset(paintingItem.getSourceGalleryFile(), paintingWidth, paintingHeight, null, null, currentPaintState);
     paintView.setPaintBase(paintingBitmap, paintingMirrorHorizontally, paintingMirrorVertically); // XGram
-    paintView.post(this::xgramPrepareBrushBase); // XGram: once it is measured, for Blur or Pixelate picked last time
+    // XGram: the Cut out tool cuts this photo, mirrored as shown, and takes the touches in its mode
+    if (xgramCutoutEditor != null) {
+      xgramCutoutEditor.setPhoto(paintingBitmap, paintingMirrorHorizontally, paintingMirrorVertically);
+    }
+    paintView.getContentWrap().setCutoutEditor(xgramCutoutEditor);
+    xgramUpdateCutoutControls(false);
+    paintView.post(this::xgramPrepareBrushBase); // XGram: once it is measured, for Blur, Pixelate or Cut out picked last time
     boolean changed = paintingItem.setPaintState(null, false);
 
     mediaView.getBaseCell().addView(paintView);
@@ -7965,6 +7971,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
 
   private void hidePaintEditor () {
     xgramCloseLayerEditors(); // XGram: a held layer goes back, the text editor and the sticker picker close
+    if (xgramCutoutEditor != null) {
+      xgramCutoutEditor.release(currentPaintState); // XGram: a cut-out stroke in progress is undone, its buffers freed
+    }
     if (paintView != null) {
       paintView.setEditorVisible(false);
     }
@@ -7999,6 +8008,10 @@ public class MediaViewController extends ViewController<MediaViewController.Args
 
   private com.fahadali.xgram.editor.XgramPaintToolbar paintToolbar, paintShapesBar;
   private com.fahadali.xgram.editor.XgramBrushSizeSlider paintSizeSlider;
+  // XGram: the Cut out tool's row (where Shapes' is) and its tolerance (in the colour row's place)
+  private com.fahadali.xgram.editor.XgramPaintToolbar xgramCutoutBar;
+  private com.fahadali.xgram.editor.XgramToleranceRow xgramToleranceRow;
+  private com.fahadali.xgram.editor.XgramCutoutEditor xgramCutoutEditor;
   private TextView paintToolHint;
   private ImageView redoButton;
   private int paintTool = -1, paintShape;
@@ -8033,6 +8046,44 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     paintShapesBar.setShown(false, false);
     paintControlsWrap.addView(paintShapesBar);
 
+    // XGram: Cut out's row in the same place: the modes, then Global and Soft edges (toggles) and Invert (an action)
+    xgramCutoutEditor = new com.fahadali.xgram.editor.XgramCutoutEditor();
+    final int[] cutoutItems = com.fahadali.xgram.editor.XgramCutoutEditor.ITEMS;
+    final int[] cutoutIcons = new int[cutoutItems.length], cutoutNames = new int[cutoutItems.length];
+    for (int i = 0; i < cutoutItems.length; i++) {
+      cutoutIcons[i] = com.fahadali.xgram.editor.XgramCutoutEditor.icon(cutoutItems[i]);
+      cutoutNames[i] = com.fahadali.xgram.editor.XgramCutoutEditor.name(cutoutItems[i]);
+    }
+    params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, toolsRowHeight, Gravity.BOTTOM);
+    params.bottomMargin = colorRowHeight + toolsRowHeight;
+    xgramCutoutBar = new com.fahadali.xgram.editor.XgramPaintToolbar(context(), true);
+    xgramCutoutBar.setItems(cutoutItems, cutoutIcons, cutoutNames);
+    xgramCutoutBar.setToggle(com.fahadali.xgram.editor.XgramCutoutEditor.ITEM_GLOBAL);
+    xgramCutoutBar.setToggle(com.fahadali.xgram.editor.XgramCutoutEditor.ITEM_SOFT);
+    xgramCutoutBar.setIndependent(com.fahadali.xgram.editor.XgramCutoutEditor.ITEM_INVERT);
+    xgramCutoutBar.setGroupBreak(4); // the four modes, then the toggles and Invert, set apart
+    xgramCutoutBar.setCallback(xgramPaintToolbarCallback);
+    xgramCutoutBar.setLayoutParams(params);
+    xgramCutoutBar.setShown(false, false);
+    paintControlsWrap.addView(xgramCutoutBar);
+
+    params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, colorRowHeight, Gravity.BOTTOM);
+    params.leftMargin = params.rightMargin = margin; // between Undo and Redo, as the line about the tool
+    xgramToleranceRow = new com.fahadali.xgram.editor.XgramToleranceRow(context());
+    xgramToleranceRow.setValue(xgramCutoutEditor.getTolerance());
+    xgramToleranceRow.setCallback((row, value, done) -> {
+      if (xgramCutoutEditor != null) {
+        xgramCutoutEditor.setTolerance(value);
+        if (done && xgramCutoutEditor.getMode() == com.fahadali.xgram.editor.XgramCutoutEditor.MODE_WAND) {
+          xgramCutoutEditor.redoLastWand(currentPaintState); // the last tap again, with the new tolerance (not the background eraser's)
+        }
+      }
+    });
+    xgramToleranceRow.setAlpha(0f);
+    xgramToleranceRow.setVisibility(View.INVISIBLE);
+    xgramToleranceRow.setLayoutParams(params);
+    paintControlsWrap.addView(xgramToleranceRow);
+
     params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, colorRowHeight, Gravity.BOTTOM);
     params.leftMargin = params.rightMargin = margin;
     paintToolHint = new NoScrollTextView(context());
@@ -8051,6 +8102,8 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     params = FrameLayoutFix.newParams(Screen.dp(196f), ViewGroup.LayoutParams.MATCH_PARENT, (Lang.rtl() ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP);
     params.topMargin = Screen.dp(64f);
     params.bottomMargin = colorRowHeight + toolsRowHeight + Screen.dp(12f);
+    xgramSizeSliderBottomMargin = params.bottomMargin; // XGram: Cut out's row raises it (xgramUpdateCutoutControls)
+    xgramCutoutRowHeight = toolsRowHeight;
     paintSizeSlider = new com.fahadali.xgram.editor.XgramBrushSizeSlider(context());
     paintSizeSlider.setCallback(new com.fahadali.xgram.editor.XgramBrushSizeSlider.Callback() {
       @Override
@@ -8076,6 +8129,8 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       }
       if (toolbar == paintShapesBar) {
         xgramSetPaintShape(id);
+      } else if (toolbar == xgramCutoutBar) {
+        xgramOnCutoutItem(id);
       } else {
         xgramSetPaintTool(id, true);
       }
@@ -8083,7 +8138,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
 
     @Override
     public boolean onPaintToolbarLongPress (com.fahadali.xgram.editor.XgramPaintToolbar toolbar, View button, int id) {
-      int name = toolbar == paintShapesBar ? com.fahadali.xgram.editor.XgramPaintTools.shapeName(id) : com.fahadali.xgram.editor.XgramPaintTools.name(id);
+      int name = toolbar == paintShapesBar ? com.fahadali.xgram.editor.XgramPaintTools.shapeName(id) : toolbar == xgramCutoutBar ? com.fahadali.xgram.editor.XgramCutoutEditor.name(id) : com.fahadali.xgram.editor.XgramPaintTools.name(id);
       context().tooltipManager().builder(button).color(context().tooltipManager().overrideColorProvider(getForcedTheme())).show(tdlib, Lang.getString(name)).hideDelayed();
       return true;
     }
@@ -8118,16 +8173,32 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     paintToolbar.setChecked(tool, byUser);
     paintShapesBar.setChecked(paintShape, false);
     paintShapesBar.setShown(tool == com.fahadali.xgram.editor.XgramPaintTools.TOOL_SHAPES, byUser);
+    xgramCutoutBar.setShown(tool == com.fahadali.xgram.editor.XgramPaintTools.TOOL_CUTOUT, byUser); // XGram
     final int hint = com.fahadali.xgram.editor.XgramPaintTools.hint(tool);
     if (hint != 0) {
       paintToolHint.setText(Lang.getString(hint));
     }
     xgramSetColorRowVisible(com.fahadali.xgram.editor.XgramPaintTools.usesColor(tool), byUser);
+    xgramUpdateCutoutControls(byUser); // XGram: Cut out's row, tolerance and line, and the size slider
     xgramUpdateSizePreview();
     if (byUser) {
       com.fahadali.xgram.editor.XgramPaintTools.saveTool(tool, paintShape);
       xgramPrepareBrushBase();
-      paintSizeSlider.flashDot(); // the new tool's size, for a moment
+      if (tool != com.fahadali.xgram.editor.XgramPaintTools.TOOL_CUTOUT || com.fahadali.xgram.editor.XgramCutoutEditor.usesSize(xgramCutoutEditor.getMode())) { // XGram: not as the slider fades out (the wand has no size)
+        paintSizeSlider.flashDot(); // the new tool's size, for a moment
+      }
+      if (tool == com.fahadali.xgram.editor.XgramPaintTools.TOOL_CUTOUT) {
+        // XGram: how to use Cut out's mode, once its row has risen into place (Erase and Restore have it as the line
+        // in the colour row's place already)
+        paintToolbar.postDelayed(() -> {
+          if (currentSection == SECTION_PAINT && paintTool == com.fahadali.xgram.editor.XgramPaintTools.TOOL_CUTOUT && xgramCutoutEditor != null && paintControlsWrap != null && paintControlsWrap.getParent() != null) {
+            final int mode = xgramCutoutEditor.getMode();
+            if (com.fahadali.xgram.editor.XgramCutoutEditor.usesTolerance(mode)) {
+              xgramShowCutoutTip(mode, com.fahadali.xgram.editor.XgramCutoutEditor.hint(mode, xgramCutoutEditor.isGlobal()));
+            }
+          }
+        }, 240L);
+      }
     }
     setPaintType(com.fahadali.xgram.editor.XgramPaintTools.paintMode(tool, paintShape));
     onBrushChanged(colorPreviewView);
@@ -8136,6 +8207,13 @@ public class MediaViewController extends ViewController<MediaViewController.Args
 
   /** Makes the blurred or pixelated copy of the photo as Blur or Pixelate is picked, not on their first stroke. */
   private void xgramPrepareBrushBase () {
+    if (paintTool == com.fahadali.xgram.editor.XgramPaintTools.TOOL_CUTOUT) {
+      // XGram: and the photo's colours for the wand and the background eraser as Cut out is picked
+      if (xgramCutoutEditor != null && paintView != null && paintView.isEditorVisible()) {
+        xgramCutoutEditor.prepare(currentPaintState);
+      }
+      return;
+    }
     final int kind;
     if (paintTool == com.fahadali.xgram.editor.XgramPaintTools.TOOL_BLUR) {
       kind = com.fahadali.xgram.editor.XgramPaintBase.KIND_BLUR;
@@ -8206,7 +8284,150 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     colorPickerView.setVisibility(visibility);
     colorPreviewView.setAlpha(alpha);
     colorPreviewView.setVisibility(visibility);
-    paintToolHint.setAlpha(1f - alpha);
+    xgramColorRowAlpha = alpha;
+    xgramUpdateToolLineAlpha(); // XGram: the line about the tool, or Cut out's tolerance
+  }
+
+  // XGram: the Cut out tool (com.fahadali.xgram.editor.XgramCutoutEditor). Its row takes the Shapes row's place: Magic
+  // wand, Background eraser, Erase, Restore, then Global (the wand's colour everywhere), Soft edges and Invert. The wand
+  // and the background eraser show their tolerance in the colour row's place, Erase and Restore a line about them; the
+  // size slider is for the brushes. A new tolerance or Global taps the wand again where it was last tapped.
+
+  private float xgramColorRowAlpha = 1f, xgramToleranceFactor;
+  private BoolAnimator xgramToleranceAnimator, xgramSizeSliderAnimator;
+  private int xgramSizeSliderBottomMargin, xgramCutoutRowHeight;
+
+  private void xgramUpdateToolLineAlpha () {
+    final float hidden = 1f - xgramColorRowAlpha;
+    paintToolHint.setAlpha(hidden * (1f - xgramToleranceFactor));
+    if (xgramToleranceRow != null) {
+      final float alpha = hidden * xgramToleranceFactor;
+      xgramToleranceRow.setAlpha(alpha);
+      xgramToleranceRow.setVisibility(alpha > 0f ? View.VISIBLE : View.INVISIBLE);
+    }
+  }
+
+  private void xgramSetToleranceVisible (boolean visible, boolean animated) {
+    if (xgramToleranceAnimator == null) {
+      xgramToleranceAnimator = new BoolAnimator(0, (id, factor, fraction, callee) -> {
+        xgramToleranceFactor = MathUtils.clamp(factor);
+        xgramUpdateToolLineAlpha();
+      }, AnimatorUtils.DECELERATE_INTERPOLATOR, 180L, false);
+    }
+    com.fahadali.xgram.appearance.XgramAppMotion.use(xgramToleranceAnimator, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, true);
+    xgramToleranceAnimator.setValue(visible, animated);
+    xgramToleranceFactor = MathUtils.clamp(xgramToleranceAnimator.getFloatValue());
+    xgramUpdateToolLineAlpha();
+  }
+
+  private void xgramSetSizeSliderVisible (boolean visible, boolean animated) {
+    if (paintSizeSlider == null) {
+      return;
+    }
+    if (xgramSizeSliderAnimator == null) {
+      xgramSizeSliderAnimator = new BoolAnimator(0, (id, factor, fraction, callee) -> xgramSetSizeSliderFactor(factor), AnimatorUtils.DECELERATE_INTERPOLATOR, 180L, true);
+    }
+    com.fahadali.xgram.appearance.XgramAppMotion.use(xgramSizeSliderAnimator, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, true);
+    xgramSizeSliderAnimator.setValue(visible, animated);
+    xgramSetSizeSliderFactor(xgramSizeSliderAnimator.getFloatValue());
+  }
+
+  private void xgramSetSizeSliderFactor (float factor) {
+    final float alpha = MathUtils.clamp(factor);
+    paintSizeSlider.setAlpha(alpha);
+    paintSizeSlider.setVisibility(alpha > 0f ? View.VISIBLE : View.INVISIBLE);
+  }
+
+  /** Cut out's row, its tolerance or line and the size slider, as the tool, its mode and the drawing's cut-out are. */
+  private void xgramUpdateCutoutControls (boolean animated) {
+    if (xgramCutoutBar == null || xgramCutoutEditor == null || paintToolHint == null) {
+      return;
+    }
+    final com.fahadali.xgram.editor.XgramCutoutEditor editor = xgramCutoutEditor;
+    final boolean active = paintTool == com.fahadali.xgram.editor.XgramPaintTools.TOOL_CUTOUT;
+    final int mode = editor.getMode();
+    xgramCutoutBar.setChecked(mode, animated);
+    xgramCutoutBar.setItemChecked(com.fahadali.xgram.editor.XgramCutoutEditor.ITEM_GLOBAL, editor.isGlobal(), animated);
+    xgramCutoutBar.setItemChecked(com.fahadali.xgram.editor.XgramCutoutEditor.ITEM_SOFT, editor.isSoft(currentPaintState), animated);
+    xgramCutoutBar.setItemEnabled(com.fahadali.xgram.editor.XgramCutoutEditor.ITEM_GLOBAL, mode == com.fahadali.xgram.editor.XgramCutoutEditor.MODE_WAND);
+    final boolean tolerance = com.fahadali.xgram.editor.XgramCutoutEditor.usesTolerance(mode);
+    if (active && !tolerance) {
+      paintToolHint.setText(Lang.getString(com.fahadali.xgram.editor.XgramCutoutEditor.hint(mode, editor.isGlobal())));
+    }
+    if (xgramToleranceRow != null) {
+      xgramToleranceRow.setValue(editor.getTolerance());
+    }
+    xgramSetToleranceVisible(active && tolerance, animated);
+    xgramSetSizeSliderVisible(!active || com.fahadali.xgram.editor.XgramCutoutEditor.usesSize(mode), animated);
+    // the size slider stays above Cut out's row, which is wider than the Shapes row and reaches under its strip: it
+    // rises and comes down with the row, not in one frame
+    if (xgramSizeSliderRaiseAnimator == null) {
+      xgramSizeSliderRaiseAnimator = new BoolAnimator(0, (id, factor, fraction, callee) -> xgramSetSizeSliderRaise(factor), AnimatorUtils.DECELERATE_INTERPOLATOR, 180L, false);
+    }
+    com.fahadali.xgram.appearance.XgramAppMotion.use(xgramSizeSliderRaiseAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, true);
+    xgramSizeSliderRaiseAnimator.setValue(active, animated);
+    xgramSetSizeSliderRaise(xgramSizeSliderRaiseAnimator.getFloatValue());
+  }
+
+  private BoolAnimator xgramSizeSliderRaiseAnimator;
+
+  private void xgramSetSizeSliderRaise (float factor) {
+    if (paintSizeSlider != null && paintSizeSlider.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
+      final ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) paintSizeSlider.getLayoutParams();
+      final int bottomMargin = xgramSizeSliderBottomMargin + Math.round(xgramCutoutRowHeight * MathUtils.clamp(factor));
+      if (params.bottomMargin != bottomMargin) {
+        params.bottomMargin = bottomMargin;
+        paintSizeSlider.setLayoutParams(params);
+      }
+    }
+  }
+
+  private void xgramOnCutoutItem (int id) {
+    final com.fahadali.xgram.editor.XgramCutoutEditor editor = xgramCutoutEditor;
+    if (editor == null || paintTool != com.fahadali.xgram.editor.XgramPaintTools.TOOL_CUTOUT || currentPaintState == null) {
+      return;
+    }
+    switch (id) {
+      case com.fahadali.xgram.editor.XgramCutoutEditor.ITEM_GLOBAL: {
+        final boolean global = !editor.isGlobal();
+        editor.setGlobal(global);
+        xgramUpdateCutoutControls(true);
+        xgramShowCutoutTip(id, global ? R.string.XgramEditorCutoutGlobalOn : R.string.XgramEditorCutoutGlobalOff);
+        editor.redoLastWand(currentPaintState); // the last tap again, near or everywhere
+        break;
+      }
+      case com.fahadali.xgram.editor.XgramCutoutEditor.ITEM_SOFT: {
+        final boolean soft = !editor.isSoft(currentPaintState);
+        editor.setSoft(currentPaintState, soft);
+        xgramUpdateCutoutControls(true);
+        xgramShowCutoutTip(id, soft ? R.string.XgramEditorCutoutSoftOn : R.string.XgramEditorCutoutSoftOff);
+        break;
+      }
+      case com.fahadali.xgram.editor.XgramCutoutEditor.ITEM_INVERT: {
+        editor.invert(currentPaintState);
+        break;
+      }
+      default: {
+        final boolean changed = editor.getMode() != id;
+        editor.setMode(id);
+        xgramUpdateCutoutControls(true);
+        if (changed && com.fahadali.xgram.editor.XgramCutoutEditor.usesSize(id)) {
+          paintSizeSlider.flashDot();
+        }
+        if (com.fahadali.xgram.editor.XgramCutoutEditor.usesTolerance(id)) { // Erase and Restore: the line says it already
+          xgramShowCutoutTip(id, com.fahadali.xgram.editor.XgramCutoutEditor.hint(id, editor.isGlobal()));
+        }
+        break;
+      }
+    }
+  }
+
+  /** A line over one of Cut out's buttons for a moment: how to use the mode, or what a toggle now does. */
+  private void xgramShowCutoutTip (int id, int text) {
+    final View button = xgramCutoutBar != null ? xgramCutoutBar.findButton(id) : null;
+    if (button != null) {
+      context().tooltipManager().builder(button).color(context().tooltipManager().overrideColorProvider(getForcedTheme())).show(tdlib, Lang.getString(text)).hideDelayed();
+    }
   }
 
   // XGram: the layers over the drawing (com.fahadali.xgram.editor.XgramLayer). In the brush section Telegram X's dormant
@@ -9794,12 +10015,59 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       imageFiles.add(stack.getCurrent().getSourceGalleryFile());
     }
 
+    // XGram: a photo with a cut-out (the Cut out tool) doesn't go as a photo, which can't keep its transparency: the
+    // choices (a sticker, a PNG file, a photo on white, the PNG saved) bake it into a file that goes instead
+    if (com.fahadali.xgram.editor.XgramCutoutExport.hasCutout(imageFiles)) {
+      xgramSendCutout(view, imageFiles, initialSendOptions, disableMarkdown);
+      return;
+    }
+
     if (sendDelegate.sendSelectedItems(view, imageFiles, initialSendOptions, disableMarkdown, asFiles, sendDelegate.showCaptionAboveMedia(), sendDelegate.isHideMediaEnabled())) {
       forceAnimationType = ANIMATION_TYPE_FADE;
       isMediaSent = true;
       setUIBlocked(true);
       popupView.hideWindow(true);
     }
+  }
+
+  // XGram: Send with a cut-out among the photos (com.fahadali.xgram.editor.XgramCutoutExport): the choices, then the
+  // baked files go through the send delegate in the photos' places. As a profile photo and in place of a message's
+  // photo (the replace pickers' FLAG_DISALLOW_SEND_BUTTON_HAPTIC_MENU) only the photo on white is offered
+
+  private boolean xgramCutoutBusy;
+
+  private void xgramSendCutout (View view, ArrayList<ImageFile> imageFiles, TdApi.MessageSendOptions sendOptions, boolean disableMarkdown) {
+    if (xgramCutoutBusy || isMediaSent) {
+      return;
+    }
+    final boolean sendsMessages = !inProfilePhotoEditMode() && !hasFlag(Args.FLAG_DISALLOW_SEND_BUTTON_HAPTIC_MENU);
+    final long chatId = getOutputChatId();
+    final TdApi.Chat chat = sendsMessages && chatId != 0 ? tdlib.chat(chatId) : null;
+    com.fahadali.xgram.editor.XgramCutoutExport.showChoices(this, getForcedTheme(), chat, sendsMessages, imageFiles, new com.fahadali.xgram.editor.XgramCutoutExport.Host() {
+      @Override
+      public boolean canSend () {
+        return !isDestroyed() && !isMediaSent && sendDelegate != null;
+      }
+
+      @Override
+      public void setBusy (boolean busy) {
+        xgramCutoutBusy = busy;
+        setUIBlocked(busy);
+      }
+
+      @Override
+      public void send (@NonNull ArrayList<ImageFile> files, boolean asFiles) {
+        if (!canSend()) {
+          return;
+        }
+        if (sendDelegate.sendSelectedItems(view, files, sendOptions, disableMarkdown, asFiles, sendDelegate.showCaptionAboveMedia(), sendDelegate.isHideMediaEnabled())) {
+          forceAnimationType = ANIMATION_TYPE_FADE;
+          isMediaSent = true;
+          setUIBlocked(true);
+          popupView.hideWindow(true);
+        }
+      }
+    });
   }
 
   private boolean isProfileStack () {
@@ -10949,6 +11217,36 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   }
 
   private void openShareControllerForItem (MediaItem item2) {
+    // XGram: a photo with a cut-out is shared as a photo, which can't keep its transparency: the choices that fit here
+    // (on a white background, or the PNG saved) instead of the whole photo silently
+    final ImageGalleryFile xgramSource = item2.getSourceGalleryFile();
+    if (com.fahadali.xgram.editor.XgramCutoutExport.hasCutout(xgramSource)) {
+      if (xgramCutoutBusy || isMediaSent) {
+        return;
+      }
+      final ArrayList<ImageFile> xgramFiles = new ArrayList<>(1);
+      xgramFiles.add(xgramSource);
+      com.fahadali.xgram.editor.XgramCutoutExport.showChoices(this, getForcedTheme(), null, false, xgramFiles, new com.fahadali.xgram.editor.XgramCutoutExport.Host() {
+        @Override
+        public boolean canSend () {
+          return !isDestroyed() && !isMediaSent;
+        }
+
+        @Override
+        public void setBusy (boolean busy) {
+          xgramCutoutBusy = busy;
+          setUIBlocked(busy);
+        }
+
+        @Override
+        public void send (@NonNull ArrayList<ImageFile> files, boolean asFiles) {
+          if (canSend() && !files.isEmpty() && files.get(0) instanceof ImageGalleryFile && !com.fahadali.xgram.editor.XgramCutoutExport.hasCutout(files.get(0))) {
+            openShareControllerForItem(new MediaItem(context, tdlib, (ImageGalleryFile) files.get(0)));
+          }
+        }
+      });
+      return;
+    }
     ShareController c = new ShareController(context, tdlib);
     CharSequence caption = Td.isEmpty(item2.getCaption()) ? null : TD.toCharSequence(item2.getCaption());
     c.setArguments(new ShareController.Args(item2, caption, caption).setAfter(this::forceClose));

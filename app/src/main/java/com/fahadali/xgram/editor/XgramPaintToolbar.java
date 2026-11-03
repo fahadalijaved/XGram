@@ -18,6 +18,7 @@ import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.accessibility.AccessibilityNodeInfo;
 
 import androidx.annotation.DrawableRes;
 import androidx.annotation.NonNull;
@@ -118,9 +119,64 @@ public final class XgramPaintToolbar extends ViewGroup implements FactorAnimator
   public void setChecked (int id, boolean animated) {
     for (int i = 0; i < getChildCount(); i++) {
       View view = getChildAt(i);
-      if (view instanceof Item) {
+      if (view instanceof Item && !((Item) view).independent) {
         ((Item) view).setChecked(((Item) view).itemId == id, animated);
       }
+    }
+  }
+
+  // Toggles and actions next to the one-of choice (the cut-out row's Global, Soft edges, Invert): setChecked leaves
+  // them as they are; a toggle shows its state with the picked look
+
+  public void setIndependent (int id) {
+    Item item = findItem(id);
+    if (item != null) {
+      item.independent = true;
+    }
+  }
+
+  /** An independent on/off toggle (Global, Soft edges): TalkBack reads it as a switch, on or off. */
+  public void setToggle (int id) {
+    Item item = findItem(id);
+    if (item != null) {
+      item.independent = true;
+      item.toggle = true;
+      item.setSelected(false);
+    }
+  }
+
+  // A group break (the cut-out row: its modes, then its toggles and action): a wider gap with a thin line in it
+
+  private static final float GROUP_GAP_DP = 12f;
+  private int groupBreak = -1;
+  private float dividerX;
+
+  /** The buttons after the first {@code afterCount} are set apart. */
+  public void setGroupBreak (int afterCount) {
+    if (groupBreak != afterCount) {
+      groupBreak = afterCount;
+      requestLayout();
+      invalidate();
+    }
+  }
+
+  private int groupGap () {
+    return groupBreak > 0 && groupBreak < getChildCount() ? Screen.dp(GROUP_GAP_DP) : 0;
+  }
+
+  public void setItemChecked (int id, boolean checked, boolean animated) {
+    Item item = findItem(id);
+    if (item != null) {
+      item.setChecked(checked, animated);
+    }
+  }
+
+  /** A button that does nothing now is dimmed and takes no touches. */
+  public void setItemEnabled (int id, boolean enabled) {
+    Item item = findItem(id);
+    if (item != null && item.isEnabled() != enabled) {
+      item.setEnabled(enabled);
+      item.setAlpha(enabled ? 1f : .38f);
     }
   }
 
@@ -163,11 +219,12 @@ public final class XgramPaintToolbar extends ViewGroup implements FactorAnimator
     if (count == 0) {
       return;
     }
+    final int groupGap = groupGap();
     if (expressive) {
-      final int available = width - Screen.dp(EDGE_DP + PILL_PADDING_DP) * 2 - Screen.dp(GAP_DP) * (count - 1);
+      final int available = width - Screen.dp(EDGE_DP + PILL_PADDING_DP) * 2 - Screen.dp(GAP_DP) * (count - 1) - groupGap;
       buttonWidth = buttonHeight = Math.max(1, Math.min(Screen.dp(BUTTON_DP), available / count));
     } else {
-      buttonWidth = Math.max(1, Math.min(Screen.dp(CLASSIC_MAX_WIDTH_DP), width / count));
+      buttonWidth = Math.max(1, Math.min(Screen.dp(CLASSIC_MAX_WIDTH_DP), (width - groupGap) / count));
       buttonHeight = Math.min(height, Screen.dp(CLASSIC_BUTTON_HEIGHT_DP));
     }
     final int widthSpec = MeasureSpec.makeMeasureSpec(buttonWidth, MeasureSpec.EXACTLY);
@@ -184,16 +241,20 @@ public final class XgramPaintToolbar extends ViewGroup implements FactorAnimator
       return;
     }
     final int gap = expressive ? Screen.dp(GAP_DP) : 0;
-    final int total = buttonWidth * count + gap * (count - 1);
+    final int groupGap = groupGap();
+    final int total = buttonWidth * count + gap * (count - 1) + groupGap;
     final int left = (getMeasuredWidth() - total) / 2;
     final int top = (getMeasuredHeight() - buttonHeight) / 2;
     final boolean rtl = Lang.rtl();
+    // the place (from the left) of the first button after the group break
+    final int breakAt = groupGap > 0 ? (rtl ? count - groupBreak : groupBreak) : count;
     for (int i = 0; i < count; i++) {
       // the first tool at the start: on the right in RTL
       final int index = rtl ? count - 1 - i : i;
-      final int x = left + index * (buttonWidth + gap);
+      final int x = left + index * (buttonWidth + gap) + (index >= breakAt ? groupGap : 0);
       getChildAt(i).layout(x, top, x + buttonWidth, top + buttonHeight);
     }
+    dividerX = groupGap > 0 ? left + breakAt * (buttonWidth + gap) + (groupGap - gap) / 2f : -1f;
     final int padding = Screen.dp(PILL_PADDING_DP);
     pillRect.set(left - padding, top - padding, left + total + padding, top + buttonHeight + padding);
   }
@@ -210,12 +271,21 @@ public final class XgramPaintToolbar extends ViewGroup implements FactorAnimator
     } else if (classicBand) {
       c.drawColor(Theme.getColor(ColorId.transparentEditor));
     }
+    if (dividerX >= 0f && groupGap() > 0) {
+      // the group break's line, 1 x 24dp
+      pillPaint.setColor(expressive ? XgramM3MediaChrome.onMedia(XgramExpressive.OUTLINE_VARIANT) : 0x4dffffff);
+      final float cy = getHeight() / 2f, half = Screen.dpf(12f), line = Screen.dpf(.5f);
+      c.drawRect(dividerX - line, cy - half, dividerX + line, cy + half, pillPaint);
+    }
   }
 
   // Buttons
 
   private static final class Item extends View implements FactorAnimator.Target {
     final int itemId;
+    boolean independent;
+    /** An on/off toggle (setToggle): checked is on, read as a switch. */
+    boolean toggle;
     private final XgramPaintToolbar toolbar;
     private @Nullable Drawable icon;
     private @DrawableRes int iconRes;
@@ -265,7 +335,7 @@ public final class XgramPaintToolbar extends ViewGroup implements FactorAnimator
         return;
       }
       this.checked = checked;
-      setSelected(checked);
+      setSelected(checked && !toggle); // a toggle is on or off (onInitializeAccessibilityNodeInfo), not selected
       if (checkedAnimator != null) {
         checkedAnimator.setValue(checked, animated);
       } else if (animated) {
@@ -280,6 +350,16 @@ public final class XgramPaintToolbar extends ViewGroup implements FactorAnimator
 
     private float checkedValue () {
       return checkedAnimator != null ? checkedAnimator.getFloatValue() : checkedSpring.getValue();
+    }
+
+    @Override
+    public void onInitializeAccessibilityNodeInfo (AccessibilityNodeInfo info) {
+      super.onInitializeAccessibilityNodeInfo(info);
+      if (toggle) {
+        info.setCheckable(true);
+        info.setChecked(checked);
+        info.setClassName(android.widget.Switch.class.getName());
+      }
     }
 
     @Override

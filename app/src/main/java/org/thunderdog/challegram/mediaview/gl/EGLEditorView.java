@@ -662,6 +662,20 @@ public class EGLEditorView extends ViewGroup {
       return Screen.dpf(brushRadius) / 2f / getScreenScale();
     }
 
+    // XGram: the Cut out tool (PaintMode.CUTOUT) gives its touches to the editor's cut-out tools, which change the
+    // drawing's cut-out; a ring the brush's size follows the finger for its brushes
+
+    private @Nullable com.fahadali.xgram.editor.XgramCutoutEditor cutoutEditor;
+
+    public void setCutoutEditor (@Nullable com.fahadali.xgram.editor.XgramCutoutEditor editor) {
+      this.cutoutEditor = editor;
+    }
+
+    private void xgramSetCutoutRing (float x, float y, float radius) {
+      parent.paintView.setEraserCrosshair(radius > 0f && cutoutEditor != null && cutoutEditor.getMode() == com.fahadali.xgram.editor.XgramCutoutEditor.MODE_BACKGROUND_ERASER); // XGram: where it reads the colour
+      parent.paintView.setEraser(x, y, Math.max(0f, radius));
+    }
+
     public void setBrushParameters (int brushColor, float brushRadius) {
       if (this.brushColor != brushColor || this.brushRadius != brushRadius) {
         this.brushColor = brushColor;
@@ -714,6 +728,19 @@ public class EGLEditorView extends ViewGroup {
           parent.paintView.setEraser(e.getX(), e.getY(), tolerance);
           return true;
         }
+        case PaintMode.CUTOUT: { // XGram
+          if (cutoutEditor == null) {
+            return false;
+          }
+          final float scale = getScreenScale();
+          parent.paintView.setScreenScale(scale);
+          final float ring = cutoutEditor.onTouchDown(state, e.getX(), e.getY(), canvasWidth, canvasHeight, getEraserTolerance(), scale);
+          if (ring < 0f) {
+            return false;
+          }
+          xgramSetCutoutRing(e.getX(), e.getY(), ring);
+          return true;
+        }
         default:
           return false;
       }
@@ -728,6 +755,22 @@ public class EGLEditorView extends ViewGroup {
     }
 
     private boolean moveDrawing (int mode, MotionEvent e, boolean allowHistory) {
+      if (mode == PaintMode.CUTOUT) { // XGram: along the finger's path since the last event
+        if (cutoutEditor == null) {
+          return false;
+        }
+        final int width = getMeasuredWidth(), height = getMeasuredHeight();
+        final float radius = getEraserTolerance();
+        for (int i = 0; i < e.getHistorySize(); i++) {
+          cutoutEditor.onTouchMove(state, e.getHistoricalX(i), e.getHistoricalY(i), width, height, radius);
+        }
+        final float ring = cutoutEditor.onTouchMove(state, e.getX(), e.getY(), width, height, radius);
+        if (ring < 0f) {
+          return false;
+        }
+        xgramSetCutoutRing(e.getX(), e.getY(), ring);
+        return true;
+      }
       if (mode == PaintMode.ERASER) { // XGram: along the finger's path since the last event
         if (eraseData == null) {
           return false;
@@ -748,6 +791,13 @@ public class EGLEditorView extends ViewGroup {
     }
 
     private void completeDrawing (int mode, MotionEvent e, boolean byPinch) {
+      if (mode == PaintMode.CUTOUT) { // XGram: one action for the gesture (a wand's tap), none when a pinch took it over
+        if (cutoutEditor != null && state != null) {
+          cutoutEditor.onTouchUp(state, e.getX(), e.getY(), getMeasuredWidth(), getMeasuredHeight(), byPinch, e.getActionMasked() == MotionEvent.ACTION_CANCEL);
+        }
+        xgramSetCutoutRing(0f, 0f, 0f);
+        return;
+      }
       if (mode == PaintMode.ERASER) { // XGram: one action for the gesture, none when a pinch took it over
         if (eraseData != null) {
           if (byPinch) {
@@ -818,7 +868,7 @@ public class EGLEditorView extends ViewGroup {
       if (heldLayer != null) {
         xgramEndLayerGesture(null, true); // a gesture that never ended
       }
-      if (!paintingEnabled || paintingMode == PaintMode.FREE_MOVEMENT || state == null || !state.hasLayers() || e.getPointerCount() > 1) {
+      if (!paintingEnabled || paintingMode == PaintMode.FREE_MOVEMENT || state == null || !state.hasLayers() || e.getPointerCount() > 1) { // XGram: in Cut out too (the layers are drawn over the cut-out, so cutting under one shows nothing)
         return false;
       }
       final float scale = getScreenScale();

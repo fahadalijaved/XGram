@@ -28,6 +28,50 @@
   <string name="XgramEditorPixelateHint">Paint over what you want to pixelate</string>
   <string name="XgramEditorEraserHint">Touch a drawing to erase it</string>
 
+  <!-- XGram: the Cut out tool (removes the photo's background, no AI), see com.fahadali.xgram.editor.XgramCutoutEditor -->
+  <string name="XgramEditorCutout">Cut out</string>
+  <!-- Its row above the tools row (TalkBack, and the name shown on a long press) -->
+  <string name="XgramEditorCutoutWand">Magic wand</string>
+  <string name="XgramEditorCutoutBackgroundEraser">Background eraser</string>
+  <string name="XgramEditorCutoutErase">Erase</string>
+  <string name="XgramEditorCutoutRestore">Restore</string>
+  <string name="XgramEditorCutoutGlobal">Global (whole photo)</string>
+  <string name="XgramEditorCutoutSoft">Soft edges</string>
+  <string name="XgramEditorCutoutInvert">Invert</string>
+  <!-- The slider in the color row's place for the magic wand and the background eraser -->
+  <string name="XgramEditorCutoutTolerance">Tolerance</string>
+  <!-- Shown as a mode is picked (Erase and Restore: also in the color row's place) -->
+  <string name="XgramEditorCutoutWandHint">Tap the background to remove it</string>
+  <string name="XgramEditorCutoutWandGlobalHint">Tap a color to remove it everywhere</string>
+  <string name="XgramEditorCutoutBackgroundEraserHint">Keep the brush\'s center on the background</string>
+  <string name="XgramEditorCutoutEraseHint">Paint over what to remove</string>
+  <string name="XgramEditorCutoutRestoreHint">Paint over what to bring back</string>
+  <!-- As Global or Soft edges is turned on or off -->
+  <string name="XgramEditorCutoutGlobalOn">The wand removes the color everywhere</string>
+  <string name="XgramEditorCutoutGlobalOff">The wand removes only the area you tap</string>
+  <string name="XgramEditorCutoutSoftOn">Soft edges on</string>
+  <string name="XgramEditorCutoutSoftOff">Soft edges off</string>
+  <!-- Long press on Undo ("Clear drawing?") when the cut-out removed some of the photo -->
+  <string name="XgramConfirmClearDrawingCutoutText">Everything you drew will be removed and the cut-out background comes back.</string>
+  <!-- Send on a photo with a cut-out shows these choices (see com.fahadali.xgram.editor.XgramCutoutExport) -->
+  <string name="XgramCutoutInfo">The cut-out has a transparent background, which a photo can\'t keep</string>
+  <!-- As a profile photo or in place of a message's photo -->
+  <string name="XgramCutoutInfoNoTransparency">A transparent background can\'t be used here, so the cut-out goes on white</string>
+  <string name="XgramCutoutSendSticker">Send as sticker</string>
+  <!-- A sticker can't have a caption -->
+  <string name="XgramCutoutSendStickerNoCaption">Send as sticker, without the caption</string>
+  <string name="XgramCutoutSendFile">Send as PNG file</string>
+  <string name="XgramCutoutSendFiles">Send as PNG files</string>
+  <string name="XgramCutoutSendPhoto">Send as photo on white</string>
+  <string name="XgramCutoutUsePhoto">Use on a white background</string>
+  <string name="XgramCutoutSave">Save PNG to gallery</string>
+  <string name="XgramCutoutSaveAll">Save PNGs to gallery</string>
+  <!-- Shown when making the cut-out's file takes a moment -->
+  <string name="XgramCutoutPreparing">Making the cut-out…</string>
+  <string name="XgramCutoutSaved">Saved to gallery as PNG</string>
+  <string name="XgramCutoutFailed">Couldn\'t make the cut-out</string>
+  <string name="XgramCutoutNothingLeft">Nothing is left of the photo: all of it is cut out</string>
+
   <!-- XGram: the layers over the drawing (text, emoji, stickers), see com.fahadali.xgram.editor.XgramLayer -->
 
   <!-- The bottom row's buttons in the brush section (TalkBack): Crop and Adjust turn into them -->

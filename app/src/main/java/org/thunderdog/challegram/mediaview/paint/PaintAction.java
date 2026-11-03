@@ -19,6 +19,7 @@ import android.os.SystemClock;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.fahadali.xgram.editor.XgramCutout;
 import com.fahadali.xgram.editor.XgramLayer;
 
 import java.util.ArrayList;
@@ -40,6 +41,8 @@ public class PaintAction {
   public static final int LAYER_REMOVE = 4;
   /** A layer was moved, scaled, turned or edited: before and after. */
   public static final int LAYER_CHANGE = 5;
+  /** XGram: a change to the cut-out (the Cut out tool), a {@link XgramCutout.Edit}. */
+  public static final int CUTOUT = 6;
 
   private final int type;
   private final Object data;
@@ -95,14 +98,20 @@ public class PaintAction {
     return copy;
   }
 
-  /** XGram: what Clear removed: the drawings and the layers, each in order. */
+  /** XGram: what Clear removed: the drawings and the layers, each in order, and the cut-out it brought back. */
   public static final class ClearData {
     final List<SimpleDrawing> drawings;
     final List<XgramLayer> layers;
+    final @Nullable XgramCutout.Edit cutout;
 
     ClearData (@NonNull List<SimpleDrawing> drawings, @NonNull List<XgramLayer> layers) {
+      this(drawings, layers, null);
+    }
+
+    ClearData (@NonNull List<SimpleDrawing> drawings, @NonNull List<XgramLayer> layers, @Nullable XgramCutout.Edit cutout) {
       this.drawings = drawings;
       this.layers = layers;
+      this.cutout = cutout;
     }
   }
 

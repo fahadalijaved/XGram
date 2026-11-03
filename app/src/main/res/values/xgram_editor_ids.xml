@@ -3,4 +3,9 @@
   <!-- XGram: the photo editor's drawing tools, see com.fahadali.xgram.editor.XgramPaintTools -->
   <!-- Redo, next to Undo -->
   <item type="id" name="paint_redo" />
+  <!-- The choices as a photo with a cut-out is sent, see com.fahadali.xgram.editor.XgramCutoutExport -->
+  <item type="id" name="xgram_cutout_sticker" />
+  <item type="id" name="xgram_cutout_file" />
+  <item type="id" name="xgram_cutout_photo" />
+  <item type="id" name="xgram_cutout_save" />
 </resources>
