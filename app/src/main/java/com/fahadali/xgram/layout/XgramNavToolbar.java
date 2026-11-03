@@ -1310,6 +1310,11 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     return swipeSwitchAccountId != TdlibAccount.NO_ID && isAccountRoot(c, swipeSwitchAccountId);
   }
 
+  @Override
+  public boolean xgramIsSwitchRoot (ViewController<?> c) {
+    return isSwipeSwitchRoot(c);
+  }
+
   /** A chat list of {@code accountId} (an account switch's new root). */
   private static boolean isAccountRoot (@Nullable ViewController<?> c, int accountId) {
     return c instanceof MainController && !c.isDestroyed() && c.tdlib() != null && c.tdlib().id() == accountId;

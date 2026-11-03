@@ -567,6 +567,11 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
 
     /** Extra bottom room for the lists of {@code c} (a tab screen keeps its last row clear of the toolbar), in px. */
     int xgramBottomRoom (ViewController<?> c);
+
+    /** {@code c} is the new account's chat list of a switch the toolbar started (the photo swipe). */
+    default boolean xgramIsSwitchRoot (ViewController<?> c) {
+      return false;
+    }
   }
 
   private @Nullable XgramBarListener xgramBarListener;
@@ -647,8 +652,13 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
 
   /** {@code right} is a tab screen and {@code left} another one or the chat list at the root. */
   private boolean xgramIsTabSwitch (@Nullable ViewController<?> left, @Nullable ViewController<?> right) {
-    if (xgramNav == null || left == null || right == null || !right.xgramIsBarTab()) {
+    if (xgramNav == null || left == null || right == null) {
       return false;
+    }
+    if (!right.xgramIsBarTab()) {
+      // XGram: the photo swipe's account switch from a tab screen (its new chat list is no tab yet): the same quick
+      // fade-through as a tab switch, not Telegram X's slow fade with the tall profile header shrinking frame by frame
+      return left.xgramIsBarTab() && xgramBarListener != null && xgramBarListener.xgramIsSwitchRoot(right);
     }
     return left.xgramIsBarTab() || left == getStack().get(0);
   }
