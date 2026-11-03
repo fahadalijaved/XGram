@@ -451,7 +451,7 @@ public final class XgramR5Security {
       if (selection >= 0 && selection <= input.length()) {
         input.setSelection(selection);
       }
-      v.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
+      com.fahadali.xgram.XgramHaptics.tick(v);
     });
     android.widget.FrameLayout.LayoutParams params = new android.widget.FrameLayout.LayoutParams(Screen.dp(48f), Screen.dp(48f), android.view.Gravity.TOP | (rtl ? android.view.Gravity.LEFT : android.view.Gravity.RIGHT));
     params.topMargin = Screen.dp(16f);
@@ -507,7 +507,7 @@ public final class XgramR5Security {
         XgramM3Connected.shape(morph, true, true, p, count);
         segment.setOnClickListener(v -> {
           if (index != this.selected) {
-            v.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
+            com.fahadali.xgram.XgramHaptics.tick(v);
             listener.onSegmentSelected(index);
           }
         });
@@ -743,7 +743,7 @@ public final class XgramR5Security {
     }
 
     private void shake (View target) {
-      performHapticFeedback(android.view.HapticFeedbackConstants.REJECT);
+      com.fahadali.xgram.XgramHaptics.reject(this); // REJECT on Android 11+, a long press before (it had no version check)
       if (XgramMotion.reduce()) {
         return;
       }
@@ -1103,7 +1103,7 @@ public final class XgramR5Security {
           setBackground(container);
         }
         setOnClickListener(v -> {
-          performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP);
+          com.fahadali.xgram.XgramHaptics.tap(this);
           onUserInput();
           callback.onLockKey(number);
         });
@@ -1158,7 +1158,7 @@ public final class XgramR5Security {
         android.widget.ImageView backspace = newTonalIconButton(context, org.thunderdog.challegram.R.drawable.baseline_backspace_24, 56f,
           Lang.getString(org.thunderdog.challegram.R.string.XgramR5SecurityBackspace));
         backspace.setOnClickListener(v -> {
-          performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP);
+          com.fahadali.xgram.XgramHaptics.tap(this);
           onUserInput();
           callback.onLockBackspace();
         });
@@ -1312,7 +1312,7 @@ public final class XgramR5Security {
         if (visible) {
           grow[dot].animateTo(1f);
         }
-        performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
+        com.fahadali.xgram.XgramHaptics.tick(this);
       }
 
       @Override

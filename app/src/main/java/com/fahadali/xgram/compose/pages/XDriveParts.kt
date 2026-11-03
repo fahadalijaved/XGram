@@ -103,16 +103,14 @@ import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.hapticfeedback.HapticFeedback
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -130,6 +128,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.fahadali.xgram.XgramHaptics
 import com.fahadali.xgram.compose.LocalXgramHost
 import com.fahadali.xgram.compose.PromptSpec
 import com.fahadali.xgram.compose.XgramComposeHost
@@ -566,7 +565,7 @@ internal fun Modifier.xdriveBounds(state: XDriveState, key: String): Modifier {
  */
 @Composable
 internal fun Modifier.xdriveItem(state: XDriveState, message: TdApi.Message, describe: String? = null, onOpen: () -> Unit): Modifier {
-  val haptic = LocalHapticFeedback.current
+  val haptic = LocalView.current // XgramHaptics: the Haptic feedback switch, ticks spaced out
   val coordinates = remember { arrayOfNulls<LayoutCoordinates>(1) }
   val isSelected = state.selected.containsKey(message.id)
   val selectLabel = str(if (isSelected) R.string.XgramXDriveDeselect else R.string.XgramXDriveSelect)
@@ -592,7 +591,7 @@ internal fun Modifier.xdriveItem(state: XDriveState, message: TdApi.Message, des
     .pointerInput(message.id) {
       detectDragGesturesAfterLongPress(
         onDragStart = { offset ->
-          haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+          XgramHaptics.longPress(haptic)
           if (!state.selected.containsKey(message.id)) state.selected[message.id] = message
           val root = state.root
           val local = coordinates[0]
@@ -602,7 +601,7 @@ internal fun Modifier.xdriveItem(state: XDriveState, message: TdApi.Message, des
         },
         onDrag = { change, amount ->
           change.consume()
-          if (state.drag.moveBy(amount, viewConfiguration.touchSlop, state.bounds[BOUNDS_DOCK], state.tilesTakeDrops)) haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
+          if (state.drag.moveBy(amount, viewConfiguration.touchSlop, state.bounds[BOUNDS_DOCK], state.tilesTakeDrops)) XgramHaptics.segmentTick(haptic)
         },
         onDragEnd = { finishDrag(state, haptic, true) },
         onDragCancel = { finishDrag(state, haptic, false) }
@@ -610,14 +609,14 @@ internal fun Modifier.xdriveItem(state: XDriveState, message: TdApi.Message, des
     }
 }
 
-private fun finishDrag(state: XDriveState, haptic: HapticFeedback, drop: Boolean) {
+private fun finishDrag(state: XDriveState, haptic: android.view.View, drop: Boolean) {
   val drag = state.drag
   val target = if (drop && drag.moved) drag.hovered else null
   val items = drag.items
   drag.end()
   state.host.noSwipeBack(drag, null)
   if (target != null && items.isNotEmpty()) {
-    haptic.performHapticFeedback(HapticFeedbackType.Confirm)
+    XgramHaptics.confirm(haptic)
     state.dropOn(target, items)
   }
 }

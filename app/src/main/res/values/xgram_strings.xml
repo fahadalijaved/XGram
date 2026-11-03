@@ -849,6 +849,10 @@
   <string name="XgramExpressiveInfo">Colors, shapes, motion and lists follow Material 3 Expressive. Off: the classic look. The app restarts to apply the change.</string>
   <string name="XgramComposeTgx">New look for Telegram X pages</string>
   <string name="XgramComposeTgxSub">Privacy, data, notifications, themes</string>
+  <!-- Haptic feedback (Appearance): every haptic of the app -->
+  <string name="XgramHaptics">Haptic feedback</string>
+  <string name="XgramHapticsSub">Vibrate on touches and gestures</string>
+  <string name="XgramHapticsInfo">Your phone\'s Touch feedback setting also applies. Notification and call vibrations have their own settings.</string>
   <!-- XGram: adaptive part 1, foldables (Appearance > Layout) -->
   <string name="XgramFoldHingeSplit">Split panes at the fold</string>
   <string name="XgramFoldHingeSplitSub">When half open like a book</string>

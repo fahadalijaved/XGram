@@ -202,7 +202,7 @@ public final class XgramBrushSizeSlider extends View implements FactorAnimator.T
     final float value = MathUtils.clamp((bottom - y) / Math.max(1f, bottom - top));
     if (this.value != value) {
       if (value == 0f || value == 1f) {
-        performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+        com.fahadali.xgram.XgramHaptics.segmentTick(this); // an end of the slider
       }
       applyValue(value);
     }

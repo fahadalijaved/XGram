@@ -764,7 +764,12 @@ public class GifActor implements GifState.Callback, TGPlayerController.TrackChan
       if (vibrateMode != VIBRATE_NONE) {
         View view = GifBridge.instance().findAnyView(file);;
         if (view != null) {
-          ViewUtils.hapticVibrate(view, vibrateMode == VIBRATE_MAIN, true);
+          // XGram: through XgramHaptics (the Haptic feedback switch; no FLAG_IGNORE_GLOBAL_SETTING)
+          if (vibrateMode == VIBRATE_MAIN) {
+            com.fahadali.xgram.XgramHaptics.longPress(view);
+          } else {
+            com.fahadali.xgram.XgramHaptics.tap(view);
+          }
         }
       }
     }

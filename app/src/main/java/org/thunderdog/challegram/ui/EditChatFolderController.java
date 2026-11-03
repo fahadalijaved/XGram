@@ -565,7 +565,7 @@ public class EditChatFolderController extends EditBaseController<EditChatFolderC
         }
       }
     } else if (id == R.id.btn_visible) {
-      UI.forceVibrate(v, false);
+      // XGram: the switch's own haptic (TogglerView.toggle) replaces Telegram X's tap here, not on top of it
       boolean isEnabled = adapter.toggleView(v);
       tdlib.settings().setChatFolderEnabled(chatFolderId, isEnabled);
     } else if (id == R.id.btn_removeFolder) {

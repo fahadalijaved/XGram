@@ -420,6 +420,7 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
         super.onMoved(recyclerView, viewHolder, fromPos, target, toPos, x, y);
         viewHolder.itemView.invalidate();
         target.itemView.invalidate();
+        com.fahadali.xgram.XgramHaptics.segmentTick(viewHolder.itemView); // XGram: a tick on each new slot
       }
 
       @Override
@@ -463,6 +464,8 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
       public void onSelectedChanged (RecyclerView.ViewHolder viewHolder, int actionState) {
         super.onSelectedChanged(viewHolder, actionState);
         if (actionState == ItemTouchHelper.ACTION_STATE_DRAG) {
+          // XGram: the account is picked up (a slide off the preview or a long press start it, neither had a haptic)
+          com.fahadali.xgram.XgramHaptics.dragStart(viewHolder.itemView);
           prepareShadows();
           ((DrawerItemView) viewHolder.itemView).setIsDragging(true);
           animator.setValue(true, true);
@@ -1196,6 +1199,7 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
     } else if (viewId == R.id.btn_proxy) {
       if (v instanceof TogglerView) {
         boolean value = Settings.instance().toggleProxySetting(Settings.PROXY_FLAG_ENABLED);
+        com.fahadali.xgram.XgramHaptics.toggle(v, value); // XGram: the switch's haptic
         setProxyEnabled(value);
       } else {
         context.currentTdlib().ui().openProxySettings(context.navigation().getCurrentStackItem(), false);
@@ -1210,6 +1214,7 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
         }
       });
     } else if (viewId == R.id.btn_night) {
+      com.fahadali.xgram.XgramHaptics.toggle(v, !Theme.isDark()); // XGram: the switch's haptic
       ThemeManager.instance().toggleNightMode();
     } else if (viewId == R.id.btn_xgramExpressive) {
       xgramToggleExpressive(); // XGram
@@ -1217,6 +1222,7 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
       // XGram: quick ghost mode switch, like AyuGram's drawer toggle. Off turns every ghost option off.
       com.fahadali.xgram.XgramSettings settings = com.fahadali.xgram.XgramSettings.instance();
       boolean enable = !settings.isAnyGhostEnabled();
+      com.fahadali.xgram.XgramHaptics.toggle(v, enable); // the switch's haptic
       settings.setGhostModeEnabled(enable);
       com.fahadali.xgram.ghost.XgramGhost.applyOnlineState();
       int index = adapter.indexOfViewById(R.id.btn_xgramGhostMode);

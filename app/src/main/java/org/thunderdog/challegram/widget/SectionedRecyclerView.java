@@ -543,7 +543,7 @@ public class SectionedRecyclerView extends RecyclerView implements Runnable {
       if (parent != null) {
         parent.requestDisallowInterceptTouchEvent(true);
       }
-      performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
+      com.fahadali.xgram.XgramHaptics.tick(this); // XGram: off with Haptic feedback
       stopScroll();
       return;
     }

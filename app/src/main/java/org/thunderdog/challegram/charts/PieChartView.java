@@ -372,13 +372,9 @@ public class PieChartView extends StackLinearChartView<PieChartViewData> {
             pieLegendView.setTranslationX(xl);
             pieLegendView.setTranslationY(yl);
 
-            boolean v = false;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                v = performHapticFeedback(HapticFeedbackConstants.TEXT_HANDLE_MOVE, HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING);
-            }
-            if (!v) {
-                performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP, HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING);
-            }
+            // XGram: through XgramHaptics (TEXT_HANDLE_MOVE, a tick before Android 8.1), off with Haptic feedback; no
+            // FLAG_IGNORE_GLOBAL_SETTING, so the phone's Touch feedback setting applies
+            com.fahadali.xgram.XgramHaptics.textHandle(this);
 
         }
         moveLegend();

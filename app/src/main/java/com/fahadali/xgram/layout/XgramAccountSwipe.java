@@ -547,7 +547,7 @@ final class XgramAccountSwipe {
     pendingSwitchId = target;
     bound = false;
     setSquare(true); // also from TalkBack's action: the photos slide as one strip
-    touchView.performHapticFeedback(Build.VERSION.SDK_INT >= 34 ? HapticFeedbackConstants.SEGMENT_TICK : HapticFeedbackConstants.CLOCK_TICK);
+    com.fahadali.xgram.XgramHaptics.segmentTick(touchView);
     pos.setToken(XgramExpressive.SPATIAL_DEFAULT); // barely overshoots (and draw() stops at the end): no gap
     pos.animateTo(direction, Math.max(-MAX_VELOCITY, Math.min(MAX_VELOCITY, velocity / size)));
     UI.cancel(bindTimeout);

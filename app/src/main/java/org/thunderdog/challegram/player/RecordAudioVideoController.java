@@ -737,6 +737,7 @@ public class RecordAudioVideoController implements
       lockView.setCollapseFactor(collapseFactor);
 
       if (collapseFactor == 1f) {
+        com.fahadali.xgram.XgramHaptics.threshold(voiceVideoButtonView); // XGram: the recording locked (Telegram's tap)
         setReleased(true, true);
       }
     }

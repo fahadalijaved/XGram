@@ -1005,7 +1005,7 @@ public class EGLEditorView extends ViewGroup {
           heldLayer.setFade(over ? 1f : 0f);
         }
         if (over) {
-          performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+          com.fahadali.xgram.XgramHaptics.tap(this); // XGram: off with Haptic feedback
         }
         if (layerListener != null) {
           layerListener.onLayerOverTrashChanged(this, over);

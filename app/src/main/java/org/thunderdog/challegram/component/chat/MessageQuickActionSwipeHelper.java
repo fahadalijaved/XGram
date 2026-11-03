@@ -24,6 +24,7 @@ public class MessageQuickActionSwipeHelper {
 
   private float moveFactor;
   private int quickActionNumber;
+  private boolean xgramArmed; // XGram: the flat layout's swipe is past its threshold (one haptic per crossing)
 
   public MessageQuickActionSwipeHelper (TGMessage message) {
     this.message = message;
@@ -50,6 +51,17 @@ public class MessageQuickActionSwipeHelper {
       lockedBecauseNotReadyInBubbleMode &= useBubbles() && Math.abs(actualDx) < Screen.dp(SWIPE_BUBBLE_MOVE_MAX);
       lockedBecauseSmallDy &= Math.abs(currentDy) < Screen.dp(SWIPE_VERTICAL_HEIGHT) / 2f;
       moveFactor = Math.min(1f, Math.abs(dx) / Screen.dp(SWIPE_THRESHOLD_WIDTH));
+      // XGram: the flat layout had no haptic at all: Telegram's tap where letting go acts (the swipe threshold,
+      // MessagesTouchHelperCallback.getSwipeThreshold); bubbles have theirs in TGMessage.translate
+      if (!useBubbles()) {
+        final boolean armed = moveFactor >= 1f;
+        if (armed != xgramArmed) {
+          xgramArmed = armed;
+          if (armed) {
+            com.fahadali.xgram.XgramHaptics.threshold(message.findCurrentView());
+          }
+        }
+      }
     } else {
       reset();
     }
@@ -77,6 +89,7 @@ public class MessageQuickActionSwipeHelper {
     lockedBecauseSwipeStarted = false;
     moveFactor = 0f;
     quickActionNumber = 0;
+    xgramArmed = false; // XGram
   }
 
   public float getMoveFactor () {

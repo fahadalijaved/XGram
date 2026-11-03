@@ -648,7 +648,7 @@ public class CustomTouchHelper extends RecyclerView.ItemDecoration
       mSelected = selected;
 
       if (actionState == ACTION_STATE_DRAG) {
-        mSelected.itemView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+        com.fahadali.xgram.XgramHaptics.longPress(mSelected.itemView); // XGram: off with Haptic feedback
       }
     }
     final ViewParent rvParent = mRecyclerView.getParent();

@@ -2709,7 +2709,7 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
             color = colors[index];
             select.setValue(0f);
             select.animateTo(1f);
-            performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
+            com.fahadali.xgram.XgramHaptics.tick(this);
             if (preview != null) {
               preview.bindPreview(ForumTopicEditController.this, null);
             }

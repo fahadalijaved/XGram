@@ -293,6 +293,16 @@ public class PlaybackController extends ViewController<Void> implements Menu, Mo
         super.onMoved(recyclerView, viewHolder, fromPos, target, toPos, x, y);
         viewHolder.itemView.invalidate();
         target.itemView.invalidate();
+        com.fahadali.xgram.XgramHaptics.segmentTick(viewHolder.itemView); // XGram: a tick on each new slot
+      }
+
+      // XGram: androidx's ItemTouchHelper has no haptic when its long press picks a track up
+      @Override
+      public void onSelectedChanged (@Nullable RecyclerView.ViewHolder viewHolder, int actionState) {
+        super.onSelectedChanged(viewHolder, actionState);
+        if (viewHolder != null && actionState == ItemTouchHelper.ACTION_STATE_DRAG) {
+          com.fahadali.xgram.XgramHaptics.longPress(viewHolder.itemView);
+        }
       }
 
       /*@Override
@@ -304,6 +314,9 @@ public class PlaybackController extends ViewController<Void> implements Menu, Mo
       public void onChildDraw (Canvas c, RecyclerView recyclerView, RecyclerView.ViewHolder viewHolder, float dX, float dY, int actionState, boolean isCurrentlyActive) {
         if (actionState != ItemTouchHelper.ACTION_STATE_SWIPE) {
           super.onChildDraw(c, recyclerView, viewHolder, dX, dY, actionState, isCurrentlyActive);
+        } else {
+          // XGram: the row's threshold haptic where this swipe removes (ItemTouchHelper's default, half the row)
+          RemoveHelper.xgramSetSwipeThreshold(getSwipeThreshold(viewHolder) * viewHolder.itemView.getMeasuredWidth());
         }
         if (viewHolder.itemView instanceof RemoveHelper.RemoveDelegate) {
           RemoveHelper.RemoveDelegate removeView = (RemoveHelper.RemoveDelegate) viewHolder.itemView;

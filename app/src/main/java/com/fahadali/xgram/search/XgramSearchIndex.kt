@@ -55,6 +55,8 @@ internal object XgramSearchIndex {
     R.id.btn_xgramExportSettings, R.id.btn_xgramImportSettings -> intArrayOf(R.string.XgramSearchKwBackup)
     R.id.btn_xgramUpdateChannel, R.id.btn_xgramUpdateCheck, R.id.btn_xgramAboutVersion -> intArrayOf(R.string.XgramSearchKwVersion, R.string.XgramSearchKwUpdateChannel)
     R.id.btn_xgramExpressive -> intArrayOf(R.string.XgramSearchKwExpressive)
+    // Telegram X's Custom Vibrations row is gone (it did nothing on Android 13+): "vibration" finds this one
+    R.id.btn_xgramHaptics -> intArrayOf(R.string.XgramSearchKwHaptic, R.string.CustomVibrations)
     R.id.btn_xgramColorSource -> intArrayOf(R.string.XgramSearchKwColors, R.string.XgramSearchKwMaterialYou, R.string.XgramSearchKwExpressive)
     R.id.btn_xgramAllowScreenshots, R.id.btn_xgramBlockContentCapture -> intArrayOf(R.string.XgramSearchKwScreenshot)
     R.id.btn_xgramSaveProtected -> intArrayOf(R.string.XgramSearchKwScreenshot, R.string.XgramSearchKwExportProtected)

@@ -178,7 +178,7 @@ public class InfiniteRecyclerView<T> extends RecyclerView implements View.OnClic
       boolean ticked = xgramTickRow != -1;
       xgramTickRow = row;
       if (ticked) {
-        performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
+        com.fahadali.xgram.XgramHaptics.tick(this); // XGram: off with Haptic feedback
       }
     }
   }

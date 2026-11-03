@@ -135,7 +135,7 @@ public final class XgramArchivePull {
     final boolean ready = fraction >= THRESHOLD;
     if (this.ready != ready) {
       this.ready = ready;
-      list.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+      com.fahadali.xgram.XgramHaptics.gestureThreshold(list, ready); // armed: Android 14's threshold haptic (a tap before); let go: 14+ only
       readyFactor.animateTo(ready ? 1f : 0f);
     }
     invalidate();

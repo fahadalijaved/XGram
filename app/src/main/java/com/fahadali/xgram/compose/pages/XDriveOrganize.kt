@@ -463,7 +463,11 @@ private fun ProposalCard(state: XDriveState, folder: XDriveProposedFolder, expan
           )
         }
       }
-      Switch(checked = folder.enabled, onCheckedChange = { folder.enabled = it })
+      val view = androidx.compose.ui.platform.LocalView.current
+      Switch(checked = folder.enabled, onCheckedChange = {
+        folder.enabled = it
+        com.fahadali.xgram.XgramHaptics.toggle(view, it) // the switch's haptic (Pixel apps)
+      })
     }
     LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
       items(folder.items.take(12), key = { it.id }) { message ->

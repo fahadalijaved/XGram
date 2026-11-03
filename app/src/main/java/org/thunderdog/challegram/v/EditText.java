@@ -66,6 +66,12 @@ public class EditText extends android.widget.EditText {
     super(context, attrs, defStyleAttr);
   }
 
+  // XGram: the system's text field haptics (long press, selection handles) follow the Haptic feedback switch too
+  @Override
+  public boolean performHapticFeedback (int feedbackConstant, int flags) {
+    return com.fahadali.xgram.XgramHaptics.enabled() && super.performHapticFeedback(feedbackConstant, com.fahadali.xgram.XgramHaptics.viewFlags(flags));
+  }
+
   public final void initDefault () {
     setTextColor(Theme.textAccentColor());
     setTextSize(TypedValue.COMPLEX_UNIT_DIP, 17f);

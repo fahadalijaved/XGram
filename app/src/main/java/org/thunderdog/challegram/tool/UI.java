@@ -403,8 +403,7 @@ public class UI {
   }
 
   public static void forceVibrateError (View view) {
-    forceVibrate(view, true);
-    forceVibrate(view, true);
+    com.fahadali.xgram.XgramHaptics.reject(view); // XGram: one REJECT (Android 11+; a long press before), not two long presses
   }
 
   public static void forceVibrate (View view, boolean isMain) {
@@ -412,7 +411,13 @@ public class UI {
   }
 
   public static void forceVibrate (View view, boolean isMain, boolean forceCustom) {
-    ViewUtils.hapticVibrate(view, isMain, forceCustom || Settings.instance().useCustomVibrations());
+    // XGram: through XgramHaptics (the Haptic feedback switch and the phone's Touch feedback setting): Custom Vibrations'
+    // FLAG_IGNORE_GLOBAL_SETTING does nothing since Android 13, so [forceCustom] is no longer used.
+    if (isMain) {
+      com.fahadali.xgram.XgramHaptics.longPress(view);
+    } else {
+      com.fahadali.xgram.XgramHaptics.tap(view);
+    }
     /*if (forceCustom || Settings.instance().useCustomVibrations()) {
       vibrate(isMain ? Device.FORCE_VIBRATE_OPEN_DURATION : Device.FORCE_VIBRATE_DURATION);
     } else if (isMain) {
@@ -421,7 +426,7 @@ public class UI {
   }
 
   public static void hapticVibrate (View view, boolean isForce) {
-    ViewUtils.hapticVibrate(view, isForce, Settings.instance().useCustomVibrations());
+    forceVibrate(view, isForce, false); // XGram: through XgramHaptics, as forceVibrate
   }
 
   public static Resources getResources () {

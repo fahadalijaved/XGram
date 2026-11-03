@@ -130,7 +130,7 @@ public class XgramIconPacksController extends ViewController<Void> {
           XgramPackCard card = new XgramPackCard(parent.getContext());
           card.setLayoutParams(new androidx.recyclerview.widget.RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(120f)));
           card.setOnClickListener(v -> {
-            v.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
+            com.fahadali.xgram.XgramHaptics.tick(v);
             choose(card.pack);
           });
           view = card;

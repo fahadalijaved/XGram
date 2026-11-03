@@ -37,6 +37,7 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
 import androidx.customview.widget.ExploreByTouchHelper;
 
+import com.fahadali.xgram.XgramHaptics;
 import com.fahadali.xgram.appearance.XgramExpressive;
 import com.fahadali.xgram.appearance.XgramM3MediaChrome;
 
@@ -135,7 +136,11 @@ public final class XgramCameraControls extends FrameLayout implements CameraMana
         if (camera != null && pinchZoom > 0f) {
           // Follows the fingers, not the camera's state (a frame or more late)
           float max = camera.getMaxZoom(), min = camera.getMinZoom();
+          final float before = pinchZoom;
           pinchZoom = Math.max(min, Math.min(max > 0f ? max : pinchZoom, pinchZoom * detector.getScaleFactor()));
+          if (crossesZoomStop(before, pinchZoom, min, max)) {
+            XgramHaptics.segmentTick(XgramCameraControls.this); // a lens's ratio (1x, 2x...) or the end of the zoom
+          }
           lenses.setZoom(pinchZoom, false);
           camera.xgramSetZoom(pinchZoom, true);
         }
@@ -163,6 +168,22 @@ public final class XgramCameraControls extends FrameLayout implements CameraMana
         }
       }
     });
+  }
+
+  /** A pinch from [before] to [after] reached a lens's ratio (the lens row's stops) or an end of the zoom. */
+  private boolean crossesZoomStop (float before, float after, float min, float max) {
+    if (before == after) {
+      return false;
+    }
+    if ((after <= min && before > min) || (max > 0f && after >= max && before < max)) {
+      return true;
+    }
+    for (float stop : lenses.stops) {
+      if ((before < stop && after >= stop) || (before > stop && after <= stop)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /** Listens to {@code camera} (null: none, the usual camera without these controls). */
@@ -299,7 +320,11 @@ public final class XgramCameraControls extends FrameLayout implements CameraMana
       return;
     }
     if (camera.xgramFocusAt(px, py, lock)) {
-      performHapticFeedback(lock ? android.view.HapticFeedbackConstants.LONG_PRESS : android.view.HapticFeedbackConstants.CONTEXT_CLICK);
+      if (lock) {
+        XgramHaptics.longPress(this);
+      } else {
+        XgramHaptics.contextClick(this);
+      }
       focusPreviewLeft = x - px;
       focusPreviewTop = y - py;
       focusPreviewWidth = preview.getWidth();
@@ -847,7 +872,7 @@ public final class XgramCameraControls extends FrameLayout implements CameraMana
         int index = (int) ((along - Screen.dp(PADDING)) / slot());
         index = Math.max(0, Math.min(stops.length - 1, index));
         if (parent.setZoom(stops[index])) {
-          performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK); // no tick for a tap the camera can't take
+          XgramHaptics.tick(this); // no tick for a tap the camera can't take
         }
       }
       return true;
@@ -1023,7 +1048,7 @@ public final class XgramCameraControls extends FrameLayout implements CameraMana
           rect.inset(0, -Screen.dp(8f));
           if (rect.contains(e.getX(), e.getY())) {
             if (modes[i] != selected && parent.setMode(modes[i])) {
-              performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK); // no tick for a tap the camera can't take
+              XgramHaptics.tick(this); // no tick for a tap the camera can't take
             }
             break;
           }
@@ -1299,7 +1324,7 @@ public final class XgramCameraControls extends FrameLayout implements CameraMana
       if (index != exposureIndex) {
         exposureIndex = index;
         if (index == 0) {
-          performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
+          XgramHaptics.tick(this);
         }
         parent.setExposure(index);
         invalidate();

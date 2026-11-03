@@ -67,8 +67,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.hapticfeedback.HapticFeedback
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollDispatcher
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -80,7 +78,6 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
@@ -95,6 +92,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import com.fahadali.xgram.XgramHaptics
 import com.fahadali.xgram.compose.LocalXgramHost
 import com.fahadali.xgram.compose.XgramComposeHost
 import kotlinx.coroutines.CoroutineScope
@@ -193,7 +191,7 @@ private class ReorderState(val host: XgramComposeHost, val scope: CoroutineScope
   private val jobs = HashMap<String, Job>()
 
   // Updated after every composition.
-  var haptic: HapticFeedback? = null
+  var hapticView: android.view.View? = null // XgramHaptics: the Haptic feedback switch, ticks spaced out
   var spec: FiniteAnimationSpec<Float> = spring()
   var gapPx = 0f
   var incoming: List<String> = emptyList()
@@ -234,7 +232,7 @@ private class ReorderState(val host: XgramComposeHost, val scope: CoroutineScope
     moved = false
     travel = 0f
     dragged = key
-    haptic?.performHapticFeedback(HapticFeedbackType.LongPress)
+    XgramHaptics.longPress(hapticView)
     host.noSwipeBack(this, NO_SWIPE_EVERYWHERE)
     return true
   }
@@ -298,7 +296,7 @@ private class ReorderState(val host: XgramComposeHost, val scope: CoroutineScope
     if (swapped) {
       local = list
       moved = true
-      haptic?.performHapticFeedback(HapticFeedbackType.SegmentTick)
+      XgramHaptics.segmentTick(hapticView)
     }
   }
 
@@ -399,7 +397,6 @@ private fun ReorderGroupBlock(
   val host = LocalXgramHost.current
   val density = LocalDensity.current
   val view = LocalView.current
-  val haptic = LocalHapticFeedback.current
   val scope = rememberCoroutineScope()
   val spec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
   val state = remember { ReorderState(host, scope) }
@@ -408,7 +405,7 @@ private fun ReorderGroupBlock(
   val gapPx = with(density) { ListItemDefaults.SegmentedGap.toPx() }
 
   SideEffect {
-    state.haptic = haptic
+    state.hapticView = view
     state.spec = spec
     state.gapPx = gapPx
     state.incoming = incoming
@@ -485,6 +482,7 @@ private fun ReorderItem(
   compact: Boolean
 ) {
   val host = LocalXgramHost.current
+  val view = LocalView.current
   val rowKey = row.key
   val isDragged = state.dragged == rowKey
   val slide = state.offset(rowKey)
@@ -580,6 +578,7 @@ private fun ReorderItem(
         // Letting go of a row that was held without moving it must not flip its switch.
         if (state.acceptsClick()) {
           onToggle(rowKey, !checked)
+          XgramHaptics.toggle(view, !checked) // the switch's haptic (Pixel apps)
           host.changed()
         }
       },

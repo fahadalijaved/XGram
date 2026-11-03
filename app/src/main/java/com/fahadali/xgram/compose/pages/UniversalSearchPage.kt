@@ -279,10 +279,12 @@ private fun LazyListScope.resultRows(
           // isDark recomposes it when the theme changes.
           val checked = remember(host.isDark) { toggle.checked() }
           val label = str(R.string.XgramSearchNightModeToggle)
+          val view = androidx.compose.ui.platform.LocalView.current
           Switch(
             checked = checked,
             onCheckedChange = {
               toggle.toggle()
+              com.fahadali.xgram.XgramHaptics.toggle(view, it) // the switch's haptic (Pixel apps)
               host.themeChanged()
             },
             modifier = Modifier.semantics { contentDescription = label },

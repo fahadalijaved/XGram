@@ -43,6 +43,13 @@ public class ColorToneView extends View implements ClickHelper.Delegate {
   @Nullable
   private ColorPreviewView preview;
 
+  // XGram: vkryl's ClickHelper (and the system's long click) vibrate this view directly: the Haptic feedback switch gates
+  // it, and without FLAG_IGNORE_GLOBAL_SETTING the phone's Touch feedback setting applies (XgramHaptics)
+  @Override
+  public boolean performHapticFeedback (int feedbackConstant, int flags) {
+    return com.fahadali.xgram.XgramHaptics.enabled() && super.performHapticFeedback(feedbackConstant, com.fahadali.xgram.XgramHaptics.viewFlags(flags));
+  }
+
   public ColorToneView (Context context) {
     super(context);
   }
@@ -411,7 +418,7 @@ public class ColorToneView extends View implements ClickHelper.Delegate {
   @Override
   public boolean onLongPressRequestedAt (View view, float x, float y) {
     if (!isDragging) {
-      UI.forceVibrate(this, true);
+      // XGram: no haptic here: returning true makes ClickHelper.onLongPress play the long press one (it played twice)
       this.isSlowDragging = true;
       this.listenDrag = true;
       if (parent == null && (parent = getParent()) != null)

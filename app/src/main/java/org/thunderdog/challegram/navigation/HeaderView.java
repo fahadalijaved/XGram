@@ -115,6 +115,13 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
 
   private HeaderFilling filling;
 
+  // XGram: vkryl's ClickHelper (and the system's long click) vibrate this view directly: the Haptic feedback switch gates
+  // it, and without FLAG_IGNORE_GLOBAL_SETTING the phone's Touch feedback setting applies (XgramHaptics)
+  @Override
+  public boolean performHapticFeedback (int feedbackConstant, int flags) {
+    return com.fahadali.xgram.XgramHaptics.enabled() && super.performHapticFeedback(feedbackConstant, com.fahadali.xgram.XgramHaptics.viewFlags(flags));
+  }
+
   public HeaderView (Context context) {
     super(context);
 

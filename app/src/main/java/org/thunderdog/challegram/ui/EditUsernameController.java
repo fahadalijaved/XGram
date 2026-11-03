@@ -260,6 +260,7 @@ public class EditUsernameController extends EditBaseController<EditUsernameContr
 
             moveUsername(fromUsernameIndex, toUsernameIndex);
             saveUsernamesOrder(false);
+            com.fahadali.xgram.XgramHaptics.segmentTick(viewHolder.itemView); // XGram: a tick on each new slot
 
             return true;
           }
@@ -268,6 +269,15 @@ public class EditUsernameController extends EditBaseController<EditUsernameContr
 
         @Override
         public void onSwiped (@NonNull RecyclerView.ViewHolder viewHolder, int direction) { }
+
+        // XGram: androidx's ItemTouchHelper has no haptic when its long press picks a row up
+        @Override
+        public void onSelectedChanged (@androidx.annotation.Nullable RecyclerView.ViewHolder viewHolder, int actionState) {
+          super.onSelectedChanged(viewHolder, actionState);
+          if (viewHolder != null && actionState == ItemTouchHelper.ACTION_STATE_DRAG) {
+            com.fahadali.xgram.XgramHaptics.longPress(viewHolder.itemView);
+          }
+        }
       });
       if (xgram) {
         xgramAttachReorder(recyclerView); // XGram M3E r6: RemoveHelper's spring lift and a tick on each slot

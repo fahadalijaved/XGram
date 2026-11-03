@@ -218,7 +218,7 @@ public class ColorPickerView extends View implements FactorAnimator.Target {
       return;
     }
 
-    performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+    com.fahadali.xgram.XgramHaptics.longPress(this); // XGram: off with Haptic feedback
     setInLongTap(true);
   }
 

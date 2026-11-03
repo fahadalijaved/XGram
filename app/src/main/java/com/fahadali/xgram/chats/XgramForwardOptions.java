@@ -325,7 +325,10 @@ public final class XgramForwardOptions {
       addView(info, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
       captions = new SwitchRow(context, m3, Lang.getString(R.string.XgramFwdHideCaptions));
-      captions.setOnClickListener(v -> callback.onForwardCaptionsChanged(!captions.checked));
+      captions.setOnClickListener(v -> {
+        com.fahadali.xgram.XgramHaptics.toggle(v, !captions.checked); // the switch's haptic (Pixel apps)
+        callback.onForwardCaptionsChanged(!captions.checked);
+      });
       addView(captions, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(m3 ? 56f : 54f)));
 
       setState(null, false, false, false);
@@ -558,9 +561,7 @@ public final class XgramForwardOptions {
         }
         cell.setOnClickListener(v -> {
           if (index != selected && v.isEnabled()) {
-            if (m3) {
-              v.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
-            }
+            com.fahadali.xgram.XgramHaptics.tick(v); // both looks
             listener.onSenderSelected(index);
           }
         });

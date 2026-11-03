@@ -126,7 +126,7 @@ public final class XgramR6B1Pickers {
             }
             checked[0] = index;
             row.setChecked(true, true);
-            v.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+            com.fahadali.xgram.XgramHaptics.tick(v);
           }
           if (applyOnTap) {
             popupLayout.hideWindow(true);

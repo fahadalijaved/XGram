@@ -185,7 +185,7 @@ public final class XgramAppIconsController extends RecyclerViewController<Void> 
       boolean enabled = !settings.iconTheme();
       settings.setIconTheme(enabled);
       xgramBindThemeSwitch(v, true);
-      v.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
+      com.fahadali.xgram.XgramHaptics.toggle(v, enabled); // a switch
       if (enabled && selected != null) {
         com.fahadali.xgram.appearance.XgramThemePack.applyForIcon(this, selected);
       }
@@ -488,7 +488,7 @@ public final class XgramAppIconsController extends RecyclerViewController<Void> 
       cell.setOnClickListener(v -> {
         Object tag = v.getTag();
         if (tag instanceof XgramAppIcons.Icon) {
-          v.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
+          com.fahadali.xgram.XgramHaptics.tick(v);
           select((XgramAppIcons.Icon) tag);
         }
       });

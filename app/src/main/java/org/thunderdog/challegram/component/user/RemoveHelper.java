@@ -61,9 +61,7 @@ public class RemoveHelper implements FactorAnimator.Target {
   public void setDx (float dx) {
     if (this.dx != dx) {
       this.dx = dx;
-      if (XgramExpressive.isEnabled()) {
-        xgramCheckThreshold();
-      }
+      xgramCheckThreshold(); // XGram: the threshold haptic in the classic look too (the icon spring only draws in M3E)
       view.invalidate();
     }
   }
@@ -86,6 +84,11 @@ public class RemoveHelper implements FactorAnimator.Target {
   /** The remove threshold of the swipe in progress (ItemTouchHelper swipes one row at a time), set by {@link #attach}. */
   private static float xgramThresholdPx;
 
+  /** XGram: a list with its own ItemTouchHelper (the playlist) sets where its swipe removes, for the threshold haptic. */
+  public static void xgramSetSwipeThreshold (float px) {
+    xgramThresholdPx = px;
+  }
+
   private boolean xgramPastThreshold;
   private @Nullable XgramExpressive.Spring xgramIconSpring;
   private @Nullable Paint xgramIconPaint;
@@ -102,7 +105,8 @@ public class RemoveHelper implements FactorAnimator.Target {
     }
     xgramIconSpring.animateTo(past ? 1f : 0f);
     if (past) {
-      view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+      // XGram: armed (Android 14's threshold haptic, a tap before). Not when let go: dx also drops when the row resets.
+      com.fahadali.xgram.XgramHaptics.gestureThreshold(view, true);
     }
   }
 
@@ -317,8 +321,7 @@ public class RemoveHelper implements FactorAnimator.Target {
           recolored = true;
         }
       }
-      v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
-      spring().animateTo(1f);
+      spring().animateTo(1f); // XGram: the pick's haptic is in onSelectedChanged, for the classic look too
     }
 
     void drop (View v) {
@@ -416,8 +419,8 @@ public class RemoveHelper implements FactorAnimator.Target {
           if (actionState == ItemTouchHelper.ACTION_STATE_DRAG && XgramExpressive.isEnabled()) {
             xgramLift.apply(); // over the elevation ItemTouchHelper gives the dragged row on its first frame
           }
-        } else if (XgramExpressive.isEnabled()) {
-          xgramThresholdPx = Screen.dp(callback.getRemoveThresholdWidth());
+        } else {
+          xgramThresholdPx = Screen.dp(callback.getRemoveThresholdWidth()); // XGram: the threshold haptic in both looks
         }
         RemoveHelper.RemoveDelegate removeView = (RemoveHelper.RemoveDelegate) viewHolder.itemView;
         removeView.setRemoveDx(dX);
@@ -426,8 +429,17 @@ public class RemoveHelper implements FactorAnimator.Target {
       @Override
       public void onSelectedChanged (@Nullable RecyclerView.ViewHolder viewHolder, int actionState) {
         super.onSelectedChanged(viewHolder, actionState);
-        if (viewHolder != null && actionState == ItemTouchHelper.ACTION_STATE_DRAG && XgramExpressive.isEnabled()) {
-          xgramLift.lift(viewHolder.itemView);
+        if (viewHolder != null && actionState == ItemTouchHelper.ACTION_STATE_DRAG) {
+          // XGram: androidx's ItemTouchHelper has no pick haptic (Telegram X's CustomTouchHelper does): one in both looks,
+          // for drags it starts on its own long press or a drag handle. A page that starts drags from its row's
+          // onLongClick (Chat folders, Proxy) already had the system's long-click haptic; Chat folders' handle and icon
+          // play theirs in SettingsFoldersController.startDrag.
+          if (isLongPressDragEnabled()) {
+            com.fahadali.xgram.XgramHaptics.longPress(viewHolder.itemView);
+          }
+          if (XgramExpressive.isEnabled()) {
+            xgramLift.lift(viewHolder.itemView);
+          }
         }
       }
 
@@ -459,9 +471,7 @@ public class RemoveHelper implements FactorAnimator.Target {
         super.onMoved(recyclerView, viewHolder, fromPos, target, toPos, x, y);
         viewHolder.itemView.invalidate();
         target.itemView.invalidate();
-        if (XgramExpressive.isEnabled()) {
-          viewHolder.itemView.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK); // XGram M3E: a tick on each new slot
-        }
+        com.fahadali.xgram.XgramHaptics.segmentTick(viewHolder.itemView); // XGram: a tick on each new slot (both looks)
       }
 
       @Override

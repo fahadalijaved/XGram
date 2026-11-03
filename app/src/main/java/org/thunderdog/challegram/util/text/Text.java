@@ -3357,7 +3357,7 @@ public class Text implements Runnable, Emoji.CountLimiter, CounterTextPart, List
   public void run () {
     View view = longPressTarget;
     if (view != null && pressHighlight != null && performLongPress(view)) {
-      view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+      com.fahadali.xgram.XgramHaptics.longPress(view); // XGram: off with Haptic feedback
       if ((textFlags & FLAG_CUSTOM_LONG_PRESS) != 0) {
         setInLongPress(true);
       }

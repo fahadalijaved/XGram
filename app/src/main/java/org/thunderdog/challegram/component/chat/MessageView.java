@@ -1476,7 +1476,7 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
         parent.requestDisallowInterceptTouchEvent(true);
       }
       if (allowHapticFeedback) {
-        performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+        com.fahadali.xgram.XgramHaptics.longPress(this); // XGram: off with Haptic feedback
       }
     } else {
       flags &= ~FLAG_LONG_PRESSED;

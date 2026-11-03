@@ -229,7 +229,7 @@ public final class XgramEmojiBackspaceKey extends View implements FactorAnimator
     if (!repeating) {
       repeating = true;
       repeatInterval = REPEAT_FIRST_INTERVAL_MS;
-      performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); // the hold took: it deletes and repeats from here
+      com.fahadali.xgram.XgramHaptics.longPress(this); // the hold took: it deletes and repeats from here
       playSoundEffect(SoundEffectConstants.CLICK);
     } else {
       repeatInterval = Math.max(REPEAT_MIN_INTERVAL_MS, (long) (repeatInterval * REPEAT_SPEEDUP));

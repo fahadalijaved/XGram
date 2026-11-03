@@ -199,7 +199,7 @@ public final class XgramToleranceRow extends View implements FactorAnimator.Targ
     final float value = MathUtils.clamp((x - start) / Math.max(1f, end - start));
     if (this.value != value) {
       if (value == 0f || value == 1f) {
-        performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+        com.fahadali.xgram.XgramHaptics.segmentTick(this); // an end of the slider
       }
       applyValue(value);
     }

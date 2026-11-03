@@ -439,9 +439,7 @@ public final class QrLoginController extends ViewController<TdApi.AuthorizationS
     xgramCard.setCornerTarget(state == XGRAM_SCANNED ? XgramExpressive.CORNER_FULL : Float.NaN, animated);
     if (state == XGRAM_SCANNED && previous != XGRAM_SCANNED) {
       XgramR6B8Login.popIn(xgramCheck);
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-        xgramCheck.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM);
-      }
+      com.fahadali.xgram.XgramHaptics.confirm(xgramCheck);
     } else if (state != XGRAM_SCANNED) {
       xgramCheck.setAlpha(0f);
     }

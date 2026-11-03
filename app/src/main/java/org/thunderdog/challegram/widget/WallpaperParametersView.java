@@ -200,10 +200,7 @@ public class WallpaperParametersView extends View implements ClickHelper.Delegat
   @Override
   public void onClickAt (View view, float x, float y) {
     if (blurRect.contains(x, y)) {
-      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-        performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK); // XGram M3E: a tick on the toggle
-      }
-      isBlurEnabled.toggleValue(true);
+      com.fahadali.xgram.XgramHaptics.toggle(this, isBlurEnabled.toggleValue(true)); // XGram: the toggle's haptic (both looks)
       if (listener != null) listener.onBlurValueChanged(isBlurred());
     }
   }

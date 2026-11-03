@@ -76,6 +76,8 @@ public final class XgramBackup {
     XgramSettings.KEY_ADD_BOT_ADMIN, XgramSettings.KEY_ADD_BOT_ALL_RIGHTS,
     // Expressive design and New look for Telegram X pages (Appearance): on by default, so turning one off is kept too
     com.fahadali.xgram.appearance.XgramExpressive.KEY, XgramSettings.KEY_COMPOSE_TGX_PAGES,
+    // Haptic feedback (Appearance): on by default, so turning it off is kept too
+    XgramSettings.KEY_HAPTICS,
     // per chat / per sender
     "xgram_sb_", "xgram_ghost_ex_", "xgram_tabs_side_", "xgram_drawer_hide_", "xgram_input_hide_", XgramSettings.KEY_UNDO_SEND_EXCLUDE,
     // per account: removed by reset, but exported by Telegram user in "accounts" (see exportAccounts)

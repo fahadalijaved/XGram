@@ -377,7 +377,7 @@ public final class XgramPullToNext implements FactorAnimator.Target {
     if (armed != isArmed) {
       armed = isArmed;
       if (pulling) {
-        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+        com.fahadali.xgram.XgramHaptics.gestureThreshold(view, armed); // armed: Android 14's threshold haptic (a tap before); let go: 14+ only
       }
     }
   }

@@ -72,6 +72,13 @@ public class SendButton extends View implements FactorAnimator.Target, TooltipOv
   private final Drawable sendIcon;
   private final Drawable sendIconBg;
 
+  // XGram: the system's long-click haptic (the send menu, HapticMenuHelper) follows the Haptic feedback switch too,
+  // without FLAG_IGNORE_GLOBAL_SETTING (XgramHaptics)
+  @Override
+  public boolean performHapticFeedback (int feedbackConstant, int flags) {
+    return com.fahadali.xgram.XgramHaptics.enabled() && super.performHapticFeedback(feedbackConstant, com.fahadali.xgram.XgramHaptics.viewFlags(flags));
+  }
+
   public SendButton (Context context, int sendIconRes) {
     super(context);
     avatarReceiver = new AvatarReceiver(this);

@@ -721,13 +721,18 @@ public class SettingsFoldersController extends RecyclerViewController<Void> impl
   @Override
   public boolean onLongClick (View v) {
     if (v.getId() == R.id.chatFolder) {
-      startDrag(getRecyclerView().getChildViewHolder(v));
+      startDrag(getRecyclerView().getChildViewHolder(v), false); // XGram: the long click's own haptic is the pick's
       return true;
     }
     return false;
   }
 
   private void startDrag (RecyclerView.ViewHolder viewHolder) {
+    startDrag(viewHolder, true); // XGram: a touch on the drag handle or icon has no haptic of its own
+  }
+
+  // XGram: [pickHaptic] plays the pick-up haptic (RemoveHelper only plays one for lists that drag on their own long press)
+  private void startDrag (RecyclerView.ViewHolder viewHolder, boolean pickHaptic) {
     if (viewHolder == null)
       return;
     ListItem listItem = (ListItem) viewHolder.itemView.getTag();
@@ -742,6 +747,9 @@ public class SettingsFoldersController extends RecyclerViewController<Void> impl
         .show(tdlib, Strings.buildMarkdown(this, markdown))
         .hideDelayed();
       return;
+    }
+    if (pickHaptic) {
+      com.fahadali.xgram.XgramHaptics.longPress(viewHolder.itemView); // XGram
     }
     itemTouchHelper.startDrag(viewHolder);
   }

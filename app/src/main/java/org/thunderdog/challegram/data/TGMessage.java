@@ -7362,7 +7362,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     }
 
     if (after != null && ((flags & FLAG_READY_QUICK_RIGHT) == 0) && (flags & FLAG_READY_QUICK_LEFT) == 0) {
-      vibrate();
+      vibrateThreshold(); // XGram: Telegram's lighter tap
     }
 
     if (!needDelay) {
@@ -7429,6 +7429,11 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     UI.hapticVibrate(findCurrentView(), true);
   }
 
+  // XGram: swipe to reply passing its threshold: Telegram's lighter KEYBOARD_TAP, not a long press
+  private void vibrateThreshold () {
+    com.fahadali.xgram.XgramHaptics.threshold(findCurrentView());
+  }
+
   private float quickRightReadyFactor, quickLeftReadyFactor;
   private FactorAnimator quickRightReadyAnimator, quickLeftReadyAnimator;
 
@@ -7454,7 +7459,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         return;
       }
       verticalAnimator.animateTo(factor);
-      vibrate();
+      com.fahadali.xgram.XgramHaptics.segmentTick(findCurrentView()); // XGram: a step between the quick actions
     } else {
       if (verticalAnimator != null) {
         verticalAnimator.forceFactor(factor);
@@ -7550,11 +7555,11 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       int threshold = Screen.dp(BUBBLE_MOVE_THRESHOLD);
       if (dx >= threshold && (flags & FLAG_READY_QUICK_LEFT) == 0) {
         flags |= FLAG_READY_QUICK_LEFT;
-        vibrate();
+        vibrateThreshold(); // XGram: Telegram's lighter tap
         setReadyFactor(true, 1f, true, true);
       } else if (dx <= -threshold && (flags & FLAG_READY_QUICK_RIGHT) == 0) {
         flags |= FLAG_READY_QUICK_RIGHT;
-        vibrate();
+        vibrateThreshold(); // XGram: Telegram's lighter tap
         setReadyFactor(false, 1f, true, true);
       }
     }

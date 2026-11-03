@@ -478,7 +478,7 @@ public final class XgramM3PollCreate {
       row.setTranslationZ(dragged ? Screen.dp(XgramExpressive.ELEVATION_3) : 0f);
     }
     if (dragged) {
-      row.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+      com.fahadali.xgram.XgramHaptics.longPress(row);
     }
   }
 

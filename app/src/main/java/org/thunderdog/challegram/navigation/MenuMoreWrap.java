@@ -1238,8 +1238,8 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
 
   private void setSelectedIndex (int index) {
     if (index == lastSelectedIndex) return;
-    if (index != -1 && XgramExpressive.isEnabled()) {
-      performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK); // XGram M3E r6: a tick per row under the finger
+    if (index != -1) {
+      com.fahadali.xgram.XgramHaptics.tick(this); // XGram: a tick per row under the finger (both looks)
     }
     if (lastSelectedIndex == -1 || index == -1) {
       factorAnimator.forceFactor(index);

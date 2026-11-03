@@ -292,6 +292,8 @@
   <!-- XGram M3E part A: Expressive design switch, list decoration and row tags -->
   <item type="id" name="btn_xgramExpressive" />
   <item type="id" name="btn_xgramComposeTgx" />
+  <!-- Haptic feedback (Appearance) -->
+  <item type="id" name="btn_xgramHaptics" />
   <item type="id" name="xgram_m3e_list" />
   <item type="id" name="xgram_m3e_row" />
   <!-- Adaptive part 1: foldables (Appearance > Layout) -->

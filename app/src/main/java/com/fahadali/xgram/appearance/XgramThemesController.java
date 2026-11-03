@@ -545,7 +545,7 @@ public final class XgramThemesController extends RecyclerViewController<Void> {
       cell.setOnClickListener(v -> {
         Object tag = v.getTag();
         if (tag instanceof Item && !XgramSettingDeps.themesLocked()) {
-          v.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
+          com.fahadali.xgram.XgramHaptics.tick(v);
           select((Item) tag);
         }
       });

@@ -627,6 +627,7 @@ class TgxSettingsRenderer private constructor(
     val i = index.coerceIn(0, count - 1)
     if (view.valueIndex != i) {
       view.onValueChanged(null, i / (count - 1f))
+      com.fahadali.xgram.XgramHaptics.segmentTick(view) // a tick on each stop, as Telegram X's own slider (SliderView)
     }
   }
 

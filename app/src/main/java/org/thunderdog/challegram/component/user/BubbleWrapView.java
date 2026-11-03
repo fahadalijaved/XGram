@@ -418,9 +418,7 @@ public class BubbleWrapView extends View {
 
           if (startX >= cx - spacing && startX < cx + w + spacing && startY >= cy - spacing && startY < cy + h + spacing) {
             caughtIndex = i;
-            if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-              performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP); // XGram M3E: the chip turns errorContainer
-            }
+            com.fahadali.xgram.XgramHaptics.tap(this); // XGram: the chip is caught for removal (both looks)
             deleteIconStroke = Screen.dp(1f);
             deleteIconWidth = Screen.dp(7f);
             view.setIsDeleting(true, true);

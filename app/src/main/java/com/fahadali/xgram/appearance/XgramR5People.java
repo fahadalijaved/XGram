@@ -314,7 +314,7 @@ public final class XgramR5People {
         this.pressed = pressed;
         press.animateTo(pressed ? 1f : 0f);
         if (pressed) {
-          host.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+          com.fahadali.xgram.XgramHaptics.tap(host);
         }
       }
     }

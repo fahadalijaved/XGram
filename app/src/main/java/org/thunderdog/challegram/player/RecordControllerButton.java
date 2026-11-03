@@ -119,8 +119,8 @@ public class RecordControllerButton extends FrameLayoutFix {
 
   public void toggleActive (boolean animated) {
     com.fahadali.xgram.appearance.XgramAppMotion.use(isActiveAnimator, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, true); // XGram
-    if (xgramTonal != null && animated) {
-      performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK); // XGram M3E: a tick on toggles
+    if (animated) {
+      com.fahadali.xgram.XgramHaptics.tick(this); // XGram: a tick on toggles (both looks)
     }
     isActiveAnimator.setValue(!isActiveAnimator.getValue(), animated);
   }

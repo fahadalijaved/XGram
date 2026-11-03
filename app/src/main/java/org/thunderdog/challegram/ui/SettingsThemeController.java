@@ -524,8 +524,8 @@ public class SettingsThemeController extends RecyclerViewController<SettingsThem
         items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
         items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_useHoldToPreview, 0, R.string.HoldToPreview, Settings.instance().needPreviewChatOnHold()));
       }
-      items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
-      items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_customVibrations, 0, R.string.CustomVibrations));
+      // XGram: no Custom Vibrations: all it did was FLAG_IGNORE_GLOBAL_SETTING, which Android 13+ ignores for apps. XGram's
+      // Haptic feedback (Settings › XGram › Appearance) turns every haptic on or off.
       items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
       items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_reduceMotion, 0, R.string.ReduceMotion, Settings.instance().needReduceMotion()));
       if (Lang.rtl() || Lang.getLanguageDirection() != Lang.LANGUAGE_DIRECTION_LTR) {

@@ -826,12 +826,12 @@ public final class XgramUndoSendBubbles extends RecyclerView.ItemDecoration impl
 
   private void sendNow (XgramUndoSendItem item) {
     if (XgramUndoSend.sendNow(owner, item)) {
-      list.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+      com.fahadali.xgram.XgramHaptics.tick(list);
     }
   }
 
   private void confirmHaptic () {
-    list.performHapticFeedback(Build.VERSION.SDK_INT >= Build.VERSION_CODES.R ? HapticFeedbackConstants.CONFIRM : HapticFeedbackConstants.VIRTUAL_KEY);
+    com.fahadali.xgram.XgramHaptics.confirm(list);
   }
 
   // Views

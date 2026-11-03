@@ -1143,7 +1143,7 @@ public final class XgramDragDrop {
     public void run () {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && down && canStart()) {
         armed = true;
-        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+        com.fahadali.xgram.XgramHaptics.longPress(view);
       }
     }
 

@@ -1161,6 +1161,12 @@ public class TGMessagePoll extends TGMessage implements ClickHelper.Delegate, Co
             if (!isShaken) {
               isShaken = true;
               performShakeAnimation(isCorrect);
+              // XGram: felt too. isBeingChosen is this device's own answer, so other devices' answers stay silent.
+              if (isCorrect) {
+                com.fahadali.xgram.XgramHaptics.confirm(findCurrentView());
+              } else {
+                com.fahadali.xgram.XgramHaptics.reject(findCurrentView());
+              }
             }
             if (!isCorrect && !Td.isEmpty(quiz.explanation)) {
               showExplanation(null);
@@ -1170,6 +1176,9 @@ public class TGMessagePoll extends TGMessage implements ClickHelper.Delegate, Co
         }
         if (!isShaken && !oldPoll.isClosed && updatedPoll.isClosed && oldPoll.openPeriod > 0 && oldPoll.closeDate != 0 && tdlib.currentTime(TimeUnit.SECONDS) + 5 >= oldPoll.closeDate) {
           performShakeAnimation(false);
+          if (!TD.hasAnswer(oldPoll)) {
+            com.fahadali.xgram.XgramHaptics.reject(findCurrentView()); // XGram: the quiz's time ran out before an answer
+          }
         }
       }
       if (isMultiChoicePoll() && TD.hasAnswer(updatedPoll)) {

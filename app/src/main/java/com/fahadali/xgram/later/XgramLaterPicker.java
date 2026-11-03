@@ -570,10 +570,7 @@ public final class XgramLaterPicker {
   }
 
   private static void haptic (ViewController<?> c) {
-    View view = c.getValue();
-    if (view != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-      view.performHapticFeedback(HapticFeedbackConstants.CONFIRM);
-    }
+    com.fahadali.xgram.XgramHaptics.confirm(c.getValue()); // a tap before Android 11
   }
 
   // In the chat

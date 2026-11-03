@@ -277,7 +277,7 @@ public final class XgramM3Wheel {
       final boolean now = !chip.isSelected();
       chip.setSelected(now);
       chip.setChecked(now, false);
-      v.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
+      com.fahadali.xgram.XgramHaptics.toggle(v, now); // a filter chip turned on or off
       listener.onChipChanged(now);
     });
     chip.setSelected(checked);

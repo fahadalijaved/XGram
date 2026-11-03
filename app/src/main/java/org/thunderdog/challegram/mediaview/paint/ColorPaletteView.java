@@ -52,6 +52,13 @@ public class ColorPaletteView extends View implements ClickHelper.Delegate {
 
   private final ClickHelper helper;
 
+  // XGram: vkryl's ClickHelper (and the system's long click) vibrate this view directly: the Haptic feedback switch gates
+  // it, and without FLAG_IGNORE_GLOBAL_SETTING the phone's Touch feedback setting applies (XgramHaptics)
+  @Override
+  public boolean performHapticFeedback (int feedbackConstant, int flags) {
+    return com.fahadali.xgram.XgramHaptics.enabled() && super.performHapticFeedback(feedbackConstant, com.fahadali.xgram.XgramHaptics.viewFlags(flags));
+  }
+
   public ColorPaletteView (Context context, boolean inTransparentMode) {
     super(context);
     this.colorPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
@@ -324,8 +331,7 @@ public class ColorPaletteView extends View implements ClickHelper.Delegate {
       isDragging = true;
       startX = x;
       startValue = value;
-      if (byLongPress)
-        UI.forceVibrate(this, true);
+      // XGram: no haptic of its own on a long press: ClickHelper.onLongPress plays it once this returns (it played twice)
       if ((requestedParent = getParent()) != null) {
         requestedParent.requestDisallowInterceptTouchEvent(true);
       }

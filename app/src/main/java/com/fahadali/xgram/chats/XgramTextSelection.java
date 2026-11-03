@@ -212,7 +212,7 @@ public final class XgramTextSelection {
     selection.beginPress(view, x, y, true);
     touchOwner = selection;
     touchOwnerView = view;
-    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+    com.fahadali.xgram.XgramHaptics.longPress(view);
     return true;
   }
 
@@ -475,8 +475,8 @@ public final class XgramTextSelection {
     wrapper.setXgramSelection(start, end, color);
     msg.invalidate();
     layer.invalidate();
-    if (tick && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-      view.performHapticFeedback(HapticFeedbackConstants.TEXT_HANDLE_MOVE);
+    if (tick) {
+      com.fahadali.xgram.XgramHaptics.textHandle(view); // TEXT_HANDLE_MOVE (Android 8.1+), a tick before
     }
   }
 
@@ -775,7 +775,7 @@ public final class XgramTextSelection {
     secondTap = false;
     lastTapEnds = false;
     UI.cancel(endLater);
-    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+    com.fahadali.xgram.XgramHaptics.longPress(view);
     selectWordAt(view, atId, at, offset, true, x, y);
   }
 

@@ -239,9 +239,7 @@ public final class XgramR6B8Login {
     }
 
     public void play (@Nullable View hapticView) {
-      if (hapticView != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-        hapticView.performHapticFeedback(HapticFeedbackConstants.REJECT);
-      }
+      com.fahadali.xgram.XgramHaptics.reject(hapticView); // REJECT on Android 11+, a long press before
       if (XgramMotion.reduce()) {
         return;
       }
@@ -796,6 +794,13 @@ public final class XgramR6B8Login {
         setOnLongClickListener(v -> pasteFromClipboard());
       }
 
+      // The long click's own haptic (a paste: pasteFromClipboard returned true) follows Haptic feedback too, without
+      // FLAG_IGNORE_GLOBAL_SETTING (XgramHaptics)
+      @Override
+      public boolean performHapticFeedback (int feedbackConstant, int flags) {
+        return com.fahadali.xgram.XgramHaptics.enabled() && super.performHapticFeedback(feedbackConstant, com.fahadali.xgram.XgramHaptics.viewFlags(flags));
+      }
+
       void setError (boolean error) {
         if (this.error != error) {
           this.error = error;
@@ -841,7 +846,7 @@ public final class XgramR6B8Login {
           if (count > 0 && digits.length() > count) {
             digits = digits.substring(0, count);
           }
-          performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+          // No haptic of its own: returning true makes the long click play LONG_PRESS (it played twice)
           field.getEditText().requestFocus();
           field.setText(digits);
           return true;

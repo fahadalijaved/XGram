@@ -203,9 +203,20 @@ public class TogglerView extends View implements FactorAnimator.Target, TooltipO
     if (xgram) {
       final boolean value = !isEnabled.getValue();
       xgramSetChecked(value, animated);
+      xgramToggleHaptic(animated, value);
       return value;
     }
-    return isEnabled.toggleValue(animated);
+    final boolean value = isEnabled.toggleValue(animated);
+    xgramToggleHaptic(animated, value);
+    return value;
+  }
+
+  // XGram: a flip by the user (every caller passes animated) ticks like Pixel apps' switches; the setters don't.
+  // Telegram X pages drawn in Compose flip this same view (their rows' headless SettingView), so they tick too.
+  private void xgramToggleHaptic (boolean animated, boolean value) {
+    if (animated) {
+      com.fahadali.xgram.XgramHaptics.toggle(this, value);
+    }
   }
 
   /*public boolean isAnimating () {

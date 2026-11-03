@@ -44,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -54,6 +55,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.fahadali.xgram.XgramHaptics
 import com.fahadali.xgram.compose.LocalXgramHost
 import kotlin.math.roundToInt
 
@@ -261,9 +263,12 @@ private fun SwitchRow(
   busy: Boolean, shapes: ListItemShapes, onChange: (Boolean) -> Unit
 ) {
   val host = LocalXgramHost.current
+  val view = LocalView.current
   SegmentedListItem(
     onClick = {
       onChange(!checked)
+      // The switch's haptic (Pixel apps), after the change: Haptic feedback's own switch is felt when turned on only
+      XgramHaptics.toggle(view, !checked)
       host.changed()
     },
     shapes = shapes,
@@ -299,9 +304,11 @@ private fun MainSwitchRow(
   val p = if (highlight != null && highlight.matches(id, key)) highlight.progress.value else 0f
   val container = if (p > 0f) lerp(animated, cs.secondaryContainer, p) else animated
   val onColor = if (checked) cs.onPrimaryContainer else cs.onSurface
+  val view = LocalView.current
   SegmentedListItem(
     onClick = {
       onChange(!checked)
+      XgramHaptics.toggle(view, !checked) // the switch's haptic (Pixel apps)
       host.changed()
     },
     shapes = shapes,
@@ -419,6 +426,7 @@ private fun SliderRow(
   onChange: (Int) -> Unit
 ) {
   val host = LocalXgramHost.current
+  val view = LocalView.current
   val last = (labels.size - 1).coerceAtLeast(1)
   var position by remember(index) { mutableFloatStateOf(index.toFloat()) }
   val shown = position.roundToInt().coerceIn(0, labels.size - 1)
@@ -430,7 +438,13 @@ private fun SliderRow(
         Text(labels.getOrElse(shown) { "" })
         Slider(
           value = position,
-          onValueChange = { position = it },
+          onValueChange = {
+            // A tick on each stop the thumb reaches while dragged
+            if (it.roundToInt() != position.roundToInt()) {
+              XgramHaptics.segmentTick(view)
+            }
+            position = it
+          },
           modifier = Modifier.fillMaxWidth().xgramNoSwipeBack().semantics { stateDescription = labels.getOrElse(shown) { "" } },
           enabled = enabled,
           valueRange = 0f..last.toFloat(),

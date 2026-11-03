@@ -90,6 +90,8 @@ public final class XgramSettings {
   public static final String HEADER_BUTTON_GHOST = "ghost", HEADER_BUTTON_SEARCH = "search";
   /** Message menu: a popup next to the message (Telegram) instead of the sheet. */
   public static final String KEY_MESSAGE_POPUP = "xgram_message_popup";
+  /** Appearance › Haptic feedback: every haptic of the app, XGram's and Telegram X's (XgramHaptics). On by default. */
+  public static final String KEY_HAPTICS = "xgram_haptics";
   /** A bot's profile → Add to group or channel: as an admin in groups too (channels always), with every right. */
   public static final String KEY_ADD_BOT_ADMIN = "xgram_add_bot_admin", KEY_ADD_BOT_ALL_RIGHTS = "xgram_add_bot_all_rights";
   /** XDrive (Saved Messages as the drive) is a test for now: Testing utilities switches it on (debug builds on, CI off). */
@@ -132,6 +134,7 @@ public final class XgramSettings {
   private volatile boolean emojiCategorySwipe;
   private volatile boolean tapToRecord;
   private volatile boolean systemEmoji;
+  private volatile boolean hapticFeedback;
   private volatile boolean downloadBoost;
   private volatile int downloadBoostLevel;
 
@@ -178,6 +181,7 @@ public final class XgramSettings {
     pullToNext = pmc.getBoolean(KEY_PULL_TO_NEXT, true);
     tapToRecord = pmc.getBoolean(KEY_TAP_TO_RECORD, false);
     systemEmoji = pmc.getBoolean(KEY_SYSTEM_EMOJI, false);
+    hapticFeedback = pmc.getBoolean(KEY_HAPTICS, true);
     downloadBoost = pmc.getBoolean(KEY_DOWNLOAD_BOOST, false);
     downloadBoostLevel = Math.max(XgramDownloadBoost.LEVEL_LOW, Math.min(XgramDownloadBoost.LEVEL_MAX, pmc.getInt(KEY_DOWNLOAD_BOOST_LEVEL, XgramDownloadBoost.LEVEL_DEFAULT)));
     applyGhostSend();
@@ -645,6 +649,23 @@ public final class XgramSettings {
   public void setSystemEmoji (boolean value) {
     systemEmoji = value;
     put(KEY_SYSTEM_EMOJI, value);
+  }
+
+  // Haptic feedback
+
+  /**
+   * Appearance › Haptic feedback: off, nothing in the app vibrates on a touch or a gesture (XgramHaptics; vkryl's
+   * ClickHelper and ViewUtils.hapticVibrate through the views' performHapticFeedback overrides, see XgramHaptics). On, the
+   * phone's Touch feedback setting still applies. Notification and call vibrations aren't haptics: they follow their
+   * own settings.
+   */
+  public boolean hapticFeedback () {
+    return hapticFeedback;
+  }
+
+  public void setHapticFeedback (boolean value) {
+    hapticFeedback = value;
+    put(KEY_HAPTICS, value);
   }
 
   /** Message box buttons the user hid ({@code INPUT_BUTTON_*}). Telegram X still decides when a shown one appears. */

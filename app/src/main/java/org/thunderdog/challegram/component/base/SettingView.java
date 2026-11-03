@@ -136,6 +136,13 @@ public class SettingView extends FrameLayoutFix implements FactorAnimator.Target
   private IconOverlay overlay;
   private final ComplexReceiver complexReceiver;
 
+  // XGram: the system's long-click haptic on settings rows follows the Haptic feedback switch too, without
+  // FLAG_IGNORE_GLOBAL_SETTING (XgramHaptics)
+  @Override
+  public boolean performHapticFeedback (int feedbackConstant, int flags) {
+    return com.fahadali.xgram.XgramHaptics.enabled() && super.performHapticFeedback(feedbackConstant, com.fahadali.xgram.XgramHaptics.viewFlags(flags));
+  }
+
   public SettingView (Context context, Tdlib tdlib) {
     super(context);
     this.tdlib = tdlib;

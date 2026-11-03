@@ -67,6 +67,15 @@ fun AppearancePage() {
 
     expressive(host)
 
+    // Haptic feedback: every haptic of the app (XgramHaptics), on any Android version, so outside Expressive's group.
+    // Saved before the row's own toggle haptic (SwitchRow), so turning it on is felt and turning it off isn't.
+    group {
+      switch(R.id.btn_xgramHaptics, s(R.string.XgramHaptics), s(R.string.XgramHapticsSub), checked = settings.hapticFeedback()) {
+        settings.setHapticFeedback(it)
+      }
+    }
+    description(R.string.XgramHapticsInfo)
+
     header(R.string.XgramColors)
     if (expressiveOn) {
       // Expressive design's colors: the wallpaper's or a picked one (AppearanceColors.kt)

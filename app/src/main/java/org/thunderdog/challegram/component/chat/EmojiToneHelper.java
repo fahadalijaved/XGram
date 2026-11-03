@@ -168,6 +168,7 @@ public class EmojiToneHelper implements FactorAnimator.Target {
     boolean updatePosition = false;
 
     if (relativeY >= 0 && !applyButtonPressed && emojiTonePicker.changeIndex(relativeX, relativeY)) {
+      com.fahadali.xgram.XgramHaptics.tick(anchorView); // XGram: a tick per skin tone under the finger (Telegram)
       toneChanged = true;
       currentTone = EmojiData.emojiColors[emojiTonePicker.getToneIndex()];
       updatePosition = true;

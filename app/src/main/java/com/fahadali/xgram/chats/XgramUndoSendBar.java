@@ -593,7 +593,7 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
   }
 
   private void confirmHaptic () {
-    performHapticFeedback(Build.VERSION.SDK_INT >= Build.VERSION_CODES.R ? HapticFeedbackConstants.CONFIRM : HapticFeedbackConstants.VIRTUAL_KEY);
+    com.fahadali.xgram.XgramHaptics.confirm(this);
   }
 
   private void onSendNowClick () {
@@ -601,7 +601,7 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
     if (s == null || isSending(s, SystemClock.uptimeMillis())) {
       return;
     }
-    performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+    com.fahadali.xgram.XgramHaptics.tick(this);
     XgramUndoSend.sendNow(owner);
   }
 

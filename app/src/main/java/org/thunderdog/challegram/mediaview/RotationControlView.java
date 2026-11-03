@@ -172,6 +172,18 @@ public class RotationControlView extends View implements FactorAnimator.Target {
     }
   }
 
+  // XGram: a tick when the dragged wheel crosses 0° (straight) or reaches either end (+-45°)
+  private void xgramRotationHaptic (float before, float after) {
+    if (before == after) {
+      return;
+    }
+    final boolean crossedZero = (before < 0f && after >= 0f) || (before > 0f && after <= 0f);
+    final boolean reachedEnd = Math.abs(after) >= 45f && Math.abs(before) < 45f;
+    if (crossedZero || reachedEnd) {
+      com.fahadali.xgram.XgramHaptics.segmentTick(this);
+    }
+  }
+
   private void setValue (float value) {
     if (this.value !=  value) {
       this.value = value;
@@ -251,7 +263,9 @@ public class RotationControlView extends View implements FactorAnimator.Target {
         if (isUp) {
           float diffX = (e.getX() - startX) * MOVE_FACTOR;
           float value = startValue + -45f * diffX / ((float) currentWidth / 2.5f);
+          final float before = this.value; // XGram: haptics
           updateValue(value);
+          xgramRotationHaptic(before, this.value);
         }
 
         break;

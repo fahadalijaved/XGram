@@ -377,9 +377,7 @@ public final class XgramConnectionPill extends View {
   public boolean performClick () {
     super.performClick();
     if (state == XgramConnection.STUCK) {
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-        performHapticFeedback(HapticFeedbackConstants.CONFIRM);
-      }
+      com.fahadali.xgram.XgramHaptics.confirm(this);
       (source != null ? source : XgramConnection.instance()).retry();
       return true;
     }

@@ -392,7 +392,7 @@ public final class XgramDragSelect implements RecyclerView.OnItemTouchListener {
       hi = position - 1;
     }
     if (changed > 0) {
-      list.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+      com.fahadali.xgram.XgramHaptics.tick(list);
     }
   }
 

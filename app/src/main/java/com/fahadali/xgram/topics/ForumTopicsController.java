@@ -995,8 +995,8 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
       }
       boolean moved = list.movePinnedLocally(viewHolder.getBindingAdapterPosition(), target.getBindingAdapterPosition());
       reorderChanged |= moved;
-      if (moved && XgramExpressive.isEnabled()) {
-        recyclerView.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK); // XGram M3E: a tick on each swap
+      if (moved) {
+        com.fahadali.xgram.XgramHaptics.segmentTick(recyclerView); // a tick on each swap (both looks)
       }
       return moved;
     }

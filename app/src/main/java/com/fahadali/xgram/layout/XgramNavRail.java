@@ -1027,6 +1027,13 @@ public final class XgramNavRail {
       }
     }
 
+    // The system's long-click haptic (tabs, the profile's accounts, rail items) follows Haptic feedback too, without
+    // FLAG_IGNORE_GLOBAL_SETTING (XgramHaptics)
+    @Override
+    public boolean performHapticFeedback (int feedbackConstant, int flags) {
+      return com.fahadali.xgram.XgramHaptics.enabled() && super.performHapticFeedback(feedbackConstant, com.fahadali.xgram.XgramHaptics.viewFlags(flags));
+    }
+
     /** The content color the state layer is made of. */
     protected abstract int stateLayerColor ();
 
@@ -1595,7 +1602,11 @@ public final class XgramNavRail {
           onMenuAction(id);
           close();
         });
-        toggler.setOnClickListener(v -> toggler.setRadioEnabled(Settings.instance().toggleProxySetting(Settings.PROXY_FLAG_ENABLED), true));
+        toggler.setOnClickListener(v -> {
+          final boolean on = Settings.instance().toggleProxySetting(Settings.PROXY_FLAG_ENABLED);
+          com.fahadali.xgram.XgramHaptics.toggle(v, on); // the switch's haptic, as in the side menu
+          toggler.setRadioEnabled(on, true);
+        });
         toggler.setContentDescription(Lang.getString(entry.label));
       } else {
         // The whole row is the switch: the press reaches the row and the switch (ViewGroup#dispatchSetPressed)
@@ -1607,6 +1618,7 @@ public final class XgramNavRail {
         wrap.setContentDescription(Lang.getString(entry.label));
         wrap.setOnClickListener(v -> {
           if (id == R.id.btn_night) {
+            com.fahadali.xgram.XgramHaptics.toggle(v, !toggler.isEnabled()); // the switch's haptic, as in the side menu
             toggler.setRadioEnabled(!toggler.isEnabled(), true);
             ThemeManager.instance().toggleNightMode();
           } else if (id == R.id.btn_xgramExpressive) {
@@ -1626,6 +1638,7 @@ public final class XgramNavRail {
           } else {
             XgramSettings settings = XgramSettings.instance();
             boolean enable = !settings.isAnyGhostEnabled();
+            com.fahadali.xgram.XgramHaptics.toggle(v, enable); // the switch's haptic, as in the side menu
             settings.setGhostModeEnabled(enable);
             com.fahadali.xgram.ghost.XgramGhost.applyOnlineState();
             toggler.setRadioEnabled(enable, true);

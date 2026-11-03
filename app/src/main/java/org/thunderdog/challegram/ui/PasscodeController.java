@@ -465,7 +465,7 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
         xgramPasswordRevealed = !xgramPasswordRevealed;
         syncToggle.run();
         xgramApplyPasswordTransformation();
-        v.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
+        com.fahadali.xgram.XgramHaptics.tick(v); // XGram
       });
       FrameLayoutFix.LayoutParams toggleParams = FrameLayoutFix.newParams(Screen.dp(48f), Screen.dp(48f), Gravity.TOP | (rtl ? Gravity.LEFT : Gravity.RIGHT));
       toggleParams.topMargin = Screen.dp(16f);

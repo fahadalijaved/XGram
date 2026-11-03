@@ -202,8 +202,8 @@ final class XgramActivityPullFrame extends FrameLayoutFix implements NestedScrol
     offset = travelOf(rawDrag);
     offsetSpring.setValue(offset);
     final boolean nowArmed = offset >= thresholdPx;
-    if (nowArmed && !armed) {
-      thresholdHaptic();
+    if (nowArmed != armed) {
+      thresholdHaptic(nowArmed);
     }
     armed = nowArmed;
     invalidate();
@@ -237,16 +237,9 @@ final class XgramActivityPullFrame extends FrameLayoutFix implements NestedScrol
     }
   }
 
-  private void thresholdHaptic () {
-    final int feedback;
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-      feedback = HapticFeedbackConstants.GESTURE_THRESHOLD_ACTIVATE;
-    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-      feedback = HapticFeedbackConstants.CONTEXT_CLICK;
-    } else {
-      feedback = HapticFeedbackConstants.VIRTUAL_KEY;
-    }
-    performHapticFeedback(feedback);
+  /** Armed (Android 14's threshold pair, a tap before) or let go (Android 14+ only), as the archive pull and pull to next. */
+  private void thresholdHaptic (boolean armed) {
+    com.fahadali.xgram.XgramHaptics.gestureThreshold(this, armed);
   }
 
   // Nested scrolling (androidx NestedScrollingParent3): touches only, so a fling and its overscroll stay the list's

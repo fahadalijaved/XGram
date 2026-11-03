@@ -1234,7 +1234,7 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
           float dx = e.getRawX() - downRawX;
           if (!dragging && Math.abs(dx) > touchSlop) {
             dragging = true;
-            performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY);
+            com.fahadali.xgram.XgramHaptics.virtualKey(this);
           }
           if (dragging) {
             onDragged(Math.round(Lang.rtl() ? downList - dx : downList + dx));
@@ -1255,7 +1255,7 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
             long now = android.os.SystemClock.uptimeMillis();
             if (lastTapUp != 0 && now - lastTapUp <= android.view.ViewConfiguration.getDoubleTapTimeout()) {
               lastTapUp = 0;
-              performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY);
+              com.fahadali.xgram.XgramHaptics.virtualKey(this);
               resetWidth();
             } else {
               lastTapUp = now;

@@ -123,7 +123,7 @@ public final class XgramChatListViewCard extends ViewGroup {
     if (XgramChatListMode.tileOf(mode) == tile.index) {
       return;
     }
-    tile.performHapticFeedback(Build.VERSION.SDK_INT >= 34 ? HapticFeedbackConstants.SEGMENT_TICK : HapticFeedbackConstants.CLOCK_TICK);
+    com.fahadali.xgram.XgramHaptics.segmentTick(tile);
     final int newMode = XgramChatListMode.modeOfTile(tile.index);
     setMode(newMode, true);
     if (listener != null) {

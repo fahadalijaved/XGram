@@ -940,6 +940,8 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
         }
         dragTo = toPosition;
         adapter.movePinnedChat(fromPosition, toPosition);
+        // XGram: a tick on each new slot (returning false, onMoved never runs)
+        com.fahadali.xgram.XgramHaptics.segmentTick(viewHolder.itemView);
         if (dragTooltip != null) {
           dragTooltip.hideNow();
         }
@@ -4123,7 +4125,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     // Archive and community rows keep their own long-press menus.
     if (chat != null && chat.xgramCommunityId() == 0 && canSelectChat(chat)) {
       v.dropPress(x, y);
-      v.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
+      // XGram: no haptic here: returning true makes ClickHelper.onLongPress play the long press one (it played twice)
       selectUnselectChat(chat, true);
       return true;
     }

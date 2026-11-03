@@ -25,10 +25,15 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.hapticfeedback.HapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import com.fahadali.xgram.XgramHaptics
 import com.fahadali.xgram.appearance.XgramAmoled
 import com.fahadali.xgram.appearance.XgramColorSource
 import com.fahadali.xgram.appearance.XgramExpressive
@@ -62,13 +67,27 @@ fun XgramM3Theme(dark: Boolean, themeVersion: Int, content: @Composable () -> Un
   // The default type scale in the app font (XgramFonts, read once per process: a change restarts the app)
   val typography = remember { XgramFontFamilies.typography() }
   val shapes = remember { Shapes() }
-  MaterialExpressiveTheme(
-    colorScheme = scheme,
-    motionScheme = motion,
-    shapes = shapes,
-    typography = typography,
-    content = content
-  )
+  // Compose's own haptics (text selection handles, Material components) follow Haptic feedback too
+  val platformHaptics = LocalHapticFeedback.current
+  val haptics = remember(platformHaptics) { XgramGatedHapticFeedback(platformHaptics) }
+  CompositionLocalProvider(LocalHapticFeedback provides haptics) {
+    MaterialExpressiveTheme(
+      colorScheme = scheme,
+      motionScheme = motion,
+      shapes = shapes,
+      typography = typography,
+      content = content
+    )
+  }
+}
+
+/** The platform's haptics when Appearance › Haptic feedback is on ([XgramHaptics.enabled]); nothing when it's off. */
+private class XgramGatedHapticFeedback(private val base: HapticFeedback) : HapticFeedback {
+  override fun performHapticFeedback(hapticFeedbackType: HapticFeedbackType) {
+    if (XgramHaptics.enabled()) {
+      base.performHapticFeedback(hapticFeedbackType)
+    }
+  }
 }
 
 /**

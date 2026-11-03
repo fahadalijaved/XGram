@@ -76,6 +76,13 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
   private final @Nullable ImageReceiver imageReceiver;
   private final @Nullable GifReceiver gifReceiver;
 
+  // XGram: the system's long-click haptic (DoneButton's send menu, HapticMenuHelper) follows the Haptic feedback switch
+  // too, without FLAG_IGNORE_GLOBAL_SETTING (XgramHaptics)
+  @Override
+  public boolean performHapticFeedback (int feedbackConstant, int flags) {
+    return com.fahadali.xgram.XgramHaptics.enabled() && super.performHapticFeedback(feedbackConstant, com.fahadali.xgram.XgramHaptics.viewFlags(flags));
+  }
+
   public CircleButton (Context context) {
     super(context);
     Views.setClickable(this);

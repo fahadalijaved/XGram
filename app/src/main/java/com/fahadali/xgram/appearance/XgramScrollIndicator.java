@@ -510,7 +510,7 @@ public final class XgramScrollIndicator extends RecyclerView.ItemDecoration impl
     if (parent != null) {
       parent.requestDisallowInterceptTouchEvent(true);
     }
-    rv.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+    com.fahadali.xgram.XgramHaptics.tick(rv);
     rv.removeCallbacks(hideRunnable);
     alpha.animateTo(1f, XgramExpressive.EFFECTS_FAST);
     press.animateTo(1f, XgramExpressive.SPATIAL_FAST);
@@ -648,7 +648,7 @@ public final class XgramScrollIndicator extends RecyclerView.ItemDecoration impl
 
   /** The tick of a label change under the finger. */
   public static void labelTick (@NonNull View v) {
-    v.performHapticFeedback(Build.VERSION.SDK_INT >= 34 ? HapticFeedbackConstants.SEGMENT_FREQUENT_TICK : HapticFeedbackConstants.CLOCK_TICK);
+    com.fahadali.xgram.XgramHaptics.frequentTick(v);
   }
 
   /** The thumb from {@code top} to {@code bottom} at the end edge: 4dp off it, 4dp thick, 10dp while pressed. */

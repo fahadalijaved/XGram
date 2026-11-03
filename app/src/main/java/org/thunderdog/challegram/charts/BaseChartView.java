@@ -1098,6 +1098,9 @@ public abstract class BaseChartView<T extends ChartData, L extends LineViewData>
 
         if (selectedIndex > endXIndex) selectedIndex = endXIndex;
         if (selectedIndex < startXIndex) selectedIndex = startXIndex;
+        if (selectedIndex != oldSelectedX) {
+            com.fahadali.xgram.XgramHaptics.textHandle(this); // XGram: a tick per point under the finger (Telegram)
+        }
 
         legendShowing = true;
         animateLegend(true);

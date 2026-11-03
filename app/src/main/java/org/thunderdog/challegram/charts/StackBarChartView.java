@@ -154,6 +154,7 @@ public class StackBarChartView extends BaseChartView<StackBarChartData, StackBar
     @Override
     protected void selectXOnChart(int x, int y) {
         if (chartData == null) return;
+        final int oldSelectedX = selectedIndex; // XGram: haptics
         float offset = chartFullWidth * (pickerDelegate.pickerStart) - getHorizontalPadding();
         float p;
         if (chartData.xPercentage.length < 2) {
@@ -173,6 +174,9 @@ public class StackBarChartView extends BaseChartView<StackBarChartData, StackBar
             selectedIndex = chartData.findIndex(startXIndex, endXIndex, xP);
             if (selectedIndex > endXIndex) selectedIndex = endXIndex;
             if (selectedIndex < startXIndex) selectedIndex = startXIndex;
+        }
+        if (selectedIndex != oldSelectedX) {
+            com.fahadali.xgram.XgramHaptics.textHandle(this); // XGram: a tick per bar under the finger (Telegram)
         }
 
         legendShowing = true;

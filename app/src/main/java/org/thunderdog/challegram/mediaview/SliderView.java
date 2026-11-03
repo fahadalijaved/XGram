@@ -325,6 +325,35 @@ public class SliderView extends View implements FactorAnimator.Target {
     return getPaddingRight() + addPaddingRight;
   }
 
+  // XGram: haptics while dragged. A stepped slider ticks on each stop it reaches (Telegram's newer sliders); a centred
+  // one (the photo editor's) ticks at its ends and when it crosses the centre. Other continuous ones (seek bars) don't.
+  private int xgramHapticStop;
+
+  private int xgramStopOf (float value) {
+    final float f = anchorMode == ANCHOR_MODE_CENTER ? (value + 1f) / 2f : value;
+    if (valueCount > 1) {
+      return Math.round(Math.max(0f, Math.min(1f, f)) * (valueCount - 1));
+    }
+    if (anchorMode != ANCHOR_MODE_CENTER) {
+      return 0;
+    }
+    return value <= -1f ? -2 : value >= 1f ? 2 : value < 0f ? -1 : value > 0f ? 1 : 0;
+  }
+
+  private void xgramStepHaptic () {
+    final int stop = xgramStopOf(value);
+    if (stop == xgramHapticStop) {
+      return;
+    }
+    final int previous = xgramHapticStop;
+    xgramHapticStop = stop;
+    // A continuous slider: reaching an end (+-2), the centre (0) or crossing it (the sign flips); not leaving an end or the
+    // centre, so a drag that starts at the editor's default 0 doesn't tick at once (to the left only, as it did)
+    if (valueCount > 1 || Math.abs(stop) == 2 || stop == 0 || (previous != 0 && Integer.signum(previous) != Integer.signum(stop))) {
+      com.fahadali.xgram.XgramHaptics.segmentTick(this);
+    }
+  }
+
   @Override
   public boolean onTouchEvent (MotionEvent e) {
     float x = e.getX();
@@ -339,6 +368,7 @@ public class SliderView extends View implements FactorAnimator.Target {
 
         if (x >= cx - radius && x <= cx + radius && y >= cy - radius && y <= cy + radius && slideEnabled && (changeAnimator == null || !changeAnimator.isAnimating()) && (listener == null || listener.allowSliderChanges(this))) {
           diffX = x - cx;
+          xgramHapticStop = xgramStopOf(value); // XGram: haptics
           setIsUp(true);
           return true;
         }
@@ -364,6 +394,7 @@ public class SliderView extends View implements FactorAnimator.Target {
           }
 
           changeValue(factor);
+          xgramStepHaptic(); // XGram
           return true;
         }
 

@@ -234,8 +234,8 @@ public final class XgramM3CallVideoTile extends FrameLayoutFix implements XgramC
     } else {
       snapToCorner();
     }
-    if (changed && expressive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-      performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+    if (changed) {
+      com.fahadali.xgram.XgramHaptics.tick(this); // both looks
     }
   }
 

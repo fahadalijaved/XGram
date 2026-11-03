@@ -346,6 +346,7 @@ public class CameraButton extends View implements FactorAnimator.Target, Runnabl
   @Override
   public void run () {
     if (isActive) {
+      com.fahadali.xgram.XgramHaptics.longPress(this); // XGram: the hold took, the video starts
       takeVideo();
     }
   }

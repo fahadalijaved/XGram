@@ -547,7 +547,6 @@ internal object TgxSearchIndex {
       visible = { Config.IN_APP_BROWSER_AVAILABLE })
     row(u, "ui/holdPreview", R.string.HoldToPreview, RowRef(R.id.btn_useHoldToPreview), kw = kw(R.string.XgramSearchKwPeek),
       visible = { Config.FORCE_TOUCH_ENABLED && Config.HOLD_TO_PREVIEW_AVAILABLE })
-    row(u, "ui/vibrations", R.string.CustomVibrations, RowRef(R.id.btn_customVibrations), kw = kw(R.string.XgramSearchKwHaptic))
     row(u, "ui/reduceMotion", R.string.ReduceMotion, RowRef(R.id.btn_reduceMotion), kw = kw(R.string.XgramSearchKwPower, R.string.XgramSearchKwAccessibility))
     row(u, "ui/rtl", R.string.RtlLayout, RowRef(R.id.btn_switchRtl), kw = kw(R.string.XgramSearchKwRtl),
       visible = { Lang.rtl() || Lang.getLanguageDirection() != Lang.LANGUAGE_DIRECTION_LTR })

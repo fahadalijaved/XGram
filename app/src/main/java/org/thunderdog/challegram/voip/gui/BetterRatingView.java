@@ -106,7 +106,7 @@ public class BetterRatingView extends View {
     xgramPopTo = rating;
     xgramPop.setValue(0f);
     xgramPop.animateTo(1f);
-    performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
+    com.fahadali.xgram.XgramHaptics.tick(this); // XGram: off with Haptic feedback
     setContentDescription(Lang.getString(R.string.XgramR5CallsStar, rating));
     if (listener != null) {
       listener.onRatingChanged(selectedRating);
