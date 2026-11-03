@@ -36,6 +36,7 @@
   <!-- Where a layer dragged to the bottom is let go to delete it (TalkBack) -->
   <string name="XgramEditorTrash">Drag here to delete</string>
   <string name="XgramEditorStickerFailed">Couldn\'t load this sticker</string>
+  <string name="XgramEditorAnimatedAsStill">GIFs and animated stickers are added as a still image for now</string>
 
   <!-- The text editor -->
   <string name="XgramEditorTextHint">Type something</string>

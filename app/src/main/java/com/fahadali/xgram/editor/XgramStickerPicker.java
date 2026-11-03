@@ -269,7 +269,14 @@ public final class XgramStickerPicker extends FrameLayoutFix implements EmojiLay
     return width > 0 && height > 0 ? (float) width / (float) height : 1f;
   }
 
+  /** Said once per app run: the editor sends a photo, so animated stickers and GIFs go on it as a still image. */
+  private static boolean stillHintShown;
+
   private void pickFile (@NonNull TdApi.File file, int format, float aspect) {
+    if (format != XgramStickerLayer.FORMAT_STATIC && !stillHintShown) {
+      stillHintShown = true;
+      UI.showToast(R.string.XgramEditorAnimatedAsStill, Toast.LENGTH_LONG);
+    }
     if (TD.isFileLoaded(file)) {
       callback.onStickerPicked(this, XgramStickerLayer.newFile(file.local.path, format, aspect));
       return;
