@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: view-once and self-destruct timers in the gallery's and the photo editor's send menus, see com.fahadali.xgram.chats.XgramViewOnce -->
+<resources>
+  <string name="XgramViewOnceSend">Send as view once</string>
+  <string name="XgramViewOnceSendX">Send %1$s as view once</string>
+  <string name="XgramViewOnceTimer">Self-destruct timer…</string>
+  <string name="XgramViewOnceSeparate">Each as its own message</string>
+  <!-- The photo editor's stopwatch badge (its 56dp button has no room for "View once" in the badge) -->
+  <string name="XgramViewOnceShort">Once</string>
+  <!-- Chat list and reply previews -->
+  <string name="XgramViewOncePhoto">View-once photo</string>
+  <string name="XgramViewOnceVideo">View-once video</string>
+</resources>

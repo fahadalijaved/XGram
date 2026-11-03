@@ -352,11 +352,11 @@ public class ContentPreview {
       }
       case TdApi.MessagePhoto.CONSTRUCTOR:
         if (((TdApi.MessagePhoto) message.content).isSecret)
-          return new ContentPreview(EMOJI_SECRET_PHOTO, R.string.SelfDestructPhoto, formattedText);
+          return new ContentPreview(EMOJI_SECRET_PHOTO, Td.selfDestructsImmediately(message.selfDestructType) ? R.string.XgramViewOncePhoto : R.string.SelfDestructPhoto, formattedText); // XGram: view once says so
         break;
       case TdApi.MessageVideo.CONSTRUCTOR:
         if (((TdApi.MessageVideo) message.content).isSecret)
-          return new ContentPreview(EMOJI_SECRET_VIDEO, R.string.SelfDestructVideo, formattedText);
+          return new ContentPreview(EMOJI_SECRET_VIDEO, Td.selfDestructsImmediately(message.selfDestructType) ? R.string.XgramViewOnceVideo : R.string.SelfDestructVideo, formattedText); // XGram: view once says so
         break;
       case TdApi.MessageVoiceNote.CONSTRUCTOR: {
         if (Td.selfDestructsImmediately(message.selfDestructType)) {

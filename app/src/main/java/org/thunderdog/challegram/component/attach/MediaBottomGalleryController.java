@@ -521,6 +521,38 @@ public class MediaBottomGalleryController extends MediaBottomBaseController<Medi
         return true;
       }));
     }
+    xgramAddViewOnceItems(view, hapticItems); // XGram
+    com.fahadali.xgram.chats.XgramViewOnce.dropScheduling(hapticItems, adapter.getSelectedPhotosAndVideosAsList(false)); // XGram: no scheduling for a self-destructing item
+  }
+
+  /**
+   * XGram: "Send as view once" and "Self-destruct timer…" for the selected photos and videos, in private chats only (no
+   * bots, no Saved Messages, not on a scheduled-only page: Telegram refuses them there), see XgramViewOnce.
+   */
+  private void xgramAddViewOnceItems (View view, @NonNull List<HapticMenuHelper.MenuItem> hapticItems) {
+    final MessagesController target = mediaLayout.getTarget();
+    if (showingFoundImages || target == null || mediaLayout.getMode() != MediaLayout.MODE_DEFAULT || mediaLayout.inSingleMediaMode() || mediaLayout.areScheduledOnly() ||
+      !com.fahadali.xgram.chats.XgramViewOnce.canSend(tdlib, target.getChat())) {
+      return;
+    }
+    final List<ImageFile> files = adapter.getSelectedPhotosAndVideosAsList(false);
+    if (!com.fahadali.xgram.chats.XgramViewOnce.canApply(files)) {
+      return;
+    }
+    com.fahadali.xgram.chats.XgramViewOnce.addMenuItems(hapticItems, files.size(),
+      () -> xgramSendSelfDestructing(view, new TdApi.MessageSelfDestructTypeImmediately()),
+      () -> com.fahadali.xgram.chats.XgramViewOnce.pickTimer(tdlib, context(), false, adapter.getSelectedPhotosAndVideosAsList(false), type -> xgramSendSelfDestructing(view, type))
+    );
+  }
+
+  private void xgramSendSelfDestructing (View view, TdApi.MessageSelfDestructType type) {
+    final ArrayList<ImageFile> files = adapter.getSelectedPhotosAndVideosAsList(true);
+    if (!com.fahadali.xgram.chats.XgramViewOnce.canApply(files) || mediaLayout.isHidden()) {
+      return;
+    }
+    com.fahadali.xgram.chats.XgramViewOnce.sendWith(files, type, () ->
+      mediaLayout.sendPhotosOrVideos(view, files, false, Td.newSendOptions(), false, false, false)
+    );
   }
 
   @Override

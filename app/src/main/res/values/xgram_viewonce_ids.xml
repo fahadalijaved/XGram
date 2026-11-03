@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: the send menus' view-once items, see com.fahadali.xgram.chats.XgramViewOnce -->
+  <item type="id" name="btn_xgramSendViewOnce" />
+  <item type="id" name="btn_xgramSendSelfDestruct" />
+</resources>

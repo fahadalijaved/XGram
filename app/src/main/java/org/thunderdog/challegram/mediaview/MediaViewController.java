@@ -8979,7 +8979,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       if (selfDestructType != null) {
         switch (selfDestructType.getConstructor()) {
           case TdApi.MessageSelfDestructTypeImmediately.CONSTRUCTOR:
-            value = TdlibUi.getDuration(0, TimeUnit.SECONDS, false); // FIXME
+            value = xgramViewOnceLabel(); // XGram: was "0s"
             break;
           case TdApi.MessageSelfDestructTypeTimer.CONSTRUCTOR:
             value = TdlibUi.getDuration(((TdApi.MessageSelfDestructTypeTimer) selfDestructType).selfDestructTime, TimeUnit.SECONDS, false);
@@ -9585,6 +9585,50 @@ public class MediaViewController extends ViewController<MediaViewController.Args
 
   // TTL
 
+  /**
+   * XGram: the stopwatch's label for view once (Telegram X showed "0s"): "View once" where the text takes the glyph's
+   * place (it scales to the button), "Once" in the Material 3 Expressive badge, which has 56dp for itself.
+   */
+  private static String xgramViewOnceLabel () {
+    return Lang.getString(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? R.string.XgramViewOnceShort : R.string.ViewOnce);
+  }
+
+  /** XGram: whether this editor may put a self-destruct type on its media (the stopwatch and the send menu's items). */
+  private boolean xgramCanSetSelfDestruct (@Nullable TdApi.Chat chat) {
+    return com.fahadali.xgram.chats.XgramViewOnce.canSend(tdlib, chat) && !hasFlag(Args.FLAG_DISALLOW_SET_DESTRUCTION_TIMER) && !getArgumentsStrict().areOnlyScheduled;
+  }
+
+  /** XGram: what send() sends, the selected items or else the one on screen. */
+  private ArrayList<ImageFile> xgramFilesToSend () {
+    ArrayList<ImageFile> files = selectDelegate != null ? selectDelegate.getSelectedMediaItems(true) : null;
+    if (files == null) {
+      files = new ArrayList<>();
+    }
+    if (files.isEmpty()) {
+      final MediaItem current = stack.getCurrent();
+      final ImageGalleryFile file = current != null ? current.getSourceGalleryFile() : null;
+      if (file != null) {
+        files.add(file);
+      }
+    }
+    return files;
+  }
+
+  /** XGram: the send menu's "Send as view once" and "Self-destruct timer…": every item goes with {@code type}. */
+  private void xgramSendSelfDestructing (TdApi.MessageSelfDestructType type) {
+    if (sendDelegate == null || isMediaSent) {
+      return;
+    }
+    final ArrayList<ImageFile> files = xgramFilesToSend();
+    if (!com.fahadali.xgram.chats.XgramViewOnce.canApply(files)) {
+      return;
+    }
+    com.fahadali.xgram.chats.XgramViewOnce.sendWith(files, type, () -> {
+      send(sendButton, Td.newSendOptions(), false, false);
+      return isMediaSent;
+    });
+  }
+
   private void showTTLOptions () {
     final MediaItem item = stack.getCurrent();
     tdlib.ui().showTTLPicker(context(), item.getSelfDestructType(), !ChatId.isSecret(item.getSourceChatId()), true, true, item.isVideo() ? R.string.MessageLifetimeVideo : R.string.MessageLifetimePhoto, result -> {
@@ -9596,7 +9640,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
           textRepresentation = null;
         } else if (result.isImmediate()) {
           selfDestructType = new TdApi.MessageSelfDestructTypeImmediately();
-          textRepresentation = TdlibUi.getDuration(0, TimeUnit.SECONDS, false); // FIXME
+          textRepresentation = xgramViewOnceLabel(); // XGram: was "0s"
         } else {
           int newTTL = result.getTtlTime();
           textRepresentation = TdlibUi.getDuration(newTTL, TimeUnit.SECONDS, false);
@@ -10483,6 +10527,17 @@ public class MediaViewController extends ViewController<MediaViewController.Args
             return true;
           }).bindTutorialFlag(Settings.TUTORIAL_SEND_AS_FILE));
         }
+        if (!inProfilePhotoEditMode && !inForceEditMode() && xgramCanSetSelfDestruct(chat)) {
+          // XGram: "Send as view once" and "Self-destruct timer…" (private chats only), see XgramViewOnce
+          final ArrayList<ImageFile> xgramFiles = xgramFilesToSend();
+          if (com.fahadali.xgram.chats.XgramViewOnce.canApply(xgramFiles)) {
+            com.fahadali.xgram.chats.XgramViewOnce.addMenuItems(hapticItems, xgramFiles.size(),
+              () -> xgramSendSelfDestructing(new TdApi.MessageSelfDestructTypeImmediately()),
+              () -> com.fahadali.xgram.chats.XgramViewOnce.pickTimer(tdlib, context(), true, xgramFilesToSend(), this::xgramSendSelfDestructing)
+            );
+          }
+        }
+        com.fahadali.xgram.chats.XgramViewOnce.dropScheduling(hapticItems, xgramFilesToSend()); // XGram: no scheduling for a self-destructing item
         if (chat != null && chat.messageSenderId != null) {
           hapticItems.add(0, MediaLayout.createHapticSenderItem(tdlib, chat).setOnClickListener((view, parentView, item) -> {
             openSetSenderPopup(chat);
@@ -10534,7 +10589,8 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     com.fahadali.xgram.appearance.XgramM3MediaChrome.iconButton(adjustOrTextButton); // XGram
     editButtons.addView(adjustOrTextButton);
 
-    if (chat != null && chat.type.getConstructor() == TdApi.ChatTypePrivate.CONSTRUCTOR && !tdlib.isBotChat(chat) && !hasFlag(Args.FLAG_DISALLOW_SET_DESTRUCTION_TIMER)) {
+    // XGram: not in Saved Messages or on a scheduled-only page either, Telegram refuses a self-destruct type there
+    if (xgramCanSetSelfDestruct(chat)) {
       stopwatchButton = new StopwatchHeaderButton(context);
       stopwatchButton.setBackgroundResource(R.drawable.bg_btn_header_light);
       stopwatchButton.forceValue(null, true);

@@ -914,7 +914,7 @@ public class TdlibUi extends Handler {
     final ArrayList<TTLOption> ttlOptions = new ArrayList<>(21);
     ttlOptions.add(new TTLOption(0, Lang.getString(R.string.Off)));
     if (allowInstant) {
-      ttlOptions.add(new TTLOption(-1, Lang.getString(R.string.TimerInstant)));
+      ttlOptions.add(new TTLOption(-1, Lang.getString(precise ? R.string.ViewOnce : R.string.TimerInstant))); // XGram: a photo's or video's "Immediately" is view once
     }
     final int secondsCount = precise ? 20 : 15;
     for (int i = 1; i <= secondsCount; i++) {
