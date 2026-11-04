@@ -611,13 +611,15 @@ public class PasswordController extends ViewController<PasswordController.Args> 
     }
 
     final android.widget.LinearLayout column = com.fahadali.xgram.appearance.XgramR6B8Login.newColumn(context);
-    final android.widget.ScrollView scroll = com.fahadali.xgram.appearance.XgramR6B8Login.wrapInScroll(context, column);
+    final com.fahadali.xgram.appearance.XgramR6B8Login.LoginScroll scroll = com.fahadali.xgram.appearance.XgramR6B8Login.wrapInScroll(context, column);
     final boolean rtl = Lang.rtl();
     final int startGravity = rtl ? Gravity.RIGHT : Gravity.LEFT;
 
     xgramHero = com.fahadali.xgram.appearance.XgramR6B8Login.newHero(context, xgramHeroIcon());
     addThemeInvalidateListener(xgramHero);
-    column.addView(xgramHero);
+    // in a Collapse of its own: it folds away when the page has no room for it (xgramUpdateHeroRoom)
+    xgramHeroCollapse = com.fahadali.xgram.appearance.XgramR6B8Login.newHeroCollapse(context, xgramHero);
+    column.addView(xgramHeroCollapse, new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
     xgramHeadline = com.fahadali.xgram.appearance.XgramR6B8Login.newHeadline(context);
     xgramHeadline.setText(getName());
@@ -647,6 +649,11 @@ public class PasswordController extends ViewController<PasswordController.Args> 
     android.widget.LinearLayout.LayoutParams fieldParams = new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
     fieldParams.topMargin = Screen.dp(24f);
     column.addView(fieldFrame, fieldParams);
+    // While typing, the field (or the boxes and the line under them) and the FAB's room under it stay on screen: the
+    // scroll used to show only the hidden input, so the boxes ended at the keyboard's edge, in the FAB's band
+    scroll.setAnchor(fieldFrame, Screen.dp(com.fahadali.xgram.appearance.XgramR6B8Login.FAB_CLEARANCE));
+    xgramScroll = scroll;
+    xgramFieldFrame = fieldFrame;
     editText.applyRtl(rtl);
     if ((editText.getEditText().getInputType() & android.text.InputType.TYPE_MASK_VARIATION) == android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD) {
       com.fahadali.xgram.appearance.XgramR5Security.attachVisibilityToggle(editText);
@@ -683,11 +690,56 @@ public class PasswordController extends ViewController<PasswordController.Args> 
     }
     contentView.addView(scroll, 0, FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
+    // The hero folds away while the page has no room for it (the keyboard up on a phone), by the phone page's rule;
+    // it was scrolled half under the app bar instead
+    final View.OnLayoutChangeListener heroRoom = (v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+      if (bottom - top != oldBottom - oldTop) {
+        v.post(this::xgramUpdateHeroRoom);
+      }
+    };
+    scroll.addOnLayoutChangeListener(heroRoom);
+    column.addOnLayoutChangeListener(heroRoom);
+
     // The small title in the app bar is the headline's: it fades in as the headline scrolls away
     com.fahadali.xgram.appearance.XgramR6B8Login.linkTitle(this, scroll, xgramHeadline);
-    // The connection pill of a login page, for the account being logged in
+    // The connection pill of a login page, for the account being logged in. Its room is the column's top padding, a
+    // layout the scroll knows about: moving the whole scroll down pushed the boxes under the keyboard
     if (isUnauthorized()) {
-      xgramConnection = com.fahadali.xgram.appearance.XgramR6B8Login.ConnectionWatch.attach(this, contentView, scroll);
+      final int columnTop = column.getPaddingTop();
+      xgramConnection = com.fahadali.xgram.appearance.XgramR6B8Login.ConnectionWatch.attach(this, contentView, (room, shown) -> {
+        final int top = columnTop + Math.round(room * shown);
+        if (column.getPaddingTop() != top) {
+          column.setPadding(column.getPaddingLeft(), top, column.getPaddingRight(), column.getPaddingBottom());
+        }
+      });
+    }
+  }
+
+  private @Nullable com.fahadali.xgram.appearance.XgramR6B8Login.Collapse xgramHeroCollapse;
+  private @Nullable View xgramScroll, xgramFieldFrame;
+  private int xgramHeroViewport, xgramHeroContent;
+
+  /** The hero shows while it fits above the field and the FAB's room under it (XgramR6B8Login.heroFits). */
+  private void xgramUpdateHeroRoom () {
+    if (xgramScroll == null || xgramFieldFrame == null || xgramHeroCollapse == null || isDestroyed()) {
+      return;
+    }
+    final int viewport = xgramScroll.getHeight();
+    if (viewport <= 0 || xgramFieldFrame.getHeight() <= 0) {
+      return;
+    }
+    // The content down to the field and the FAB's room, without the hero: the same while the hero folds
+    final int content = xgramFieldFrame.getBottom() + Screen.dp(com.fahadali.xgram.appearance.XgramR6B8Login.FAB_CLEARANCE) - xgramHeroCollapse.getHeight();
+    if (viewport == xgramHeroViewport && content == xgramHeroContent) {
+      return;
+    }
+    final boolean animated = xgramHeroViewport > 0; // the first time it snaps
+    xgramHeroViewport = viewport;
+    xgramHeroContent = content;
+    final boolean expanded = xgramHeroCollapse.isExpanded();
+    final boolean fits = com.fahadali.xgram.appearance.XgramR6B8Login.heroFits(viewport, content, expanded);
+    if (fits != expanded) {
+      xgramHeroCollapse.setExpanded(fits, animated);
     }
   }
 

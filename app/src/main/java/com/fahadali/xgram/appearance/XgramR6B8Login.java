@@ -16,6 +16,7 @@ import android.content.ClipboardManager;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.InsetDrawable;
@@ -32,6 +33,7 @@ import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -46,13 +48,15 @@ import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.data.TD;
+import org.thunderdog.challegram.emoji.Emoji;
+import org.thunderdog.challegram.emoji.EmojiSpan;
 import org.thunderdog.challegram.navigation.HeaderView;
 import org.thunderdog.challegram.navigation.ViewController;
+import org.thunderdog.challegram.telegram.TGLegacyManager;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.tool.Drawables;
 import org.thunderdog.challegram.tool.Keyboard;
 import org.thunderdog.challegram.tool.Screen;
-import org.thunderdog.challegram.tool.Strings;
 import org.thunderdog.challegram.widget.MaterialEditTextGroup;
 import org.thunderdog.challegram.widget.NoScrollTextView;
 
@@ -77,6 +81,8 @@ public final class XgramR6B8Login {
 
   public static final float COLUMN_MAX_WIDTH = XgramR5People.FORM_MAX_WIDTH;
   public static final float HERO_SIZE = 96f, HERO_ICON = 40f;
+  /** The room a login page keeps free under its field for the FAB: its 16dp margin, its 56dp and 8dp above it. */
+  public static final float FAB_CLEARANCE = 80f;
 
   /** A vertical column of at most 480dp (centred by {@link #wrapInScroll}), 16dp sides, 24dp above, room for the FAB below. */
   public static LinearLayout newColumn (@NonNull Context context) {
@@ -92,8 +98,8 @@ public final class XgramR6B8Login {
   }
 
   /** {@code column} centred at the top of a vertical scroll view that fills its parent. */
-  public static ScrollView wrapInScroll (@NonNull Context context, @NonNull View column) {
-    ScrollView scroll = new ScrollView(context);
+  public static LoginScroll wrapInScroll (@NonNull Context context, @NonNull View column) {
+    LoginScroll scroll = new LoginScroll(context);
     scroll.setVerticalScrollBarEnabled(false);
     scroll.setClipToPadding(false);
     scroll.setFillViewport(true);
@@ -106,6 +112,178 @@ public final class XgramR6B8Login {
     return scroll;
   }
 
+  /**
+   * The scroll of a login page. While its anchor (the field or the code boxes, with the line under them) has the focus,
+   * the anchor and a room under it (the FAB's) stay on screen: when the keyboard opens, when a view in the anchor asks
+   * to be shown (the input's cursor) and when the anchor grows (an error line). While content above it shrinks (the hero
+   * folding, the connection pill leaving) the anchor keeps its place on screen; while it grows (the pill making room)
+   * the page moves down as far as the anchor and that room still fit, and only the rest is scrolled. Without an anchor,
+   * or while the focus is elsewhere, it is a plain ScrollView.
+   */
+  public static final class LoginScroll extends ScrollView {
+    private @Nullable View anchor;
+    private int clearance;
+    private boolean pendingShow;
+    private final Rect anchorRect = new Rect(), requestRect = new Rect();
+
+    public LoginScroll (@NonNull Context context) {
+      super(context);
+    }
+
+    /** {@code anchor} (a descendant), with {@code clearancePx} under it kept on screen as well. */
+    public void setAnchor (@Nullable View anchor, int clearancePx) {
+      this.anchor = anchor;
+      this.clearance = clearancePx;
+    }
+
+    private boolean isInside (@Nullable View view, @NonNull View ancestor) {
+      View v = view;
+      while (v != null) {
+        if (v == ancestor) {
+          return true;
+        }
+        if (v == this) {
+          return false;
+        }
+        final ViewParent parent = v.getParent();
+        v = parent instanceof View ? (View) parent : null;
+      }
+      return false;
+    }
+
+    private boolean isAnchored () {
+      final View anchor = this.anchor;
+      return anchor != null && anchor.hasFocus() && isInside(anchor, this);
+    }
+
+    /** The anchor in content coordinates (the space of getScrollY), without the room under it. */
+    private boolean getAnchorRect (@NonNull Rect rect) {
+      final View anchor = this.anchor;
+      if (anchor == null || getChildCount() == 0 || anchor.getHeight() <= 0 || !isInside(anchor, this)) {
+        return false;
+      }
+      anchor.getDrawingRect(rect);
+      offsetDescendantRectToMyCoords(anchor, rect);
+      return true;
+    }
+
+    private int viewportHeight () {
+      return getHeight() - getPaddingTop() - getPaddingBottom();
+    }
+
+    private int scrollRange () {
+      return getChildCount() == 0 ? 0 : Math.max(0, getChildAt(0).getHeight() - viewportHeight());
+    }
+
+    /** The least scroll change that shows the anchor and the room under it (its top wins when both can't fit). */
+    private int anchorDelta () {
+      if (!getAnchorRect(anchorRect)) {
+        return 0;
+      }
+      final int viewport = viewportHeight();
+      final int scrollY = getScrollY();
+      int target = scrollY;
+      if (anchorRect.bottom + clearance > target + viewport) {
+        target = anchorRect.bottom + clearance - viewport;
+      }
+      if (anchorRect.top < target) {
+        target = anchorRect.top;
+      }
+      target = Math.max(0, Math.min(scrollRange(), target));
+      return target - scrollY;
+    }
+
+    private boolean showAnchor (boolean smooth) {
+      final int delta = anchorDelta();
+      if (delta == 0) {
+        return false;
+      }
+      if (smooth) {
+        smoothScrollBy(0, delta);
+      } else {
+        scrollBy(0, delta);
+      }
+      return true;
+    }
+
+    @Override
+    public void requestChildFocus (View child, View focused) {
+      super.requestChildFocus(child, focused);
+      if (anchor != null && isInside(focused, anchor)) {
+        if (isLaidOut() && !isLayoutRequested()) {
+          showAnchor(false);
+        } else {
+          pendingShow = true; // after the layout, as ScrollView scrolls to a focused child itself
+        }
+      }
+    }
+
+    @Override
+    public boolean requestChildRectangleOnScreen (View child, Rect rectangle, boolean immediate) {
+      if (isAnchored() && getAnchorRect(anchorRect)) {
+        requestRect.set(rectangle);
+        requestRect.offset(child.getLeft() - child.getScrollX(), child.getTop() - child.getScrollY());
+        if (Rect.intersects(requestRect, anchorRect)) {
+          // the input's cursor (or another part of the anchor): the whole anchor and the FAB's room under it instead
+          return showAnchor(!immediate);
+        }
+      }
+      return super.requestChildRectangleOnScreen(child, rectangle, immediate);
+    }
+
+    @Override
+    protected void onSizeChanged (int w, int h, int oldw, int oldh) {
+      final boolean anchored = isAnchored();
+      if (anchored) {
+        setSmoothScrollingEnabled(false); // ScrollView's own scroll to the focused input: at once, so ours isn't undone
+      }
+      super.onSizeChanged(w, h, oldw, oldh);
+      if (anchored) {
+        setSmoothScrollingEnabled(true);
+        showAnchor(false);
+      }
+    }
+
+    @Override
+    protected void onLayout (boolean changed, int l, int t, int r, int b) {
+      // Where the anchor is before this layout (the children still have their old positions), while it is on screen
+      boolean keep = false;
+      int oldTop = 0, oldHeight = 0;
+      if (isLaidOut() && isAnchored() && getAnchorRect(anchorRect)) {
+        final int scrollY = getScrollY();
+        if (anchorRect.bottom > scrollY && anchorRect.top < scrollY + viewportHeight()) {
+          keep = true;
+          oldTop = anchorRect.top;
+          oldHeight = anchorRect.height();
+        }
+      }
+      super.onLayout(changed, l, t, r, b);
+      if (keep && getAnchorRect(anchorRect)) {
+        final int moved = anchorRect.top - oldTop;
+        if (moved != 0) {
+          final int scrollY = getScrollY();
+          int by = moved;
+          if (moved > 0) {
+            // Content above grew (the pill's room): it really moves the page down while the anchor and the FAB's room
+            // still fit, so only the shortfall is scrolled, never more than it moved
+            final int need = anchorRect.bottom + clearance - (scrollY + viewportHeight());
+            by = Math.max(0, Math.min(moved, need));
+          }
+          if (by != 0) {
+            scrollTo(getScrollX(), Math.max(0, Math.min(scrollRange(), scrollY + by)));
+          }
+        }
+        if (anchorRect.height() > oldHeight) {
+          showAnchor(true); // an error line appeared under the boxes
+        }
+      }
+      if (pendingShow) {
+        pendingShow = false;
+        showAnchor(false);
+      }
+    }
+  }
+
   /** The hero of a login or security page: {@code iconRes} (through the icon pack) on a 96dp Cookie9Sided in primaryContainer. */
   public static XgramR5Security.HeroView newHero (@NonNull Context context, @DrawableRes int iconRes) {
     XgramR5Security.HeroView hero = new XgramR5Security.HeroView(context, XgramShapes.COOKIE_9, iconRes, HERO_ICON);
@@ -114,6 +292,26 @@ public final class XgramR6B8Login {
     params.bottomMargin = Screen.dp(24f);
     hero.setLayoutParams(params);
     return hero;
+  }
+
+  /** {@code hero} (a {@link #newHero}) in a {@link Collapse} of its own, so the page can fold it away when it has no room. */
+  public static Collapse newHeroCollapse (@NonNull Context context, @NonNull View hero) {
+    Collapse collapse = new Collapse(context);
+    FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(Screen.dp(HERO_SIZE), Screen.dp(HERO_SIZE), Gravity.TOP | (Lang.rtl() ? Gravity.RIGHT : Gravity.LEFT));
+    params.bottomMargin = Screen.dp(24f);
+    collapse.addView(hero, params);
+    return collapse;
+  }
+
+  /**
+   * The hero rule shared by the login pages: the hero (96dp and 24dp under it) shows while it fits in {@code viewportPx}
+   * with the content it sits above ({@code contentWithoutHeroPx}: down to the field and the FAB's room under it). 8dp
+   * of hysteresis around {@code shownNow}, so a size on the edge can't flip it back and forth.
+   */
+  public static boolean heroFits (int viewportPx, int contentWithoutHeroPx, boolean shownNow) {
+    final int needed = contentWithoutHeroPx + Screen.dp(HERO_SIZE + 24f);
+    final int slack = Screen.dp(8f);
+    return needed <= viewportPx + (shownNow ? slack : -slack);
   }
 
   /** The page headline: headlineMedium in onSurface, start aligned. */
@@ -598,16 +796,46 @@ public final class XgramR6B8Login {
 
   // Segmented code input
 
-  public static final float BOX_WIDTH = 48f, BOX_HEIGHT = 56f, BOX_GAP = 8f;
+  /** The boxes fill the column: up to 56dp wide each (at least 32dp), 56dp tall, 8dp apart (4dp when 40dp ones don't fit). */
+  public static final float BOX_MAX_WIDTH = 56f, BOX_MIN_WIDTH = 32f, BOX_HEIGHT = 56f, BOX_GAP = 8f, BOX_GAP_TIGHT = 4f;
   public static final int MIN_BOXES = 3, MAX_BOXES = 8;
+  /** The caret of the next empty box: a 2 x 24dp full-round bar in primary, on for 500ms and off for 500ms. */
+  private static final float CARET_WIDTH = 2f, CARET_HEIGHT = 24f;
+  private static final long CARET_BLINK_MS = 500L;
 
   /**
-   * The code entry of the login and confirmation pages: one 48 x 56dp box per digit (surfaceContainerHighest, CORNER_M,
-   * narrower when they don't fit), the digits in headlineSmall with tabular figures, a 2dp primary indicator around the
-   * box being typed in that slides between boxes on SPATIAL_FAST, and the supporting text line below. The input stays
-   * the page's own (hidden) field: typing moves to the next box by itself, backspace goes back one, a code pasted from
-   * the keyboard's clipboard or SMS suggestion fills every box, and a long press on the boxes pastes the digits of the
-   * clipboard. A wrong code turns every box to error and shakes them.
+   * The decimal digits of {@code text} in ASCII, nothing else: a keyboard in another script types its own digits
+   * (Arabic-Indic, Persian, Devanagari, full-width), and TDLib wants 0-9.
+   */
+  @NonNull
+  public static String asciiDigits (@Nullable CharSequence text) {
+    if (text == null) {
+      return "";
+    }
+    final int length = text.length();
+    StringBuilder b = new StringBuilder(length);
+    for (int i = 0; i < length; i++) {
+      final char ch = text.charAt(i);
+      if (ch >= '0' && ch <= '9') {
+        b.append(ch);
+      } else if (Character.isDigit(ch)) {
+        final int digit = Character.digit(ch, 10);
+        if (digit >= 0 && digit <= 9) {
+          b.append((char) ('0' + digit));
+        }
+      }
+    }
+    return b.toString();
+  }
+
+  /**
+   * The code entry of the login and confirmation pages: one box per digit that together fill the column (up to 56 x
+   * 56dp each, surfaceContainerHighest, CORNER_M), the digits in headlineSmall onSurface with tabular figures, a 2dp
+   * primary indicator around the box being typed in that slides between boxes on SPATIAL_FAST with a blinking caret in
+   * it while it is empty, and the supporting text line below. The input stays the page's own (hidden) field: typing
+   * moves to the next box by itself, backspace goes back one, a code pasted from the keyboard's clipboard or SMS
+   * suggestion fills every box, and a long press on the boxes pastes the digits of the clipboard. Digits of any script
+   * count. A wrong code turns every box to error and shakes them.
    */
   public static final class CodeInput extends LinearLayout implements TextWatcher, MaterialEditTextGroup.FocusListener {
     private final MaterialEditTextGroup field;
@@ -625,14 +853,9 @@ public final class XgramR6B8Login {
       if (clean) {
         return null;
       }
-      StringBuilder b = new StringBuilder(end - start);
-      for (int i = start; i < end; i++) {
-        final char ch = source.charAt(i);
-        if (ch >= '0' && ch <= '9') {
-          b.append(ch);
-        }
-      }
-      return b;
+      // the digits of another script become the same ASCII digits (they used to be dropped: nothing showed up);
+      // anything else is dropped
+      return asciiDigits(source.subSequence(start, end));
     };
     private @Nullable InputFilter[] originalFilters;
     private int count;
@@ -752,24 +975,35 @@ public final class XgramR6B8Login {
     @Override
     public void onFocusChanged (MaterialEditTextGroup v, boolean isFocused) {
       boxes.focus.animateTo(isFocused ? 1f : 0f);
+      boxes.setFocused(isFocused);
     }
 
     private final class Boxes extends View {
       private final Paint containerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
       private final Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+      private final Paint caretPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
       private final TextPaint textPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
       private final RectF rect = new RectF();
       private final float textCenterOffset;
       final XgramExpressive.Spring focus, errorSpring, indicator, pop;
       final Shake shake;
       private float shakeX;
-      private String text = "";
+      private String text = ""; // the last synced text: what the pop and the indicator springs started from
       private int popIndex = -1;
       boolean error;
+      private boolean focused, caretOn = true;
+      private final Runnable blink = () -> {
+        caretOn = !caretOn;
+        invalidate();
+        if (!scheduleBlink()) {
+          caretOn = true;
+        }
+      };
 
       Boxes (Context context) {
         super(context);
         containerPaint.setStyle(Paint.Style.FILL);
+        caretPaint.setStyle(Paint.Style.FILL);
         strokePaint.setStyle(Paint.Style.STROKE);
         strokePaint.setStrokeWidth(Screen.dpf(2f));
         textPaint.setTypeface(XgramExpressive.typeface(XgramExpressive.TS_HEADLINE_S, false));
@@ -808,6 +1042,60 @@ public final class XgramR6B8Login {
         }
       }
 
+      void setFocused (boolean focused) {
+        if (this.focused != focused) {
+          this.focused = focused;
+          restartCaret();
+        }
+      }
+
+      // The caret: on again after every key and focus change, then blinking only while someone can see it (focused,
+      // on screen, an empty box left, the window in front); steady with Reduce motion
+
+      private boolean canBlink () {
+        return focused && count > 0 && text.length() < count && isAttachedToWindow() && hasWindowFocus() && isShown() && !XgramMotion.reduce();
+      }
+
+      private boolean scheduleBlink () {
+        removeCallbacks(blink);
+        if (canBlink()) {
+          postDelayed(blink, CARET_BLINK_MS);
+          return true;
+        }
+        return false;
+      }
+
+      void restartCaret () {
+        caretOn = true;
+        scheduleBlink();
+        invalidate();
+      }
+
+      @Override
+      protected void onAttachedToWindow () {
+        super.onAttachedToWindow();
+        restartCaret();
+      }
+
+      @Override
+      protected void onDetachedFromWindow () {
+        super.onDetachedFromWindow();
+        removeCallbacks(blink);
+        caretOn = true;
+      }
+
+      @Override
+      public void onWindowFocusChanged (boolean hasWindowFocus) {
+        super.onWindowFocusChanged(hasWindowFocus);
+        restartCaret();
+      }
+
+      @Override
+      protected void onVisibilityChanged (@NonNull View changedView, int visibility) {
+        super.onVisibilityChanged(changedView, visibility);
+        restartCaret();
+      }
+
       void sync (boolean animated) {
         final CharSequence source = field.getEditText().getText();
         final String now = source != null ? source.toString() : "";
@@ -828,7 +1116,7 @@ public final class XgramR6B8Login {
           indicator.setValue(target);
           pop.setValue(1f);
         }
-        invalidate();
+        restartCaret(); // invalidates
       }
 
       private boolean pasteFromClipboard () {
@@ -839,7 +1127,7 @@ public final class XgramR6B8Login {
             return false;
           }
           CharSequence value = clip.getItemAt(0).coerceToText(getContext());
-          String digits = value != null ? Strings.getNumber(value.toString()) : null;
+          String digits = asciiDigits(value); // the digits of any script, as the input takes them
           if (TextUtils.isEmpty(digits)) {
             return false;
           }
@@ -857,7 +1145,10 @@ public final class XgramR6B8Login {
 
       @Override
       protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
-        setMeasuredDimension(getDefaultSize(Screen.dp(BOX_WIDTH) * Math.max(1, count), widthMeasureSpec), Screen.dp(BOX_HEIGHT));
+        // the column's width (the boxes share it); their widest when nothing limits it
+        final int n = Math.max(1, count);
+        final int natural = Math.round(Screen.dpf(BOX_MAX_WIDTH) * n + Screen.dpf(BOX_GAP) * (n - 1));
+        setMeasuredDimension(getDefaultSize(natural, widthMeasureSpec), Screen.dp(BOX_HEIGHT));
       }
 
       @Override
@@ -867,8 +1158,13 @@ public final class XgramR6B8Login {
         if (n <= 0 || width <= 0) {
           return;
         }
-        final float gap = Screen.dpf(BOX_GAP);
-        final float boxW = Math.min(Screen.dpf(BOX_WIDTH), (width - gap * (n - 1)) / n);
+        // n boxes share the width with 8dp gaps (4dp when even 40dp boxes would not fit, 7 or 8 digits on a phone),
+        // each at most 56dp wide
+        float gap = Screen.dpf(BOX_GAP);
+        if (Screen.dpf(40f) * n + gap * (n - 1) > width) {
+          gap = Screen.dpf(BOX_GAP_TIGHT);
+        }
+        final float boxW = Math.max(Screen.dpf(BOX_MIN_WIDTH), Math.min(Screen.dpf(BOX_MAX_WIDTH), (width - gap * (n - 1)) / n));
         final float total = boxW * n + gap * (n - 1);
         final float startX = Lang.rtl() ? width - total : 0f; // the digits stay left to right, the block starts at the start
         final float radius = Math.min(Screen.dpf(XgramExpressive.CORNER_M), boxW / 2f);
@@ -876,7 +1172,9 @@ public final class XgramR6B8Login {
         final float focusF = clamp(focus.getValue());
         final int container = mix(XgramExpressive.color(XgramExpressive.SURFACE_CONTAINER_HIGHEST), XgramExpressive.color(XgramExpressive.ERROR_CONTAINER), errorF);
         final int content = mix(XgramExpressive.color(XgramExpressive.ON_SURFACE), XgramExpressive.color(XgramExpressive.ON_ERROR_CONTAINER), errorF);
-        final int length = Math.min(text.length(), n);
+        // the digits as the input holds them now (not a copy that a missed sync could leave behind)
+        final CharSequence typed = field.getEditText().getText();
+        final int length = typed != null ? Math.min(typed.length(), n) : 0;
         final int restore = c.save();
         if (shakeX != 0f) {
           c.translate(shakeX, 0f);
@@ -895,10 +1193,10 @@ public final class XgramR6B8Login {
               final float scale = .6f + .4f * p;
               final int save = c.save();
               c.scale(scale, scale, cx, cy);
-              c.drawText(text, i, i + 1, cx, cy + textCenterOffset, textPaint);
+              c.drawText(typed, i, i + 1, cx, cy + textCenterOffset, textPaint);
               c.restoreToCount(save);
             } else {
-              c.drawText(text, i, i + 1, cx, cy + textCenterOffset, textPaint);
+              c.drawText(typed, i, i + 1, cx, cy + textCenterOffset, textPaint);
             }
           }
           if (errorF > 0f) {
@@ -910,9 +1208,19 @@ public final class XgramR6B8Login {
         if (focusF > 0f && errorF < 1f) {
           final float index = Math.max(0f, Math.min(n - 1, indicator.getValue()));
           final float left = startX + index * (boxW + gap);
+          final int primary = XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.PRIMARY), focusF * (1f - errorF));
           rect.set(left + half, half, left + boxW - half, height - half);
-          strokePaint.setColor(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.PRIMARY), focusF * (1f - errorF)));
+          strokePaint.setColor(primary);
           c.drawRoundRect(rect, radius - half, radius - half, strokePaint);
+          if (caretOn && length < n) {
+            // where the next digit goes: the caret in the middle of the box the indicator is on
+            final float caretW = Screen.dpf(CARET_WIDTH);
+            final float caretH = Math.min(Screen.dpf(CARET_HEIGHT), height - Screen.dpf(16f));
+            final float cx = left + boxW / 2f;
+            rect.set(cx - caretW / 2f, (height - caretH) / 2f, cx + caretW / 2f, (height + caretH) / 2f);
+            caretPaint.setColor(primary);
+            c.drawRoundRect(rect, caretW / 2f, caretW / 2f, caretPaint);
+          }
         }
         c.restoreToCount(restore);
       }
@@ -1023,44 +1331,95 @@ public final class XgramR6B8Login {
 
   // Leading flag and trailing icon of a dropdown field
 
-  /** The leading element of the country field: the country's flag emoji, or the globe icon while there is none. */
-  public static final class LeadingFlag extends NoScrollTextView {
+  /**
+   * The leading element of the country field (a 24dp box, an M3 leading icon's size): the country's flag emoji, or the globe
+   * icon while there is none or while the flag's emoji page is still loading, so the slot is never empty. It listens
+   * for the emoji set itself (a flag drawn before its page loaded stayed blank: only the list below was told).
+   */
+  public static final class LeadingFlag extends NoScrollTextView implements TGLegacyManager.EmojiLoadListener {
     private @Nullable Drawable globe;
     private int globeTint;
+    private @Nullable String flag;
 
     public LeadingFlag (@NonNull Context context) {
       super(context);
       setGravity(Gravity.CENTER);
-      setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 20f);
+      // EmojiSpanImpl draws the flag as a square of the paint's descent - ascent, not of the text size: size the text so
+      // that square is 24dp whatever the device font (px, so the font scale doesn't grow the icon either)
+      final int box = Screen.dp(24f);
+      setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, box);
+      final Paint.FontMetricsInt fm = getPaint().getFontMetricsInt();
+      final int line = Math.abs(fm.descent - fm.ascent);
+      if (line > 0) {
+        setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, (float) box * box / line);
+      }
       setIncludeFontPadding(false);
+      setSingleLine(true);
       setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
     }
 
-    public void setFlag (@Nullable CharSequence flag) {
-      setText(flag);
+    /** {@code flag}: the flag emoji as text (Emoji.getEmojiFlagFromCountry), null or empty for the globe. */
+    public void setFlag (@Nullable String flag) {
+      this.flag = TextUtils.isEmpty(flag) ? null : flag;
+      setText(this.flag != null ? Emoji.instance().replaceEmoji(this.flag) : null);
       invalidate();
     }
 
     @Override
-    protected void onDraw (Canvas c) {
-      if (TextUtils.isEmpty(getText())) {
-        if (globe == null) {
-          globe = Drawables.get(getResources(), XgramIconPack.map(R.drawable.baseline_public_24));
-        }
-        if (globe != null) {
-          final int tint = XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT);
-          if (tint != globeTint) {
-            globeTint = tint;
-            globe.setTint(tint);
-          }
-          final int size = Screen.dp(24f);
-          final int left = (getWidth() - size) / 2, top = (getHeight() - size) / 2;
-          globe.setBounds(left, top, left + size, top + size);
-          globe.draw(c);
-        }
-        return;
+    protected void onAttachedToWindow () {
+      super.onAttachedToWindow();
+      TGLegacyManager.instance().addEmojiListener(this); // a weak reference: removed again when detached
+    }
+
+    @Override
+    protected void onDetachedFromWindow () {
+      super.onDetachedFromWindow();
+      TGLegacyManager.instance().removeEmojiListener(this);
+    }
+
+    @Override
+    public void onEmojiUpdated (boolean isPackSwitch) {
+      if (isPackSwitch && flag != null) {
+        setText(Emoji.instance().replaceEmoji(flag)); // the new emoji set's flag
       }
-      super.onDraw(c);
+      invalidate(); // a page loaded: the flag draws now
+    }
+
+    /** False while an emoji of the flag could not be drawn yet (its page is loading). */
+    private boolean isFlagDrawn () {
+      final CharSequence text = getText();
+      if (text instanceof Spanned) {
+        for (EmojiSpan span : ((Spanned) text).getSpans(0, text.length(), EmojiSpan.class)) {
+          if (span.needRefresh()) {
+            return false;
+          }
+        }
+      }
+      return true;
+    }
+
+    @Override
+    protected void onDraw (Canvas c) {
+      if (!TextUtils.isEmpty(getText())) {
+        super.onDraw(c); // also asks for the flag's emoji page when it isn't loaded yet
+        if (isFlagDrawn()) {
+          return;
+        }
+      }
+      if (globe == null) {
+        globe = Drawables.get(getResources(), XgramIconPack.map(R.drawable.baseline_public_24));
+      }
+      if (globe != null) {
+        final int tint = XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT);
+        if (tint != globeTint) {
+          globeTint = tint;
+          globe.setTint(tint);
+        }
+        final int size = Screen.dp(24f);
+        final int left = (getWidth() - size) / 2, top = (getHeight() - size) / 2;
+        globe.setBounds(left, top, left + size, top + size);
+        globe.draw(c);
+      }
     }
   }
 
@@ -1093,35 +1452,51 @@ public final class XgramR6B8Login {
   /**
    * The connection pill of a login screen (PROGRESS, OFFLINE, STUCK; the same debounce as the chat list) under the app
    * bar, following the screen's own account (an account being added is not the current one). While it is in, the
-   * page content moves down by the pill's room on the pill's own spring (translation only).
+   * page makes room for it on the pill's own spring: the content moves down (translation only), or the page's own
+   * {@link Room} (the code and password pages grow their column's top padding, so their scroll keeps the field above
+   * the keyboard instead of pushing it under).
    */
   public static final class ConnectionWatch implements XgramConnection.Listener {
+    /** A page's own way of making room for the pill: {@code room} px when it is fully in, times {@code shown} (0 to 1). */
+    public interface Room {
+      void onPillRoom (int room, float shown);
+    }
+
     private final ViewController<?> owner;
     private final XgramConnection connection;
     private final XgramConnectionPill pill;
     private boolean destroyed;
 
-    private ConnectionWatch (@NonNull ViewController<?> owner, @NonNull FrameLayout parent, @Nullable View content) {
+    private ConnectionWatch (@NonNull ViewController<?> owner, @NonNull FrameLayout parent, @Nullable Room room) {
       this.owner = owner;
       this.connection = XgramConnection.track(owner.tdlib());
       this.pill = XgramConnectionPill.attach(parent);
       pill.setSource(connection);
-      if (content != null) {
-        final int room = pill.getReservedHeight();
-        pill.setOffsetListener(shown -> content.setTranslationY(room * shown));
+      if (room != null) {
+        final int reserved = pill.getReservedHeight();
+        pill.setOffsetListener(shown -> room.onPillRoom(reserved, shown));
       }
       connection.addListener(this);
       final int state = connection.getState();
       pill.setDisplay(XgramConnection.isProblem(state) ? state : XgramConnection.HIDDEN, connection.getText(), false);
     }
 
-    /** Null with Expressive design off, or when the page has no tdlib. */
+    /** Null with Expressive design off, or when the page has no tdlib. {@code content} moves down while the pill is in. */
     @Nullable
     public static ConnectionWatch attach (@NonNull ViewController<?> owner, @NonNull FrameLayout parent, @Nullable View content) {
       if (!XgramExpressive.isEnabled() || owner.tdlib() == null) {
         return null;
       }
-      return new ConnectionWatch(owner, parent, content);
+      return new ConnectionWatch(owner, parent, content != null ? (room, shown) -> content.setTranslationY(room * shown) : null);
+    }
+
+    /** Null with Expressive design off, or when the page has no tdlib. {@code room} makes the room for the pill. */
+    @Nullable
+    public static ConnectionWatch attach (@NonNull ViewController<?> owner, @NonNull FrameLayout parent, @NonNull Room room) {
+      if (!XgramExpressive.isEnabled() || owner.tdlib() == null) {
+        return null;
+      }
+      return new ConnectionWatch(owner, parent, room);
     }
 
     @Override

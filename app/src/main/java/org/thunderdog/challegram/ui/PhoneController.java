@@ -399,8 +399,8 @@ public class PhoneController extends EditBaseController<Void> implements Setting
       this.baseItems.add(hintItem);
     }
     if (mode == MODE_LOGIN) { // XGram: QR code login, no SMS or email needed when another device is logged in
-      if (xgram) { // XGram M3E r6: a tonal button under the fields
-        this.baseItems.add(new ListItem(ListItem.TYPE_BUTTON, R.id.btn_xgramQrLogin, 0, R.string.xgram_login_QrButton));
+      if (xgram) { // XGram M3E r6: a tonal button under the fields, start aligned with them, its icon leading (XgramR5Lists.bindButtonRow)
+        this.baseItems.add(new ListItem(ListItem.TYPE_BUTTON, R.id.btn_xgramQrLogin, R.drawable.xt3000_baseline_qrcode_scan_24, R.string.xgram_login_QrButton));
       } else {
         this.baseItems.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramQrLogin, R.drawable.xt3000_baseline_qrcode_scan_24, R.string.xgram_login_QrButton));
       }
@@ -629,6 +629,7 @@ public class PhoneController extends EditBaseController<Void> implements Setting
   private final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
   private @Nullable android.widget.LinearLayout xgramColumn;
   private @Nullable com.fahadali.xgram.appearance.XgramR6B8Login.Collapse xgramHeader, xgramHeroCollapse;
+  private @Nullable View xgramHeaderContent, xgramCountryWrap;
   private @Nullable TextView xgramHeadline, xgramHint;
   private @Nullable com.fahadali.xgram.appearance.XgramR6B8Login.LeadingFlag xgramFlag;
   private @Nullable com.fahadali.xgram.appearance.XgramR6B8Login.DropdownArrow xgramArrow;
@@ -684,6 +685,7 @@ public class PhoneController extends EditBaseController<Void> implements Setting
 
     xgramHeader = new com.fahadali.xgram.appearance.XgramR6B8Login.Collapse(context);
     xgramHeader.addView(headerContent, new android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP));
+    xgramHeaderContent = headerContent;
     // The small app bar title takes over as the header folds away
     xgramHeader.setListener(expanded -> HeaderView.xgramSetTitleAlpha(this, 1f - expanded));
     column.addView(xgramHeader, new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -695,6 +697,7 @@ public class PhoneController extends EditBaseController<Void> implements Setting
     xgramArrow = new com.fahadali.xgram.appearance.XgramR6B8Login.DropdownArrow(context);
     countryView.xgramSetTrailing(xgramArrow);
     column.addView(countryWrap, new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    xgramCountryWrap = countryWrap;
 
     column.addView(recyclerView, new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
     contentView.addView(column, 0, FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.CENTER_HORIZONTAL | Gravity.TOP));
@@ -711,7 +714,11 @@ public class PhoneController extends EditBaseController<Void> implements Setting
     }
   }
 
-  /** The header shows while the page has room for it above the fields (the keyboard takes the rest), never in country mode. */
+  /**
+   * The header shows while the page has room for it above the fields (the keyboard takes the rest), never in country
+   * mode. Its hero follows the code page's rule (XgramR6B8Login.heroFits), so the two pages fold it alike: it shows
+   * while the header, the country field, the number row and the FAB's room under them fit with it.
+   */
   private void xgramUpdateHeaderRoom (boolean animated) {
     if (xgramColumn == null || xgramHeader == null) {
       return;
@@ -722,8 +729,16 @@ public class PhoneController extends EditBaseController<Void> implements Setting
     }
     final int available = height - xgramBottomInset;
     xgramHeader.setExpanded(!inCountryMode && available >= Screen.dp(280f), animated);
-    if (xgramHeroCollapse != null) {
-      xgramHeroCollapse.setExpanded(available >= Screen.dp(480f), animated);
+    if (xgramHeroCollapse != null && xgramHeaderContent != null && xgramCountryWrap != null && !inCountryMode) {
+      // the number row as laid out (an error line under it included), about 78dp before it is
+      final View numberRow = numberView != null && numberView.getParent() instanceof View ? (View) numberView.getParent() : null;
+      final int rowHeight = numberRow != null && numberRow.getHeight() > 0 ? numberRow.getHeight() : Screen.dp(78f);
+      final int needed = xgramHeaderContent.getHeight() - xgramHeroCollapse.getHeight() + xgramCountryWrap.getHeight() + rowHeight + Screen.dp(com.fahadali.xgram.appearance.XgramR6B8Login.FAB_CLEARANCE);
+      final boolean expanded = xgramHeroCollapse.isExpanded();
+      final boolean fits = com.fahadali.xgram.appearance.XgramR6B8Login.heroFits(available, needed, expanded);
+      if (fits != expanded) {
+        xgramHeroCollapse.setExpanded(fits, animated);
+      }
     }
   }
 
@@ -855,7 +870,7 @@ public class PhoneController extends EditBaseController<Void> implements Setting
     if (xgramFlag != null) {
       // XGram M3E r6: the flag leads the field, the text is the name alone
       String flag = country != null ? Emoji.getEmojiFlagFromCountry(country.countryCode) : null;
-      xgramFlag.setFlag(!StringUtils.isEmpty(flag) ? Emoji.instance().replaceEmoji(flag) : null);
+      xgramFlag.setFlag(flag); // as text: the field turns it into the emoji set's flag and redraws it once its page loads
       displayText = country != null ? country.name : "";
     }
 

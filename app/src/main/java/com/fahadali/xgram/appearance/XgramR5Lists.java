@@ -329,6 +329,16 @@ public final class XgramR5Lists {
     pill.setId(item.getId());
     pill.setTag(item);
     pill.setPrimary(isPrimaryButton(item.getId()));
+    // The QR login of the phone page sits under start-aligned fields: a start-aligned filled tonal button with its icon
+    // leading. Every other list button stays a centred label (set again on rebind: a recycled row may have been it).
+    final boolean leading = item.getId() == R.id.btn_xgramQrLogin;
+    pill.setIcon(leading ? item.getIconResource() : 0);
+    final int gravity = leading ? Gravity.CENTER_VERTICAL | (Lang.rtl() ? Gravity.RIGHT : Gravity.LEFT) : Gravity.CENTER;
+    final ViewGroup.LayoutParams params = pill.getLayoutParams();
+    if (params instanceof android.widget.FrameLayout.LayoutParams && ((android.widget.FrameLayout.LayoutParams) params).gravity != gravity) {
+      ((android.widget.FrameLayout.LayoutParams) params).gravity = gravity;
+      pill.setLayoutParams(params);
+    }
     return true;
   }
 
@@ -374,7 +384,38 @@ public final class XgramR5Lists {
       // 40dp container in the 48dp touch target
       setBackground(new InsetDrawable(background, 0, Screen.dp(4f), 0, Screen.dp(4f)));
       // after setBackground: it replaces the padding with the inset's (0 at the sides), so the label touched the pill's edges
-      setPadding(Screen.dp(24f), 0, Screen.dp(24f), 0);
+      applyPadding();
+    }
+
+    private @Nullable Drawable icon;
+    private @DrawableRes int iconRes;
+    private int iconTint;
+
+    /** An 18dp icon before the label (0 for none), in the label's colour: 16dp before it, 8dp to the label, 24dp at the end. */
+    public void setIcon (@DrawableRes int iconRes) {
+      if (this.iconRes == iconRes) {
+        return;
+      }
+      this.iconRes = iconRes;
+      Drawable drawable = iconRes != 0 ? org.thunderdog.challegram.tool.Drawables.get(getResources(), XgramIconPack.map(iconRes)) : null;
+      if (drawable != null) {
+        drawable = drawable.mutate();
+        final int size = Screen.dp(18f);
+        drawable.setBounds(0, 0, size, size);
+        iconTint = 0;
+      }
+      icon = drawable;
+      final boolean rtl = Lang.rtl();
+      setCompoundDrawables(rtl ? null : icon, null, rtl ? icon : null, null);
+      setCompoundDrawablePadding(icon != null ? Screen.dp(8f) : 0);
+      applyPadding();
+      invalidate();
+    }
+
+    private void applyPadding () {
+      final int start = Screen.dp(icon != null ? 16f : 24f), end = Screen.dp(24f);
+      final boolean rtl = Lang.rtl();
+      setPadding(rtl ? end : start, 0, rtl ? start : end, 0);
     }
 
     @Override
@@ -390,6 +431,10 @@ public final class XgramR5Lists {
       }
       if (getCurrentTextColor() != color) {
         setTextColor(color);
+      }
+      if (icon != null && iconTint != color) {
+        iconTint = color;
+        icon.setTint(color);
       }
       super.onDraw(c);
     }
