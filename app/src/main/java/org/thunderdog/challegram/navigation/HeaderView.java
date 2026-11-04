@@ -1701,6 +1701,26 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
         break;
       }
       case MODE_FADE: {
+        if (xgramPullAxis) {
+          // XGram: pull to the next channel: the titles cross-slide upward with the messages (raptor is the linear time)
+          final float pos = com.fahadali.xgram.appearance.XgramNavMotion.pullPos(raptor);
+          xgramPullPivot(title);
+          xgramPullPivot(preview);
+          if (!com.fahadali.xgram.appearance.XgramMotion.reduce()) {
+            final float shift = Screen.dpf(com.fahadali.xgram.appearance.XgramNavMotion.PULL_TITLE_SHIFT_DP);
+            final float shrink = 1f - com.fahadali.xgram.appearance.XgramNavMotion.PULL_TITLE_SCALE;
+            final float scaleOut = 1f - shrink * pos, scaleIn = 1f - shrink * (1f - pos);
+            title.setTranslationY(-shift * pos);
+            title.setScaleX(scaleOut);
+            title.setScaleY(scaleOut);
+            preview.setTranslationY(shift * (1f - pos));
+            preview.setScaleX(scaleIn);
+            preview.setScaleY(scaleIn);
+          }
+          title.setAlpha(com.fahadali.xgram.appearance.XgramNavMotion.pullOutAlpha(raptor) * xgramTextAlpha(title, baseItem));
+          preview.setAlpha(com.fahadali.xgram.appearance.XgramNavMotion.pullInAlpha(raptor) * xgramTextAlpha(preview, previewItem));
+          break;
+        }
         title.setAlpha(xgramOutAlpha(raptor) * xgramTextAlpha(title, baseItem));
         preview.setAlpha(xgramInAlpha(raptor) * xgramTextAlpha(preview, previewItem));
 
@@ -2376,6 +2396,36 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
     this.xgramSharedAxis = sharedAxis;
   }
 
+  // XGram: while NavigationController runs the pull to the next channel (XgramNavMotion.MODE_PULL_NEXT, a forward
+  // fade), the old title lifts and shrinks out and the new one rises in, from the start edge.
+  private boolean xgramPullAxis;
+
+  public void xgramSetPullAxis (boolean on) {
+    if (this.xgramPullAxis == on) {
+      return;
+    }
+    this.xgramPullAxis = on;
+    if (!on) {
+      // applyPreview only swaps the two views, and a reused chat screen keeps its header view: both rest in place
+      xgramResetPullAxis(title);
+      xgramResetPullAxis(preview);
+    }
+  }
+
+  private static void xgramResetPullAxis (@Nullable View view) {
+    if (view != null) {
+      view.setTranslationY(0f);
+      view.setScaleX(1f);
+      view.setScaleY(1f);
+    }
+  }
+
+  /** Start edge, vertical centre; set on every frame, as the new title may not be laid out when the move begins. */
+  private static void xgramPullPivot (View view) {
+    view.setPivotX(Lang.rtl() ? view.getWidth() : 0f);
+    view.setPivotY(view.getHeight() / 2f);
+  }
+
   // XGram M3E: a tab switch of the floating navigation toolbar (NavigationController#xgramSetTabSwitch): the title, the
   // menu and the navigation icon fade through with the screens (out by XgramNavMotion.FADE_THRESHOLD, in after it) and
   // the height jumps to the new screen's at that point, while both titles are invisible: Settings' and the profile's
@@ -2523,6 +2573,8 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
       case MODE_FADE: {
         preview.setTranslationX(0f);
         preview.setTranslationY(0f);
+        preview.setScaleX(1f); // XGram: a reused chat header may still carry the pull move's scale (xgramSetPullAxis)
+        preview.setScaleY(1f);
         preview.setAlpha(0f);
         axisShift = 0f;
 

@@ -316,6 +316,19 @@ public final class XgramPullToNext implements FactorAnimator.Target {
     return opening;
   }
 
+  /**
+   * The pull move to the next chat began: the hold lasts until this screen is hidden (clearHold), so the timeout can't
+   * drop the messages back down mid-move on a slow device. Touches are still swallowed, as opening stays true.
+   */
+  public void keepHoldUntilHidden () {
+    view.removeCallbacks(holdTimeout);
+  }
+
+  /** How much of the list's bottom is covered (the Mute / Join bar or the navigation bar), px. */
+  public int bottomCover () {
+    return host.xgramPullBottomCover();
+  }
+
   /** The chat screen was hidden (the next chat covered it) or is reused: the messages are back in place, no hint. */
   public void clearHold () {
     opening = false;
@@ -527,6 +540,9 @@ public final class XgramPullToNext implements FactorAnimator.Target {
       TdApi.Chat chat = tdlib.chat(id);
       if (chat == null || chat.unreadCount <= 0) {
         continue;
+      }
+      if (tdlib.hasPasscode(chat)) {
+        continue; // it would open its passcode screen instead of the chat
       }
       if (tdlib.chatNotificationsEnabled(id)) {
         return new Target(id, null, tdlib.chatTitle(id));

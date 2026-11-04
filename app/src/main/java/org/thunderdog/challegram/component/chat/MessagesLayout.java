@@ -15,8 +15,12 @@
 package org.thunderdog.challegram.component.chat;
 
 import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.RectF;
 import android.view.View;
 import android.widget.RelativeLayout;
+
+import androidx.annotation.Nullable;
 
 import org.thunderdog.challegram.ui.MessagesController;
 import org.thunderdog.challegram.widget.KeyboardFrameLayout;
@@ -49,6 +53,36 @@ public class MessagesLayout extends RelativeLayout implements Animated {
     super.onMeasure(widthMeasureSpec, heightMeasureSpec);
     changedMin = height > getMeasuredHeight() && ((emojiState && emojiLayout != null) || (commandsState && keyboardLayout != null)) && getMeasuredWidth() == lastMeasuredWidth;
     lastMeasuredWidth = getMeasuredWidth();
+  }
+
+  // XGram: the pull to the next channel's move (MessagesController): while it runs, some children draw only inside a
+  // band (the next chat's messages between the bars' edges, the old chat's bars outside them). Null otherwise.
+
+  public interface XgramChildClip {
+    /** True with {@code out} set (this layout's coordinates) to clip {@code child} to it, false to draw it whole. */
+    boolean xgramClipChild (View child, RectF out);
+  }
+
+  private @Nullable XgramChildClip xgramChildClip;
+  private final RectF xgramChildClipRect = new RectF();
+
+  public void xgramSetChildClip (@Nullable XgramChildClip clip) {
+    if (xgramChildClip != clip) {
+      xgramChildClip = clip;
+      invalidate();
+    }
+  }
+
+  @Override
+  protected boolean drawChild (Canvas canvas, View child, long drawingTime) {
+    if (xgramChildClip != null && xgramChildClip.xgramClipChild(child, xgramChildClipRect)) {
+      final int save = canvas.save();
+      canvas.clipRect(xgramChildClipRect);
+      final boolean result = super.drawChild(canvas, child, drawingTime);
+      canvas.restoreToCount(save);
+      return result;
+    }
+    return super.drawChild(canvas, child, drawingTime);
   }
 
   private Runnable pendingAction;

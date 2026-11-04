@@ -4834,10 +4834,6 @@ public class MessagesController extends ViewController<MessagesController.Argume
     xgramCloseEmojiSearch(false); // XGram: leaving the chat ends the emoji search
     saveDraft();
     com.fahadali.xgram.chats.XgramUndoSend.onComposerHidden(this); // XGram: Undo send, what was in sight (ghost read on send)
-    if (xgramNextChatId != 0) {
-      xgramRemoveWhenCovered(xgramNextChatId, 0); // XGram: the next unread chat replaces this one
-      xgramNextChatId = 0;
-    }
 
     super.onBlur();
     com.fahadali.xgram.appearance.XgramSnackbar.setBottomObstruction(bottomWrap, 0); // XGram: the box is no longer in front
@@ -4926,6 +4922,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   @Override
   public void destroy () {
+    xgramPullEntering = false; // XGram: a scroll button held by the pull move never comes back on a reused screen
+    xgramPullScrollPending = false;
+    xgramPullScreen.xgramPullEnd(); // nor its lift or faded parts (a backstop: the move's end already put them back)
     com.fahadali.xgram.chats.XgramTextSelection.dismiss(this); // XGram: Select text
     // XGram: Undo send. First, while the chat and the message box are still this screen's: what waits goes now.
     com.fahadali.xgram.chats.XgramUndoSend.onOwnerDestroyed(this);
@@ -7291,6 +7290,13 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (messagesHidden || inTextSizeMode() || inWallpaperMode()) { // XGram: demo previews (Chat look, Message font size, wallpapers) rest at the bottom with no scroll button
       isVisible = false;
     }
+    if (xgramPullEntering) { // XGram: coming in by the pull move: the bar stays whole, the button comes when it ends
+      xgramPullScrollVisible = isVisible;
+      xgramPullScrollReverse = isReverse;
+      xgramPullScrollPending = true;
+      return;
+    }
+    xgramPullScrollPending = false; // XGram: newer than the state held during the pull move
     if (scrollToBottomVisible.getValue() != isVisible) {
       // XGram: pops in on SPATIAL_FAST, leaves on EFFECTS_FAST clamped (no dip below its slot or negative collapse)
       xgramPopMotion(scrollToBottomVisible, isVisible);
@@ -13331,9 +13337,13 @@ public class MessagesController extends ViewController<MessagesController.Argume
       return;
     }
     // The container starts below the bars: the topic tabs and the card group with its backing.
-    float top = topBar != null ? Math.max(0, topBar.xgramBackingBottom()) : 0f;
-    if (xgramTabs != null && xgramTabs.getVisibility() == View.VISIBLE) {
-      top = Math.max(top, xgramTabs.getTranslationY() + xgramTabs.getMeasuredHeight());
+    float top = xgramPullBarsTop();
+    if (xgramPullEdges) {
+      // The pull to the next channel's move: the container's top follows the bars' shared edge, where this chat's
+      // messages show from (xgramPullChildClip): the next chat's below both, the old chat's where its bars recede
+      // (the edge is in contentView, the container's top stays in topBar's own frame, as when no move runs)
+      final float edge = xgramPullEdgeTop - xgramPullBarsShift();
+      top = xgramPullEntering ? Math.max(top, edge) : Math.min(top, edge);
     }
     if (xgramCornersView.getTranslationY() != top) {
       xgramCornersView.setTranslationY(top);
@@ -13553,7 +13563,6 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   // XGram: pull up at the bottom of a channel (or topic) for the next unread one, as in Telegram
 
-  private long xgramNextChatId;
   @Nullable private com.fahadali.xgram.chats.XgramPullToNext xgramPull;
 
   /**
@@ -13572,6 +13581,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     public boolean xgramCanPullToNext () {
       return com.fahadali.xgram.XgramSettings.instance().pullToNext() && chat != null && previewMode == PREVIEW_MODE_NONE &&
         !isInForceTouchMode() && messageThread == null && !areScheduledOnly() && !inSelectMode() && !inSearchMode() &&
+        !isEditingMessage() && !hasAttachedFiles() && // the pull replaces this chat: never with an edit or picked files Back would ask about
         !manager.xgramCanLoadBottom() && (xgramInForumTopic() || tdlib.isChannel(chat.id));
     }
 
@@ -13648,45 +13658,221 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
   };
 
+  // XGram: the move to the next chat (XgramNavMotion.MODE_PULL_NEXT), with both chat screens attached. The old one's
+  // messages lift and fade, the next one's rise in from behind its own bottom bar. Each part fades through
+  // View#setTransitionAlpha, which multiplies with the view's own alpha, so the bar and button animators keep theirs.
+
+  private final ArrayList<View> xgramPullFaded = new ArrayList<>();
+  /** The screen coming in: its scroll button waits until the move ends, so its bar stays whole meanwhile. */
+  private boolean xgramPullEntering;
+  private boolean xgramPullScrollPending, xgramPullScrollVisible, xgramPullScrollReverse;
+
+  private static void xgramTransitionAlpha (View view, float alpha) {
+    // Public since Android 10 (hidden before, as XgramTitleMorph knows); the move needs Expressive, Android 13+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && view.getTransitionAlpha() != alpha) {
+      view.setTransitionAlpha(alpha);
+    }
+  }
+
+  // The bars' shared edges of the move's frame (px, contentView), set while it runs: a pinned bar or a taller message box
+  // only the old chat has recedes to the next chat's, and the next chat's messages show only between the edges, so none is
+  // ever drawn over the old chat's bars (which stay opaque until the second half of the move).
+  private boolean xgramPullEdges;
+  private float xgramPullEdgeTop, xgramPullEdgeBottom;
+
+  /** Where the bars over the top of the messages end (px, topBar): the card group's backing, the topic tabs. */
+  private float xgramPullBarsTop () {
+    float top = topBar != null ? Math.max(0, topBar.xgramBackingBottom()) : 0f;
+    if (xgramTabs != null && xgramTabs.getVisibility() == View.VISIBLE) {
+      top = Math.max(top, xgramTabs.getTranslationY() + xgramTabs.getMeasuredHeight());
+    }
+    return top;
+  }
+
+  /** Where topBar starts in contentView: lower by the call / audio band's offset (applyPlayerOffset moves topBar). */
+  private float xgramPullBarsShift () {
+    return topBar != null ? topBar.getTop() + topBar.getTranslationY() : 0f;
+  }
+
+  /** {@link #xgramPullBarsTop()} in contentView, where the move's edges and the clips (drawChild) are. */
+  private float xgramPullBarsTopInLayout () {
+    return xgramPullBarsShift() + xgramPullBarsTop();
+  }
+
+  /**
+   * Where the bars over the bottom of the messages start (px, contentView): the list ends where the message box with the
+   * reply, Undo send and file bars over it starts, and the Mute / Join bar covers the bottom of a list that runs under it.
+   */
+  private float xgramPullBarsBottom () {
+    if (messagesView == null) {
+      return contentView != null ? contentView.getHeight() : 0f;
+    }
+    return messagesView.getBottom() + messagesView.getTranslationY() - xgramPullHost.xgramPullBottomCover();
+  }
+
+  /** The old chat's bars at the bottom, which recede below the edge (their buttons go with the message box). */
+  private boolean xgramIsPullBottomBar (View child) {
+    return child == bottomWrap || child == bottomSpace || child == replyBarView || child == bottomBar ||
+      child == emojiButton || child == attachButtons || child == xgramTypingAttach || child == sendButton ||
+      child == messageSenderButton || (xgramUndoBar != null && child == xgramUndoBar);
+  }
+
+  private final MessagesLayout.XgramChildClip xgramPullChildClip = new MessagesLayout.XgramChildClip() {
+    @Override
+    public boolean xgramClipChild (View child, android.graphics.RectF out) {
+      if (!xgramPullEdges || contentView == null) {
+        return false;
+      }
+      final float w = contentView.getWidth(), h = contentView.getHeight();
+      if (xgramPullEntering) {
+        // The next chat's messages: below both chats' top bars, above both chats' bottom bars
+        if (child == messagesView || (xgramUndoBubbles != null && child == xgramUndoBubbles.getLayer())) {
+          out.set(-w, Math.max(xgramPullEdgeTop, xgramPullBarsTopInLayout()), 2f * w, Math.min(xgramPullEdgeBottom, xgramPullBarsBottom()));
+          return true;
+        }
+        return false;
+      }
+      // The old chat's bars: cut where the edge has passed into them
+      if (child == topBar) {
+        if (xgramPullEdgeTop < xgramPullBarsTopInLayout()) {
+          out.set(-w, -h, 2f * w, xgramPullEdgeTop);
+          return true;
+        }
+        return false;
+      }
+      if (xgramIsPullBottomBar(child) && xgramPullEdgeBottom > xgramPullBarsBottom()) {
+        out.set(-w, xgramPullEdgeBottom, 2f * w, 2f * h);
+        return true;
+      }
+      return false;
+    }
+  };
+
+  private final com.fahadali.xgram.appearance.XgramNavMotion.PullScreen xgramPullScreen = new com.fahadali.xgram.appearance.XgramNavMotion.PullScreen() {
+    @Override
+    public void xgramPullBegin (boolean entering) {
+      if (entering) {
+        if (scrollToBottomVisible.getValue()) {
+          // Opened at its first unread: the bar would fold into the scroll button mid-move. It unfolds now, folds after.
+          final boolean reverse = scrollToBottomReverse.getValue();
+          setScrollToBottomVisible(false, reverse, false);
+          xgramPullScrollVisible = true;
+          xgramPullScrollReverse = reverse;
+          xgramPullScrollPending = true;
+        }
+        xgramPullEntering = true;
+      } else if (xgramPull != null) {
+        xgramPull.keepHoldUntilHidden(); // the old messages stay held up until this screen is hidden
+      }
+    }
+
+    @Override
+    public void xgramPullFrame (float lift, float listAlpha, float chromeAlpha, float wallpaperAlpha, float edgeTop, float edgeBottom) {
+      if (contentView == null || messagesView == null) {
+        return;
+      }
+      messagesView.xgramSetLift(lift);
+      xgramPullEdgeTop = edgeTop;
+      xgramPullEdgeBottom = edgeBottom;
+      xgramPullEdges = true;
+      contentView.xgramSetChildClip(xgramPullChildClip);
+      contentView.invalidate(); // contentView draws the clips itself (drawChild): its own drawing is redone every frame
+      xgramUpdateCorners();
+      final View undoLayer = xgramUndoBubbles != null ? xgramUndoBubbles.getLayer() : null;
+      for (int i = 0; i < contentView.getChildCount(); i++) {
+        final View child = contentView.getChildAt(i);
+        final float alpha;
+        if (child == wallpaperView || child == wallpaperViewBlurPreview) {
+          alpha = wallpaperAlpha;
+        } else if (child == messagesView || child == undoLayer) {
+          alpha = listAlpha;
+        } else {
+          alpha = chromeAlpha; // the bars, the message box, the buttons, the pinned bar, the corners
+        }
+        if (alpha < 1f && !xgramPullFaded.contains(child)) {
+          xgramPullFaded.add(child);
+        }
+        xgramTransitionAlpha(child, alpha);
+      }
+    }
+
+    @Override
+    public void xgramPullEnd () {
+      if (messagesView != null) {
+        messagesView.xgramSetLift(0f);
+      }
+      if (xgramPullEdges) {
+        xgramPullEdges = false;
+        if (contentView != null) {
+          contentView.xgramSetChildClip(null);
+        }
+        xgramUpdateCorners(); // back below its own bars
+      }
+      for (View view : xgramPullFaded) { // also the views removed during the move
+        xgramTransitionAlpha(view, 1f);
+      }
+      xgramPullFaded.clear();
+      if (xgramPullEntering) {
+        xgramPullEntering = false;
+        if (xgramPullScrollPending && messagesView != null) {
+          final boolean visible = xgramPullScrollVisible, reverse = xgramPullScrollReverse;
+          // A frame later, after onFocus, so the bar folds into the button with its animation. A newer state set
+          // meanwhile clears the pending one (setScrollToBottomVisible).
+          messagesView.postOnAnimation(() -> {
+            if (xgramPullScrollPending && !isDestroyed()) {
+              xgramPullScrollPending = false;
+              setScrollToBottomVisible(visible, reverse, isFocused());
+            }
+          });
+        } else {
+          xgramPullScrollPending = false;
+        }
+      }
+    }
+
+    @Override
+    public float xgramPullCoverTop () {
+      return xgramPullBarsTopInLayout();
+    }
+
+    @Override
+    public float xgramPullCoverBottom () {
+      return xgramPullBarsBottom();
+    }
+
+    @Override
+    public boolean xgramPullCanReplace () {
+      // As XgramForums.replaceTopicScreensBelow: Back would have asked first, so the chat stays under the next one
+      return !hasEditedChanges() && !hasAttachedFiles();
+    }
+  };
+
+  @Override
+  public @Nullable com.fahadali.xgram.appearance.XgramNavMotion.PullScreen xgramPullNextScreen () {
+    // Not the tabbed Saved Messages screen (its view is a pager around the list), a preview or a closed chat
+    return contentView != null && messagesView != null && getValue() == contentView && !isDestroyed() &&
+      !isInForceTouchMode() && previewMode == PREVIEW_MODE_NONE ? xgramPullScreen : null;
+  }
+
   private boolean xgramOpenNextUnread (com.fahadali.xgram.chats.XgramPullToNext.Target target) {
     if (isDestroyed() || !isFocused() || chat == null || context().isNavigationBusy()) {
       return false; // TdlibUi.openChat drops an open while the navigation is busy: the held messages go back at once
+    }
+    if (isEditingMessage() || hasAttachedFiles()) {
+      return false; // XGram: this chat leaves the stack once covered: an edit or picked files would go without Back's prompt
     }
     TdApi.Chat next = tdlib.chat(target.chatId);
     if (next == null) {
       return false;
     }
-    // XGram: the next topic takes this topic's place on its focus (XgramForums.replaceTopicScreensBelow); only a next
-    // channel needs this screen removed once covered.
-    xgramNextChatId = target.topic != null ? 0 : next.id;
+    // XGram: the next chat takes this screen's place when its push ends (NavigationController#xgramReplaceCovered); a
+    // next topic already does on its focus (XgramForums.replaceTopicScreensBelow).
     if (target.topic != null) {
-      com.fahadali.xgram.topics.XgramForums.openTopic(this, next, target.topic);
+      com.fahadali.xgram.topics.XgramForums.openTopicPulled(this, next, target.topic);
     } else {
-      tdlib.ui().openChat(this, next, new TdlibUi.ChatOpenParameters().keepStack().chatList(openedFromChatList));
+      tdlib.ui().openChat(this, next, new TdlibUi.ChatOpenParameters().keepStack().chatList(openedFromChatList).xgramPullNext());
     }
     return true;
-  }
-
-  /** Once the next chat slid in on top of this one, this one leaves the stack: back goes where it went before. */
-  private void xgramRemoveWhenCovered (long nextChatId, int attempt) {
-    UI.post(() -> {
-      NavigationController navigation = navigationController();
-      if (navigation == null || isDestroyed()) {
-        return;
-      }
-      if (navigation.isAnimating()) {
-        if (attempt < 30) {
-          xgramRemoveWhenCovered(nextChatId, attempt + 1);
-        }
-        return;
-      }
-      ViewController<?> top = navigation.getStack().getCurrent();
-      int index = navigation.getStack().indexOf(this);
-      if (top instanceof MessagesController && top != this && ((MessagesController) top).getChatId() == nextChatId &&
-        index != -1 && index < navigation.getStack().size() - 1) {
-        navigation.getStack().destroy(index);
-      }
-    }, 120);
   }
 
   private boolean xgramInForumTopic () {

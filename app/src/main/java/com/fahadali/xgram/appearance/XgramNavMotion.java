@@ -51,6 +51,8 @@ import org.thunderdog.challegram.tool.Screen;
  *   <li>System back gesture: the predictive back card (closing screen shrinks to .9 with rounded corners and
  *   follows the finger's height; after commit the card slides away and fades).</li>
  *   <li>Swipe back anywhere: the same card that follows the finger.</li>
+ *   <li>Pull to the next channel: on a forward fade push, the old chat's messages lift and fade and the next chat's
+ *   rise in, with the bars cross-fading in place ({@link #beginPullNext}).</li>
  * </ul>
  * In the card modes the live app bar shows the previous screen from the first frame, stationary and at full colour
  * (as Google Messages and Contacts do); the previous screen waits under it at full size behind a light scrim that
@@ -65,6 +67,8 @@ import org.thunderdog.challegram.tool.Screen;
  */
 public final class XgramNavMotion {
   public static final int MODE_NONE = 0, MODE_SHARED_AXIS = 1, MODE_CARD_SYSTEM = 2, MODE_CARD_FINGER = 3;
+  /** Pull to the next channel: the old messages lift and fade, the next channel's rise in (Telegram's vertical move). */
+  public static final int MODE_PULL_NEXT = 4;
 
   public static final float SHARED_AXIS_DP = 96f, MIN_SCALE = .9f, EDGE_GAP_DP = 8f, SHRINK_TRAVEL = .3f;
   public static final float FADE_THRESHOLD = .35f;
@@ -98,6 +102,56 @@ public final class XgramNavMotion {
   /** translationX of the screen that comes in. */
   public static float inOffset (float p, boolean forward, int e, float distancePx) {
     return (forward ? 1f : -1f) * e * distancePx * (1f - p);
+  }
+
+  // Pull to the next channel. t: 0..1 linear time of the move; every alpha runs on t, the travel on pullPos(t).
+
+  public static final long PULL_NEXT_MS = 300L, PULL_NEXT_REDUCED_MS = 200L;
+  public static final float PULL_TITLE_SHIFT_DP = 8f, PULL_TITLE_SCALE = .9f;
+
+  private static final Interpolator PULL_POS = new PathInterpolator(.2f, 0f, 0f, 1f);
+
+  /** Position of the lists (M3 standard easing). */
+  public static float pullPos (float t) {
+    return PULL_POS.getInterpolation(XgramMotion.clamp01(t));
+  }
+
+  /** Old chat's messages: gone by half time. */
+  public static float pullOutAlpha (float t) {
+    return 1f - XgramMotion.clamp01(t / .5f);
+  }
+
+  /** Next chat's messages. */
+  public static float pullInAlpha (float t) {
+    return XgramMotion.clamp01((t - .1f) / .6f);
+  }
+
+  /** Next chat's bars and buttons: fully in before the old ones start to leave, so a shared bar never thins out. */
+  public static float pullChromeIn (float t) {
+    return XgramMotion.clamp01(t / .4f);
+  }
+
+  /** Old chat's bars and buttons. */
+  public static float pullChromeOut (float t) {
+    return 1f - XgramMotion.clamp01((t - .4f) / .4f);
+  }
+
+  /** A chat screen that takes part in the pull move. Lift is in px, > 0 draws the messages higher. */
+  public interface PullScreen {
+    void xgramPullBegin (boolean entering);
+    /**
+     * edgeTop, edgeBottom: in the screen's own coordinates (px), the one line both chats' top bars and the one line both
+     * chats' bottom bars (message box, Mute bar) end at in this frame. The next chat's messages draw only between them,
+     * the old chat's bars only outside them, so a message is never drawn over a bar.
+     */
+    void xgramPullFrame (float lift, float listAlpha, float chromeAlpha, float wallpaperAlpha, float edgeTop, float edgeBottom);
+    void xgramPullEnd ();
+    /** Where the screen's top bars end now (px, its own coordinates): the pinned bar's backing, the topic tabs. */
+    float xgramPullCoverTop ();
+    /** Where the screen's bottom bars start now (px, its own coordinates): the message box with its bars, or the Mute bar. */
+    float xgramPullCoverBottom ();
+    /** False while the chat holds work Back would ask about first (an unsaved edit, picked files): it stays under the next one. */
+    boolean xgramPullCanReplace ();
   }
 
   public static float sharedAxisDistance () {
@@ -204,6 +258,9 @@ public final class XgramNavMotion {
   private boolean headerMoved;
   private float headerTranslation0;
   private float headerX, headerY;
+  // Pull to the next channel: the two chat screens and how far their messages travel (px)
+  private @Nullable PullScreen pullLeft, pullRight;
+  private float pullTravel;
 
   private final Saved leftSaved = new Saved(), rightSaved = new Saved();
   private final CardOutline rightOutline = new CardOutline();
@@ -416,6 +473,62 @@ public final class XgramNavMotion {
     }
   }
 
+  /**
+   * Starts the pull to the next channel on a forward fade push: {@code left} is the chat it was pulled from, {@code right}
+   * the next one. Both screens stay at full alpha; each one lifts and fades its own parts ({@link PullScreen}). Returns
+   * false when it cannot run here, so Telegram X's fade runs. Call at the end of prepareFactorAnimation.
+   */
+  public boolean beginPullNext (@NonNull View left, @NonNull View right, @Nullable PullScreen leftScreen, @Nullable PullScreen rightScreen) {
+    if (active) {
+      headerMoved = false; // A stale transition: the app bar was just prepared for this one, leave it.
+      end(false);
+    }
+    if (!XgramExpressive.isEnabled() || leftScreen == null || rightScreen == null) {
+      return false;
+    }
+    float w = rootView.getMeasuredWidth(), h = rootView.getMeasuredHeight();
+    if (w <= 0f || h <= 0f) {
+      return false;
+    }
+    try {
+      this.mode = MODE_PULL_NEXT;
+      this.forward = true;
+      this.leftWrap = left;
+      this.rightWrap = right;
+      this.width = w;
+      this.height = h;
+      this.released = false;
+      this.commit = false;
+      this.rightTx = this.leftTx = 0f;
+      this.headerMoved = false;
+      this.headerTranslation0 = headerView.getTranslation();
+      // The fade push prepared the new screen at 0, and the last setFactor(0) changes nothing (same factor): saved at 0,
+      // end() would leave the next chat invisible. Both are saved at full alpha.
+      left.setAlpha(1f);
+      right.setAlpha(1f);
+      save(left, leftSaved);
+      save(right, rightSaved);
+      backdrop.setColor(0); // the old chat covers the whole window until it is removed
+      // The lists change every frame: a layer would be redrawn every frame anyway
+      dropHardwareLayer(left);
+      dropHardwareLayer(right);
+      this.pullTravel = XgramMotion.reduce() ? 0f : h / 3f; // Reduce motion: a crossfade in place
+      this.pullLeft = leftScreen;
+      this.pullRight = rightScreen;
+      leftScreen.xgramPullBegin(false);
+      rightScreen.xgramPullBegin(true);
+      this.active = true;
+      apply(1f); // frame 0: the old chat as it is, nothing of the next one
+      return true;
+    } catch (Throwable t) {
+      Log.w(t);
+      this.active = true;
+      end(false);
+      right.setAlpha(0f); // Telegram X's fade runs instead, from its own start
+      return false;
+    }
+  }
+
   /** Raw (unclamped) navigation factor: 0 = right screen in place, 1 = right screen gone. */
   public void apply (float factor) {
     if (!active) {
@@ -424,6 +537,9 @@ public final class XgramNavMotion {
     switch (mode) {
       case MODE_SHARED_AXIS:
         applySharedAxis(forward ? 1f - factor : factor);
+        break;
+      case MODE_PULL_NEXT:
+        applyPullNext(XgramMotion.clamp01(1f - factor)); // a forward push only: 1 - factor is the move's time
         break;
       case MODE_CARD_SYSTEM:
         applySystemGesture(XgramMotion.clamp01(factor), touchY - touchStartY);
@@ -489,6 +605,27 @@ public final class XgramNavMotion {
     }
     rightTx = forward ? inX : outX;
     leftTx = forward ? outX : inX;
+  }
+
+  /** t: 0..1 linear time. The old messages lift and fade, the next ones rise from lower; the wallpaper is the old one's. */
+  private void applyPullNext (float t) {
+    float pos = pullPos(t);
+    if (pullLeft == null || pullRight == null || leftWrap == null || rightWrap == null) {
+      return;
+    }
+    // One edge for both chats' bars, moving with the messages from where the old chat's end to where the next chat's do
+    // (a pinned bar or a reply bar only one of them has recedes). Both screens are children of the same parent: the
+    // lines are carried in its coordinates. The next chat is not laid out yet on the first frame: the old lines hold.
+    final float leftY = leftWrap.getTop() + leftWrap.getTranslationY(), rightY = rightWrap.getTop() + rightWrap.getTranslationY();
+    final float oldTop = leftY + pullLeft.xgramPullCoverTop(), oldBottom = leftY + pullLeft.xgramPullCoverBottom();
+    float newTop = oldTop, newBottom = oldBottom;
+    if (rightWrap.getHeight() > 0) {
+      newTop = rightY + pullRight.xgramPullCoverTop();
+      newBottom = rightY + pullRight.xgramPullCoverBottom();
+    }
+    final float edgeTop = oldTop + (newTop - oldTop) * pos, edgeBottom = oldBottom + (newBottom - oldBottom) * pos;
+    pullLeft.xgramPullFrame(pullTravel * pos, pullOutAlpha(t), pullChromeOut(t), 1f, edgeTop - leftY, edgeBottom - leftY);
+    pullRight.xgramPullFrame(-pullTravel * (1f - pos), pullInAlpha(t), pullChromeIn(t), 0f, edgeTop - rightY, edgeBottom - rightY);
   }
 
   private void applySystemGesture (float p, float dy) {
@@ -670,6 +807,16 @@ public final class XgramNavMotion {
     }
   }
 
+  private static void endPull (@Nullable PullScreen screen) {
+    if (screen != null) {
+      try {
+        screen.xgramPullEnd();
+      } catch (Throwable t) {
+        Log.w(t);
+      }
+    }
+  }
+
   /** Same as {@code end(false)}. */
   public void end () {
     end(false);
@@ -686,6 +833,12 @@ public final class XgramNavMotion {
     }
     active = false;
     boolean card = mode == MODE_CARD_SYSTEM || mode == MODE_CARD_FINGER;
+    if (mode == MODE_PULL_NEXT) {
+      // The chat screens put their own parts back (lift, alphas, the held scroll button) before the screens are restored
+      endPull(pullLeft);
+      endPull(pullRight);
+    }
+    pullLeft = pullRight = null;
     try {
       if (card) {
         if (leftTopClip != null && leftWrap != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2 && leftTopClip.equals(leftWrap.getClipBounds())) {

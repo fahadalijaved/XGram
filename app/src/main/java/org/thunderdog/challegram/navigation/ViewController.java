@@ -1013,6 +1013,11 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     return -1;
   }
 
+  /** XGram: the hooks of a chat screen that can take part in the pull to the next channel, or null when it can't now. */
+  public @Nullable com.fahadali.xgram.appearance.XgramNavMotion.PullScreen xgramPullNextScreen () {
+    return null;
+  }
+
   protected final int getHeaderColor () {
     int color = Theme.getColor(getHeaderColorId());
     return xgramDrawsOwnAppBar() ? me.vkryl.core.ColorUtils.color(0, color) : color; // XGram: the header fades out over a Compose page
@@ -4623,6 +4628,20 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
 
   public final void forceFastAnimationOnce () {
     forceFadeModeOnce = true;
+  }
+
+  private boolean xgramPullOnce;
+
+  /** XGram: the next push of this screen is the pull to the next channel (taken by the navigation that shows it). */
+  public final void xgramPullTransitionOnce () {
+    xgramPullOnce = true;
+  }
+
+  /** XGram: returns whether this push is a pull to the next channel and clears it, so it never outlives one navigation. */
+  public final boolean xgramTakePullTransition () {
+    boolean pull = xgramPullOnce;
+    xgramPullOnce = false;
+    return pull;
   }
 
 

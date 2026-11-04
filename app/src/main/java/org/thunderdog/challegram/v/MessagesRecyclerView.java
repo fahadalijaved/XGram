@@ -185,9 +185,9 @@ public class MessagesRecyclerView extends RecyclerView implements FactorAnimator
     return false;
   }
 
-  /** XGram: how far pull-to-next draws the list's content up (draw); Undo send's faded bubbles follow it. */
+  /** XGram: how far pull-to-next (and its move to the next chat) draws the list's content up (draw); Undo send's faded bubbles follow it. */
   public float xgramContentOffset () {
-    return xgramPull != null ? xgramPull.getOffset() : 0f;
+    return (xgramPull != null ? xgramPull.getOffset() : 0f) + xgramLift;
   }
 
   /** The new bubble grows from its tail: the bottom corner on its own side. */
@@ -505,6 +505,16 @@ public class MessagesRecyclerView extends RecyclerView implements FactorAnimator
     this.xgramPull = pull;
   }
 
+  // XGram: the pull move to the next chat draws the content this much higher (px, < 0 lower), on top of the pull
+  private float xgramLift;
+
+  public void xgramSetLift (float px) {
+    if (xgramLift != px) {
+      xgramLift = px;
+      invalidate();
+    }
+  }
+
   @Override
   public boolean dispatchTouchEvent (MotionEvent e) {
     // XGram: one touch at a time (xgramStartSwipe), and nothing a child asked during an earlier touch stays
@@ -556,15 +566,23 @@ public class MessagesRecyclerView extends RecyclerView implements FactorAnimator
   @Override
   public void draw (android.graphics.Canvas c) {
     xgramUpdateScrollTopInset(); // XGram: before the indicator (an item decoration) draws
-    float offset = xgramPull != null ? xgramPull.getOffset() : 0f;
+    final float offset = xgramPull != null ? Math.max(0f, xgramPull.getOffset()) : 0f, lift = xgramLift;
+    if (offset <= 0f && lift == 0f) {
+      super.draw(c);
+      return;
+    }
+    int save = c.save();
+    if (lift < 0f) { // the next chat's messages rise from behind its own Mute bar, never over it
+      c.clipRect(0, 0, getMeasuredWidth(), getMeasuredHeight() - (xgramPull != null ? xgramPull.bottomCover() : 0));
+    }
+    c.translate(0, -(offset + lift));
+    super.draw(c);
+    c.restoreToCount(save);
     if (offset > 0f) {
-      int save = c.save();
-      c.translate(0, -offset);
-      super.draw(c);
-      c.restoreToCount(save);
+      save = c.save();
+      c.translate(0, -lift); // the indicator rises with the old messages
       xgramPull.draw(c, getMeasuredWidth(), getMeasuredHeight());
-    } else {
-      super.draw(c);
+      c.restoreToCount(save);
     }
   }
 

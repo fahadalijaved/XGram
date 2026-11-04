@@ -232,11 +232,19 @@ public final class XgramForums {
 
   /** Opens the topic at its first unread message, else where it was left, else at the bottom. */
   public static void openTopic (ViewController<?> context, TdApi.Chat chat, TdApi.ForumTopic topic) {
-    openTopic(context, chat, topic, null);
+    openTopic(context, chat, topic, null, false);
   }
 
-  private static void openTopic (TdlibDelegate context, TdApi.Chat chat, TdApi.ForumTopic topic, @Nullable TdlibUi.UrlOpenParameters urlOpenParameters) {
+  /** As {@link #openTopic(ViewController, TdApi.Chat, TdApi.ForumTopic)}, pushed with the pull to the next channel's move. */
+  public static void openTopicPulled (ViewController<?> context, TdApi.Chat chat, TdApi.ForumTopic topic) {
+    openTopic(context, chat, topic, null, true);
+  }
+
+  private static void openTopic (TdlibDelegate context, TdApi.Chat chat, TdApi.ForumTopic topic, @Nullable TdlibUi.UrlOpenParameters urlOpenParameters, boolean pullNext) {
     TdlibUi.ChatOpenParameters params = new TdlibUi.ChatOpenParameters().keepStack().urlOpenParameters(urlOpenParameters);
+    if (pullNext) {
+      params.xgramPullNext();
+    }
     params.messageTopicId = new TdApi.MessageTopicForum(topic.info.forumTopicId);
     TopicResume resume = topicResume(context.tdlib(), chat.id, topic.info.forumTopicId, topic);
     params.highlightMessage(resume.highlightMode, resume.anchor);
@@ -279,7 +287,7 @@ public final class XgramForums {
     }
     tdlib.send(new TdApi.GetForumTopic(chatId, topicId.forumTopicId), (topic, error) -> tdlib.ui().post(() -> {
       if (topic != null) {
-        openTopic(context, chat, normalizeUnread(tdlib, topic), urlOpenParameters);
+        openTopic(context, chat, normalizeUnread(tdlib, topic), urlOpenParameters, false);
       } else {
         openTopic(context, chat, topicId.forumTopicId, 0, urlOpenParameters);
       }

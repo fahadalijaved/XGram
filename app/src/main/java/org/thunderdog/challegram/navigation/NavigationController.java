@@ -685,7 +685,40 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
     }
   }
 
+  // XGram: the pull to the next channel (MessagesController, at the bottom of a channel or topic). The next chat is
+  // pushed with XgramNavMotion.MODE_PULL_NEXT (Telegram X's fade with Expressive off), and the chat it was pulled from
+  // leaves the stack when the push ends, so Back goes where it went before. Only a push flagged by
+  // ViewController#xgramPullTransitionOnce takes these paths.
+
+  /** The pull to the next channel's move runs. */
+  private boolean xgramPullRunning () {
+    return xgramNav != null && xgramNav.isActive() && xgramNav.getMode() == XgramNavMotion.MODE_PULL_NEXT;
+  }
+
+  /** The chat {@code left} was pulled from leaves the stack, under the next chat that has focus now. */
+  private void xgramReplaceCovered (@Nullable ViewController<?> left) {
+    final XgramNavMotion.PullScreen screen = left != null ? left.xgramPullNextScreen() : null;
+    if (screen == null) {
+      return; // not a chat screen, or a topic its next topic replaced already (XgramForums.replaceTopicScreensBelow)
+    }
+    if (!screen.xgramPullCanReplace()) {
+      return; // an unsaved edit or picked files: it stays under the next chat, so Back reaches it and asks first
+    }
+    NavigationStack stack = getStack();
+    int index = stack.indexOf(left);
+    if (index != -1 && index < stack.getCurrentIndex() && stack.remove(index) != null) {
+      if (XGRAM_DEFER_POP_DESTROY) {
+        xgramDestroyAfterFrame(left); // as a popped screen: after the final frame (taking the pooled chat screen flushes it first)
+      } else {
+        xgramDestroyDetached(left);
+      }
+    }
+  }
+
   private int xgramBarKind () {
+    if (xgramPullRunning()) {
+      return XgramBarListener.KIND_FADE; // the pull to the next channel is a fade push between two chats
+    }
     if (xgramNav != null && xgramNav.isActive()) {
       return xgramNav.isCard() ? XgramBarListener.KIND_CARD : XgramBarListener.KIND_SHARED_AXIS;
     }
@@ -702,13 +735,23 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
   }
 
   private void xgramBegin (int mode, ViewController<?> left, ViewController<?> right, boolean forward, int direction, int predictiveGestureMode) {
-    if (xgramNav == null || mode == XgramNavMotion.MODE_NONE || direction != TRANSLATION_HORIZONTAL || left.usePopupMode() || right.usePopupMode()) {
+    final boolean pull = mode == XgramNavMotion.MODE_PULL_NEXT; // the pull to the next channel runs on a forward fade push
+    if (xgramNav == null || mode == XgramNavMotion.MODE_NONE || (pull ? direction != TRANSLATION_FADE || !forward : direction != TRANSLATION_HORIZONTAL) || left.usePopupMode() || right.usePopupMode()) {
       return;
     }
-    if (!xgramNav.begin(mode, leftWrap, rightWrap, forward, needRtl(), predictiveGestureMode == PredictiveGesture.BACK_FROM_RIGHT_EDGE, xgramTouchY, left.xgramAppBarBottom())) {
+    if (pull) {
+      if (!xgramNav.beginPullNext(leftWrap, rightWrap, left.xgramPullNextScreen(), right.xgramPullNextScreen())) {
+        return;
+      }
+    } else if (!xgramNav.begin(mode, leftWrap, rightWrap, forward, needRtl(), predictiveGestureMode == PredictiveGesture.BACK_FROM_RIGHT_EDGE, xgramTouchY, left.xgramAppBarBottom())) {
       return;
     }
     headerView.xgramSetSharedAxis(xgramNav.getMode() == XgramNavMotion.MODE_SHARED_AXIS); // XGram: the app bar title follows the same axis
+    final boolean pullAxis = xgramNav.getMode() == XgramNavMotion.MODE_PULL_NEXT;
+    headerView.xgramSetPullAxis(pullAxis); // XGram: the pull to the next channel's titles cross-slide upward with the messages
+    if (pullAxis) {
+      headerView.setTranslation(1f); // the move's first frame: the next title waits lower and smaller, at 0
+    }
     if (USE_PREVIEW_FADE && fadeView != null) {
       fadeView.setAlpha(0f);
     }
@@ -724,7 +767,7 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
     float factor = MathUtils.clamp(rawFactor);
     this.translationFactor = factor;
     this.lastTranslation = translationMode == TRANSLATION_VERTICAL ? Math.round(currentHeight * factor) : currentWidth * factor;
-    if (xgramNav.getMode() == XgramNavMotion.MODE_SHARED_AXIS) {
+    if (xgramNav.getMode() == XgramNavMotion.MODE_SHARED_AXIS || xgramNav.getMode() == XgramNavMotion.MODE_PULL_NEXT) {
       headerView.setTranslation(factor);
     }
     if (currentRight != null) {
@@ -739,6 +782,7 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
   private void xgramEnd (int finishMode) {
     if (headerView != null) {
       headerView.xgramSetSharedAxis(false);
+      headerView.xgramSetPullAxis(false); // the pull to the next channel's titles rest in place (no-op when it didn't run)
     }
     if (xgramTabSwitch) {
       xgramSetTabSwitch(false, 0); // XGram M3E: the tab switch's fade-through is over
@@ -1115,8 +1159,10 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
     final boolean xgramSync = xgramHorizontal && xgramProgrammaticNow;
     final boolean xgramCard = xgramNav != null && (xgramRequestedMode == XgramNavMotion.MODE_CARD_SYSTEM || xgramRequestedMode == XgramNavMotion.MODE_CARD_FINGER);
     final boolean xgramNoScreenLayers = xgramHorizontal && (xgramNav == null || xgramCard);
+    // XGram: nor has the pull to the next channel (each chat fades its own parts and its list changes every frame)
+    final boolean xgramPullNoLayers = xgramNav != null && xgramRequestedMode == XgramNavMotion.MODE_PULL_NEXT;
     if (Views.HARDWARE_LAYER_ENABLED) {
-      boolean posted = !(xgramSync || xgramNoScreenLayers);
+      boolean posted = !(xgramSync || xgramNoScreenLayers || xgramPullNoLayers);
       setLayerType(View.LAYER_TYPE_HARDWARE, posted ? left : null, posted ? right : null); // the floating button keeps its posted layer
     }
 
@@ -1338,6 +1384,8 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
     hideContextualPopups();
 
     final boolean forward = (mode & MODE_BACKWARD) != MODE_BACKWARD;
+    // XGram: the pull to the next channel, a plain push only. Taken on every navigation, so it never outlives one.
+    final boolean xgramPull = controller.xgramTakePullTransition() && forward && (mode & (MODE_FADE | MODE_REBASE)) == 0;
     final boolean fastAnimation;
     int direction;
 
@@ -1346,8 +1394,8 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
       fastAnimation = false;
     } else {
       if (forward) {
-        fastAnimation = controller.forceFastAnimation();
-        direction = fastAnimation || controller.forceFadeMode() ? TRANSLATION_FADE : controller.usePopupMode() ? TRANSLATION_VERTICAL : TRANSLATION_HORIZONTAL;
+        fastAnimation = controller.forceFastAnimation() && !xgramPull; // XGram: the pull's move has its own timing
+        direction = xgramPull ? TRANSLATION_FADE : fastAnimation || controller.forceFadeMode() ? TRANSLATION_FADE : controller.usePopupMode() ? TRANSLATION_VERTICAL : TRANSLATION_HORIZONTAL;
       } else {
         ViewController<?> current = getStack().getCurrent();
         fastAnimation = controller.forceFastAnimation();
@@ -1369,7 +1417,7 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
 
     if (USE_ASYNC_IN_STEP_2 || !controller.needAsynchronousAnimation() || !isAttachedToWindow || xgramSkipsWait(controller, mode)) { // XGram M3E: a tab screen shows at once
       controller.executeAnimationReadyListeners();
-      animateNavigate(controller, direction, forward, rebase, fastAnimation);
+      animateNavigate(controller, direction, forward, rebase, fastAnimation, xgramPull);
     } else {
       final int directionFinal = direction;
       final int rebaseFinal = rebase;
@@ -1383,7 +1431,7 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
               controller.destroy();
             } else {
               controller.executeAnimationReadyListeners();
-              animateNavigate(controller, directionFinal, forward, rebaseFinal, fastAnimation);
+              animateNavigate(controller, directionFinal, forward, rebaseFinal, fastAnimation, xgramPull);
             }
           }
         }
@@ -1401,10 +1449,9 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
 
   private static final boolean USE_ASYNC_IN_STEP_2 = false;
 
-  void animateNavigate (final ViewController<?> controller, int direction, final boolean forward, final int rebase, final boolean fastAnimation) {
+  void animateNavigate (final ViewController<?> controller, int direction, final boolean forward, final int rebase, final boolean fastAnimation, final boolean xgramPull) {
     final ViewController<?> left, right;
 
-    xgramRequestedMode = xgramNav != null ? XgramNavMotion.MODE_SHARED_AXIS : XgramNavMotion.MODE_NONE;
     if (forward) {
       left = getStack().getPrevious();
       right = controller;
@@ -1412,6 +1459,9 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
       left = controller;
       right = getStack().getCurrent();
     }
+    // XGram: the pull to the next channel moves the two chat screens itself, when both can take part
+    final boolean xgramPullMotion = xgramPull && xgramNav != null && rebase == 0 && left != null && left.xgramPullNextScreen() != null && right.xgramPullNextScreen() != null;
+    xgramRequestedMode = xgramNav == null ? XgramNavMotion.MODE_NONE : xgramPullMotion ? XgramNavMotion.MODE_PULL_NEXT : XgramNavMotion.MODE_SHARED_AXIS;
     // XGram M3E: a tab switch of the floating navigation toolbar fades through (set before the app bar's preview opens)
     final boolean xgramThrough = direction == TRANSLATION_FADE && xgramIsTabSwitch(left, right);
     xgramSetTabSwitch(xgramThrough, xgramThrough ? (forward ? right : left).xgramBarBandColor() : 0);
@@ -1433,6 +1483,9 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
         } else {
           headerView.applyPreview(getStack().getCurrent());
           processor.setNextAsCurrent();
+          if (xgramPull) {
+            xgramReplaceCovered(left); // XGram: the chat pulled from leaves the stack: Back skips it
+          }
         }
         if (xgramThrough && left != null && !left.isDestroyed()) {
           left.getValue().setAlpha(1f); // XGram M3E: the fade-through took the screen it left (kept, or the chat list) to 0
@@ -1474,7 +1527,13 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
       });
     }
 
-    if (xgramNav != null && !Config.DEBUG_NAV_ANIM && direction != TRANSLATION_NONE) {
+    if (xgramPullRunning()) {
+      // XGram: the pull to the next channel runs on linear time (each part has its own curve, XgramNavMotion). The frame
+      // that lays out the next chat stays still (at 0 it draws nothing), standing in for Telegram's short start delay.
+      animator.setDuration(XgramMotion.reduce() ? XgramNavMotion.PULL_NEXT_REDUCED_MS : XgramNavMotion.PULL_NEXT_MS);
+      animator.setInterpolator(AnimatorUtils.LINEAR_INTERPOLATOR);
+      xgramGateStart = true;
+    } else if (xgramNav != null && !Config.DEBUG_NAV_ANIM && direction != TRANSLATION_NONE) {
       // Shared axis (and Telegram X's slide when it cannot run) on SPATIAL_DEFAULT, sheets on STD_SPATIAL_DEFAULT, fades on EFFECTS.
       int token;
       if (direction == TRANSLATION_FADE) {
@@ -2047,6 +2106,9 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
 
   @Override
   public void onSystemBackProgressed (@NonNull BackEventCompat backEvent) {
+    if (xgramPullRunning()) {
+      return; // XGram: the pull to the next channel is a push: no back gesture drives it
+    }
     if (isAnimating) {
       if (xgramNav != null && xgramNav.isActive() && !xgramNav.isReleased()) {
         xgramNav.setTouchY(backEvent.getTouchY());
@@ -2058,6 +2120,9 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
 
   @Override
   public void onSystemBackCancelled () {
+    if (xgramPullRunning()) {
+      return; // XGram: see onSystemBackProgressed
+    }
     if (isAnimating) {
       closePreview(0f);
     }
@@ -2065,6 +2130,9 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
 
   @Override
   public boolean onSystemBackPressed () {
+    if (xgramPullRunning()) {
+      return true; // XGram: Back during the pull to the next channel's move is ignored
+    }
     if (isAnimating) {
       applyPreview(0f);
       return true;

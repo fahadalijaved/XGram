@@ -1864,6 +1864,15 @@ public class TdlibUi extends Handler {
       return this;
     }
 
+    // XGram: opened by the pull to the next channel (MessagesController.xgramOpenNextUnread): pushed with the vertical
+    // move, and the chat it was pulled from leaves the stack when the move ends.
+    public boolean xgramPullNext;
+
+    public ChatOpenParameters xgramPullNext () {
+      this.xgramPullNext = true;
+      return this;
+    }
+
     private void onDone () {
       if (onDone != null) {
         onDone.run();
@@ -2457,8 +2466,12 @@ public class TdlibUi extends Handler {
       // XGram: pushed over other screens: a forum topic (or tabs) then takes the place of its forum's topics under it
       // once it has focus, so visiting topics never stacks them (XgramForums.replaceTopicScreensBelow).
       controller.xgramReplaceTopicsBelowOnFocus(true);
+      // XGram: the pull to the next channel, only when it comes from a chat screen (taken back if the push is refused)
+      final boolean xgramPull = params != null && params.xgramPullNext && context instanceof MessagesController;
+      if (xgramPull) controller.xgramPullTransitionOnce();
       if (!navigation.navigateTo(controller)) {
         controller.xgramReplaceTopicsBelowOnFocus(false);
+        if (xgramPull) controller.xgramTakePullTransition();
       }
     }
     if (params != null) {
