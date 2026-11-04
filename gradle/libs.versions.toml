@@ -79,7 +79,7 @@ androidx-window-latest = "1.5.1" # requires minSdk 23: legacy and lollipop build
 
 firebase-messaging-latest = "26.0.0"
 
-google-recaptcha-latest = "18.9.3"
+google-recaptcha-latest = "18.9.4"
 
 google-play-billing-latest = "9.1.0"
 google-play-integrity-latest = "1.6.0"
