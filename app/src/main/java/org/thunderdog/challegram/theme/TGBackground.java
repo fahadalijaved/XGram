@@ -365,6 +365,23 @@ public class TGBackground {
     return isPattern() && ((TdApi.BackgroundTypePattern) type).fill.getConstructor() == TdApi.BackgroundFillFreeformGradient.CONSTRUCTOR;
   }
 
+  /** XGram: a dark-theme pattern (negative intensity on the server): black, the fill seen only through the pattern. */
+  public boolean isPatternInverted () {
+    return isPattern() && ((TdApi.BackgroundTypePattern) type).isInverted;
+  }
+
+  /**
+   * XGram: a pattern with no colors of its own, one of Telegram's bare pattern library entries (TDLib gives them a
+   * black solid fill). Telegram Desktop hides these from its picker; drawn as is they are plain black squares.
+   */
+  public boolean isColorlessPattern () {
+    if (!isPattern()) {
+      return false;
+    }
+    TdApi.BackgroundFill fill = ((TdApi.BackgroundTypePattern) type).fill;
+    return fill != null && fill.getConstructor() == TdApi.BackgroundFillSolid.CONSTRUCTOR && (((TdApi.BackgroundFillSolid) fill).color & 0xFFFFFF) == 0;
+  }
+
   public void setLegacyWallpaperId (int wallpaperId) {
     this.legacyWallpaperId = wallpaperId;
   }

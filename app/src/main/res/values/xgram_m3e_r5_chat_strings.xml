@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
   <!-- XGram M3E round 5, chat canvas. Sentence-case strings are used only while Telegram&#160;X's string is the bundled English one, so translations are kept. -->
-  <!-- The wallpaper picker with Pure black on in a dark theme -->
-  <string name="XgramR5ChatPureBlackNote">Pure black shows color backgrounds as black</string>
+  <!-- The wallpaper picker's tile for the chat's plain surface (no wallpaper); "Pure black" (XgramPureBlack) with Pure black on -->
+  <string name="XgramWallpaperNone">No wallpaper</string>
   <!-- Preview mode chats: sentence case for Telegram&#160;X's title-case English -->
   <string name="XgramR5ChatScheduledMessages">Scheduled messages</string>
   <string name="XgramR5ChatTabVideoMessages">Video messages</string>

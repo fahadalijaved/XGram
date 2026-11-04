@@ -132,9 +132,44 @@ public class WallpaperAdapter extends RecyclerView.Adapter<WallpaperAdapter.View
   private TGBackground lastFoundWallpaper;
   private int lastFoundIndex = -1;
 
+  // XGram M3E: the chat draws no wallpaper, the theme's own default and Telegram's black library patterns all as its
+  // plain surface, so they share one tile: the "surface tile", labelled "No wallpaper" (or "Pure black")
+
+  private int xgramSurfaceIndex = -1;
+
+  private boolean xgramIsSurface (@Nullable TGBackground w) {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return false;
+    }
+    if (w == null || w.isEmpty() || com.fahadali.xgram.appearance.XgramWallpaperDraw.drawsPlainBlack(w)) {
+      return true;
+    }
+    return !w.isCustom() && TdlibWallpaperManager.isSameWallpaperName(w.getName(), Theme.getDefaultWallpaper(themeId));
+  }
+
+  /** XGram: {@code a} and {@code b} are shown by the same tile. */
+  private boolean xgramSameTile (@Nullable TGBackground a, @Nullable TGBackground b) {
+    return TGBackground.compare(a, b) || (xgramIsSurface(a) && xgramIsSurface(b));
+  }
+
+  private void xgramFindSurface () {
+    xgramSurfaceIndex = -1;
+    if (wallpapers == null) {
+      return;
+    }
+    for (int i = 0; i < wallpapers.size(); i++) {
+      if (xgramIsSurface(wallpapers.get(i))) {
+        xgramSurfaceIndex = i;
+        return;
+      }
+    }
+  }
+
   private int indexOfWallpaper (TGBackground wallpaper) {
     if (wallpapers == null)
       return -1;
+    if (xgramSurfaceIndex != -1 && xgramIsSurface(wallpaper))
+      return xgramSurfaceIndex;
     if (lastFoundIndex != -1 && TGBackground.compare(lastFoundWallpaper, wallpaper))
       return lastFoundIndex;
     int i = 0;
@@ -156,7 +191,7 @@ public class WallpaperAdapter extends RecyclerView.Adapter<WallpaperAdapter.View
 
       for (RecyclerView recyclerView : attachedRecyclers) {
         View view = recyclerView.getLayoutManager().findViewByPosition(i);
-        if (view != null && view instanceof WallpaperView && TGBackground.compare(((WallpaperView) view).getWallpaper(), wallpaper)) {
+        if (view != null && view instanceof WallpaperView && xgramSameTile(((WallpaperView) view).getWallpaper(), wallpaper)) {
           ((WallpaperView) view).setWallpaperSelected(isSelected);
           foundCount++;
         }
@@ -206,8 +241,32 @@ public class WallpaperAdapter extends RecyclerView.Adapter<WallpaperAdapter.View
       newList.add(customWallpaper);
     if (needEmpty)
       newList.add(TGBackground.newEmptyWallpaper(tdlib));
-    newList.addAll(wallpapers);
     boolean isDark = Theme.isDarkTheme(themeId);
+    final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    for (TGBackground w : wallpapers) {
+      // XGram: Telegram's bare pattern library comes with the installed backgrounds; with no colors and no intensity
+      // each one is a plain black square (Telegram Desktop hides them too). With Expressive design a black inverted
+      // pattern also draws plain black, and the surface tile stands for it. A black pattern whose lines show (one
+      // installed from a t.me/bg link) stays and draws as itself. The stored one still shows through replaceWallpapers.
+      if (xgramM3 ? com.fahadali.xgram.appearance.XgramWallpaperDraw.drawsPlainBlack(w) : (w.isColorlessPattern() && w.getPatternIntensity() == 0f))
+        continue;
+      if (xgramM3) {
+        // Official Telegram hides the dark-theme (inverted) patterns in a light theme
+        if (!isDark && w.isPatternInverted())
+          continue;
+        // No duplicate tiles: the server can list the same background twice
+        boolean duplicate = false;
+        for (TGBackground existing : newList) {
+          if (TGBackground.compare(existing, w)) {
+            duplicate = true;
+            break;
+          }
+        }
+        if (duplicate)
+          continue;
+      }
+      newList.add(w);
+    }
     int[] legacyWallpaperIds = TGBackground.getLegacyWallpaperIds();
     newList.ensureCapacity(newList.size() + legacyWallpaperIds.length);
     for (int legacyWallpaperId : legacyWallpaperIds) {
@@ -290,7 +349,8 @@ public class WallpaperAdapter extends RecyclerView.Adapter<WallpaperAdapter.View
       TGBackground check;
       while (checkIndex >= 0) {
         check = newList.get(checkIndex--);
-        if (check.isFillSolid() && check.getBackgroundColor() == color) {
+        // XGram: getBackgroundColor() is opaque ARGB and the presets are RGB, so compare the RGB (no duplicate tiles)
+        if (check.isFillSolid() && (xgramM3 ? (check.getBackgroundColor() & 0xFFFFFF) == color : check.getBackgroundColor() == color)) {
           found = true;
           break;
         }
@@ -315,6 +375,22 @@ public class WallpaperAdapter extends RecyclerView.Adapter<WallpaperAdapter.View
   private void replaceWallpapers (ArrayList<TGBackground> wallpapers) {
     int oldItemCount = getItemCount();
     this.wallpapers = wallpapers;
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: one surface tile; the empty and default tiles sort first, so the first one stays
+      boolean surfaceSeen = false;
+      for (int i = 0; i < wallpapers.size(); ) {
+        if (xgramIsSurface(wallpapers.get(i))) {
+          if (surfaceSeen) {
+            wallpapers.remove(i);
+            continue;
+          }
+          surfaceSeen = true;
+        }
+        i++;
+      }
+    }
+    this.lastFoundIndex = -1; // XGram: the cached index belongs to the old list
+    xgramFindSurface();
     this.selectedWallpaper = context.tdlib().settings().getWallpaper(Theme.getWallpaperIdentifier());
     int index = indexOfWallpaper(selectedWallpaper);
     if (index == -1) {
@@ -327,6 +403,8 @@ public class WallpaperAdapter extends RecyclerView.Adapter<WallpaperAdapter.View
         index++;
       }
       wallpapers.add(index, selectedWallpaper);
+      this.lastFoundIndex = -1;
+      xgramFindSurface(); // the insertion can move the surface tile
     }
     U.notifyItemsReplaced(this, oldItemCount);
     centerWallpapers(false, index);
@@ -421,7 +499,8 @@ public class WallpaperAdapter extends RecyclerView.Adapter<WallpaperAdapter.View
       case TYPE_WALLPAPER: {
         if (wallpapers != null) {
           TGBackground wallpaper = wallpapers.get(position);
-          ((WallpaperView) holder.itemView).setWallpaper(wallpaper, TGBackground.compare(wallpaper, selectedWallpaper));
+          // XGram: the surface tile is selected for any background the chat draws as its plain surface
+          ((WallpaperView) holder.itemView).setWallpaper(wallpaper, xgramSameTile(wallpaper, selectedWallpaper), xgramIsSurface(wallpaper));
         }
         break;
       }
@@ -469,6 +548,7 @@ public class WallpaperAdapter extends RecyclerView.Adapter<WallpaperAdapter.View
     if (wallpapers != null && !wallpapers.isEmpty() && wallpaper != null && wallpaper.isCustom() && !TGBackground.compare(wallpapers.get(0), wallpaper)) {
       TGBackground oldWallpaper = wallpapers.get(0);
       wallpapers.set(0, wallpaper);
+      xgramFindSurface();
       int i = indexOfWallpaper(wallpaper);
       if (i != -1) {
         int foundCount = 0;
@@ -525,7 +605,14 @@ public class WallpaperAdapter extends RecyclerView.Adapter<WallpaperAdapter.View
     private final android.graphics.RectF xgramRect = new android.graphics.RectF();
     private final Paint xgramStroke = new Paint(Paint.ANTI_ALIAS_FLAG);
     private int xgramClipWidth, xgramClipHeight;
-    private static android.text.TextPaint xgramLabelPaint;
+    private android.text.TextPaint xgramLabelPaint;
+    private android.text.StaticLayout xgramLabelLayout;
+    private String xgramLabelText;
+    private android.graphics.Typeface xgramLabelTypeface;
+    private int xgramLabelWidth, xgramLabelBand, xgramLabelIconBlock;
+    private boolean xgramLabelShowIcon;
+    private float xgramLabelSize;
+    private boolean xgramSurface;
 
     private void xgramBuildShape (int width, int height) {
       if (xgramClipWidth == width && xgramClipHeight == height) {
@@ -543,19 +630,113 @@ public class WallpaperAdapter extends RecyclerView.Adapter<WallpaperAdapter.View
       final int width = getMeasuredWidth(), height = getMeasuredHeight();
       c.drawColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGHEST));
       final int content = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+      xgramDrawIconLabel(c, R.drawable.baseline_image_24, Lang.getString(R.string.Gallery), content);
+    }
+
+    /**
+     * XGram M3E: the surface tile, the chat's plain surface (no wallpaper, the theme's own default, Telegram's black
+     * library patterns): the surface color the chat draws, a 1dp outlineVariant edge so it still reads as a tile on
+     * a strip of the same color (black with Pure black), and what it is: "Pure black" with a moon, or "No wallpaper".
+     */
+    private void xgramDrawSurface (Canvas c) {
+      final int width = getMeasuredWidth(), height = getMeasuredHeight();
+      c.drawColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE));
+      final float stroke = Screen.dp(1f);
+      xgramStroke.setStyle(Paint.Style.STROKE);
+      xgramStroke.setStrokeWidth(stroke);
+      xgramStroke.setColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.OUTLINE_VARIANT));
+      xgramRect.set(stroke / 2f, stroke / 2f, width - stroke / 2f, height - stroke / 2f);
+      final float radius = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L) - stroke / 2f;
+      c.drawRoundRect(xgramRect, radius, radius, xgramStroke);
+      final boolean pureBlack = com.fahadali.xgram.appearance.XgramAmoled.isActive();
+      final int content = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+      xgramDrawIconLabel(c, pureBlack ? R.drawable.baseline_brightness_2_24 : R.drawable.baseline_block_24, Lang.getString(pureBlack ? R.string.XgramPureBlack : R.string.XgramWallpaperNone), content);
+    }
+
+    /**
+     * The label centred in {@code width}, ellipsized, fitted in the {@code band} together with the icon above it
+     * ({@code iconBlock} tall): two lines with the icon, then two lines without it, and only then one ellipsized
+     * line (with the icon when it still fits), so the icon goes before the text is cut. Whether the icon shows is
+     * left in {@link #xgramLabelShowIcon}. Cached, so it is rebuilt only when the text, the sizes or the font change.
+     */
+    private android.text.StaticLayout xgramLabelLayout (String text, int width, int band, int iconBlock, android.graphics.Typeface typeface, float textSize) {
+      if (xgramLabelLayout != null && xgramLabelWidth == width && xgramLabelBand == band && xgramLabelIconBlock == iconBlock && xgramLabelSize == textSize && xgramLabelTypeface == typeface && text.equals(xgramLabelText)) {
+        return xgramLabelLayout;
+      }
+      final android.text.StaticLayout two = xgramBuildLabel(text, width, 2);
+      android.text.StaticLayout layout;
+      final boolean showIcon;
+      if (two.getHeight() <= band - iconBlock) {
+        layout = two;
+        showIcon = true;
+      } else if (two.getHeight() <= band) {
+        layout = two;
+        showIcon = false;
+      } else {
+        layout = xgramBuildLabel(text, width, 1);
+        showIcon = iconBlock + layout.getHeight() <= band;
+      }
+      xgramLabelLayout = layout;
+      xgramLabelShowIcon = showIcon;
+      xgramLabelText = text;
+      xgramLabelWidth = width;
+      xgramLabelBand = band;
+      xgramLabelIconBlock = iconBlock;
+      xgramLabelSize = textSize;
+      xgramLabelTypeface = typeface;
+      return layout;
+    }
+
+    private android.text.StaticLayout xgramBuildLabel (String text, int width, int maxLines) {
+      final android.text.StaticLayout layout;
+      if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+        layout = android.text.StaticLayout.Builder.obtain(text, 0, text.length(), xgramLabelPaint, width)
+          .setAlignment(android.text.Layout.Alignment.ALIGN_CENTER)
+          .setTextDirection(android.text.TextDirectionHeuristics.FIRSTSTRONG_LTR)
+          .setIncludePad(false)
+          .setMaxLines(maxLines)
+          .setEllipsize(android.text.TextUtils.TruncateAt.END)
+          .build();
+      } else {
+        // No line limit before Android 6: one ellipsized line
+        final CharSequence line = android.text.TextUtils.ellipsize(text, xgramLabelPaint, width, android.text.TextUtils.TruncateAt.END);
+        //noinspection deprecation
+        layout = new android.text.StaticLayout(line, xgramLabelPaint, width, android.text.Layout.Alignment.ALIGN_CENTER, 1f, 0f, false);
+      }
+      return layout;
+    }
+
+    /**
+     * A 24dp icon over a labelMedium label (sp, so it follows the font size), centred in the tile but kept between
+     * the check badge (8dp inset, 24dp) and 12dp above the bottom: a long or large label takes two lines, and the
+     * icon goes before the text is cut to one line, so the text never overlaps the badge and is cut only last.
+     */
+    private void xgramDrawIconLabel (Canvas c, int iconRes, String text, int color) {
+      final int width = getMeasuredWidth(), height = getMeasuredHeight();
       if (xgramLabelPaint == null) {
         xgramLabelPaint = new android.text.TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
-        xgramLabelPaint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M, false));
-        xgramLabelPaint.setTextAlign(Paint.Align.CENTER);
       }
-      xgramLabelPaint.setTextSize(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M)));
-      xgramLabelPaint.setColor(content);
-      final Drawable icon = getSparseDrawable(R.drawable.baseline_image_24, 0);
-      final float labelHeight = -xgramLabelPaint.ascent() + xgramLabelPaint.descent();
-      final float gap = Screen.dp(8f);
-      final float top = (height - (icon.getMinimumHeight() + gap + labelHeight)) / 2f;
-      Drawables.draw(c, icon, width / 2f - icon.getMinimumWidth() / 2f, top, Paints.getPorterDuffPaint(content));
-      c.drawText(Lang.getString(R.string.Gallery), width / 2f, top + icon.getMinimumHeight() + gap - xgramLabelPaint.ascent(), xgramLabelPaint);
+      final android.graphics.Typeface typeface = com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M, false);
+      final float textSize = Screen.sp(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M));
+      xgramLabelPaint.setTypeface(typeface);
+      xgramLabelPaint.setTextSize(textSize);
+      xgramLabelPaint.setColor(color);
+      final int available = Math.max(1, width - Screen.dp(16f));
+      final float bandTop = Screen.dp(40f), bandBottom = height - Screen.dp(12f);
+      final Drawable icon = getSparseDrawable(iconRes, 0);
+      final float iconBlock = icon.getMinimumHeight() + Screen.dp(8f);
+      final android.text.StaticLayout layout = xgramLabelLayout(text, available, (int) (bandBottom - bandTop), (int) iconBlock, typeface, textSize);
+      final boolean showIcon = xgramLabelShowIcon;
+      final float block = (showIcon ? iconBlock : 0f) + layout.getHeight();
+      float top = Math.max(bandTop, Math.min((height - block) / 2f, bandBottom - block));
+      if (showIcon) {
+        Drawables.draw(c, icon, width / 2f - icon.getMinimumWidth() / 2f, top, Paints.getPorterDuffPaint(color));
+        top += iconBlock;
+      }
+      c.save();
+      c.translate((width - available) / 2f, top);
+      layout.draw(c);
+      c.restore();
     }
 
     private void xgramDrawSelection (Canvas c, float factor) {
@@ -596,8 +777,18 @@ public class WallpaperAdapter extends RecyclerView.Adapter<WallpaperAdapter.View
     private TGBackground wallpaper;
 
     public void setWallpaper (TGBackground wallpaper, boolean isSelected) {
+      setWallpaper(wallpaper, isSelected, false);
+    }
+
+    /** @param surface XGram M3E: drawn as the surface tile ({@link #xgramDrawSurface}), so nothing is loaded */
+    public void setWallpaper (TGBackground wallpaper, boolean isSelected, boolean surface) {
       this.wallpaper = wallpaper;
-      if (wallpaper != null) {
+      this.xgramSurface = surface;
+      if (xgramM3) {
+        // The labelled tiles say what they are to TalkBack too
+        setContentDescription(surface ? Lang.getString(com.fahadali.xgram.appearance.XgramAmoled.isActive() ? R.string.XgramPureBlack : R.string.XgramWallpaperNone) : wallpaper != null && wallpaper.isCustom() ? Lang.getString(R.string.Gallery) : null);
+      }
+      if (wallpaper != null && !surface) {
         if (wallpaper.isPattern()) {
           int color = wallpaper.getPatternColor();
           receiver.setPorterDuffColorFilter(color);
@@ -616,6 +807,7 @@ public class WallpaperAdapter extends RecyclerView.Adapter<WallpaperAdapter.View
 
     public void replaceWallpaper (TGBackground wallpaper) {
       this.wallpaper = wallpaper;
+      this.xgramSurface = false; // only the gallery tile is replaced
       preview.requestFile(wallpaper.getPreview(true));
       receiver.requestFile(wallpaper.getPreview(false));
     }
@@ -695,6 +887,8 @@ public class WallpaperAdapter extends RecyclerView.Adapter<WallpaperAdapter.View
         c.clipPath(xgramClip);
         if (wallpaper != null && wallpaper.isCustom()) {
           xgramDrawGallery(c);
+        } else if (xgramSurface) {
+          xgramDrawSurface(c);
         } else {
           drawContent(c, true);
         }
@@ -705,9 +899,40 @@ public class WallpaperAdapter extends RecyclerView.Adapter<WallpaperAdapter.View
       drawContent(c, false);
     }
 
+    /**
+     * XGram M3E: a pattern tile drawn as the chat draws it. A dark-theme (inverted) pattern is black with its colors
+     * showing through the lines, and the M3E placeholder until its pattern loads (black alone would look empty).
+     */
+    private void xgramDrawPattern (Canvas c) {
+      final int width = getMeasuredWidth(), height = getMeasuredHeight();
+      if (com.fahadali.xgram.appearance.XgramWallpaperDraw.drawsInverted(wallpaper, Theme.isDark())) {
+        if (!receiver.isLoaded()) {
+          com.fahadali.xgram.appearance.XgramWallpaperDraw.drawLoading(c, this, 0, 0, width, height);
+        } else {
+          com.fahadali.xgram.appearance.XgramWallpaperDraw.drawInverted(c, 0, 0, width, height, 1f, receiver, cache, wallpaper);
+        }
+        return;
+      }
+      com.fahadali.xgram.appearance.XgramWallpaperDraw.drawFill(c, cache, 0, 0, width, height, wallpaper, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE), 1f);
+      receiver.setPorterDuffColorFilter(wallpaper.getPatternColor()); // every draw: the inverted path leaves it white
+      final float alpha = wallpaper.getPatternIntensity();
+      if (alpha != 1f) {
+        receiver.setPaintAlpha(alpha * receiver.getPaintAlpha());
+      }
+      receiver.draw(c);
+      if (alpha != 1f) {
+        receiver.restorePaintAlpha();
+      }
+    }
+
     private void drawContent (Canvas c, boolean xgramM3) {
       if (wallpaper == null || wallpaper.isEmpty()) {
         c.drawColor(xgramM3 ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE) : Theme.backgroundColor());
+      } else if (xgramM3 && wallpaper.isFill()) {
+        // XGram: the chat's own fill (a freeform gradient over its base color), so the tile is what the chat shows
+        com.fahadali.xgram.appearance.XgramWallpaperDraw.drawFill(c, cache, 0, 0, getMeasuredWidth(), getMeasuredHeight(), wallpaper, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE), 1f);
+      } else if (xgramM3 && wallpaper.isPattern()) {
+        xgramDrawPattern(c);
       } else if (wallpaper.isFillSolid()) {
         c.drawColor(wallpaper.getBackgroundColor());
       } else if (wallpaper.isFillGradient()) {
@@ -733,7 +958,11 @@ public class WallpaperAdapter extends RecyclerView.Adapter<WallpaperAdapter.View
       } else {
         if (receiver.needPlaceholder()) {
           if (preview.needPlaceholder()) {
-            preview.drawPlaceholder(c);
+            if (xgramM3) {
+              com.fahadali.xgram.appearance.XgramWallpaperDraw.drawLoading(c, this, 0, 0, getMeasuredWidth(), getMeasuredHeight()); // XGram M3E: never a flat or black square
+            } else {
+              preview.drawPlaceholder(c);
+            }
           }
           preview.draw(c);
         }

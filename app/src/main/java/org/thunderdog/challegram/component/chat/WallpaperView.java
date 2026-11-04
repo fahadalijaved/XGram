@@ -55,6 +55,11 @@ public class WallpaperView extends View implements ThemeChangeListener, ChatStyl
   TGBackground wallpaper, previewWallpaper;
 
   private boolean inSetupMode, inSelfBlurMode, selfBlurValue;
+  /**
+   * XGram: a background preview (a background link or the blur preview) shows the background exactly as it is. The
+   * wallpaper picker's preview does not: it shows what the chat will, solid surface included.
+   */
+  private boolean xgramAsIs;
 
   public WallpaperView (Context context, MessagesManager manager, Tdlib tdlib) {
     super(context);
@@ -74,6 +79,7 @@ public class WallpaperView extends View implements ThemeChangeListener, ChatStyl
 
   public void initWithCustomWallpaper (TGBackground wallpaper) {
     this.inSetupMode = true;
+    this.xgramAsIs = true;
     preview = new DoubleImageReceiver(this, 0);
     setWallpaper(wallpaper, false);
   }
@@ -112,11 +118,13 @@ public class WallpaperView extends View implements ThemeChangeListener, ChatStyl
           return;
         }
         this.previewWallpaper = wallpaper;
+        xgramUpdateLayer();
         preview.setAnimationDisabled(inSetupMode);
         requestFiles(preview, wallpaper);
         animateChange();
       } else {
         this.wallpaper = wallpaper;
+        xgramUpdateLayer();
         requestFiles(receiver, wallpaper);
         if (manager.useBubbles() && manager.getAdapter() != null) {
           manager.getAdapter().invalidateAllMessages();
@@ -256,6 +264,7 @@ public class WallpaperView extends View implements ThemeChangeListener, ChatStyl
     if (finalFactor == 1f) {
       wallpaper = previewWallpaper;
       previewWallpaper = null;
+      xgramUpdateLayer();
 
       DoubleImageReceiver tempReceiver = receiver;
       receiver = preview;
@@ -306,6 +315,14 @@ public class WallpaperView extends View implements ThemeChangeListener, ChatStyl
     } else if (wallpaper.isFillFreeformGradient()) {
       c.drawColor(ColorUtils.alphaColor(alpha, wallpaper.getBackgroundColor(defaultColor)));
       DrawAlgorithms.drawMulticolorGradient(c, gradientCache, receiver.getLeft(), receiver.getTop(), receiver.getRight(), receiver.getBottom(), wallpaper.getFreeformColors(), alpha);
+    } else if (wallpaper.isPattern() && com.fahadali.xgram.appearance.XgramWallpaperDraw.drawsInverted(wallpaper, theme.isDark())) {
+      // XGram M3E: a dark-theme pattern as official Telegram draws it: black, its colors only through the pattern's
+      // lines (as its picker tile shows it); the surface placeholder until the pattern loads
+      if (!receiver.getImageReceiver().isLoaded()) {
+        c.drawColor(ColorUtils.alphaColor(alpha, defaultColor));
+      } else {
+        com.fahadali.xgram.appearance.XgramWallpaperDraw.drawInverted(c, receiver.getLeft(), receiver.getTop(), receiver.getRight(), receiver.getBottom(), alpha, receiver.getReceiver(), gradientCache, wallpaper);
+      }
     } else if (wallpaper.isPattern()) {
       if (wallpaper.isPatternBackgroundGradient()) {
         DrawAlgorithms.drawGradient(c, gradientCache, receiver.getLeft(), receiver.getTop(), receiver.getRight(), receiver.getBottom(), wallpaper.getTopColor(), wallpaper.getBottomColor(), wallpaper.getRotationAngle(), alpha);
@@ -386,11 +403,12 @@ public class WallpaperView extends View implements ThemeChangeListener, ChatStyl
   }
 
   /**
-   * XGram: Material 3 Expressive replaces the theme's own wallpaper (none, the built-in cats or the theme default) with
-   * a solid surface, like Google Messages. A wallpaper the user picked still draws; previews always draw.
+   * XGram: Material 3 Expressive replaces the theme's own wallpaper (none, the theme default or one of Telegram's
+   * colorless library patterns) with a solid surface, like Google Messages. A wallpaper the user picked still draws.
+   * The wallpaper picker's preview shows the same; only background previews ({@link #xgramAsIs}) always draw.
    */
   private boolean xgramSolidSurface () {
-    if (inSetupMode || !com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+    if (xgramAsIs || !com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
       return false;
     }
     if (isAnimatingChanges() && !xgramCovered(previewWallpaper)) {
@@ -401,45 +419,63 @@ public class WallpaperView extends View implements ThemeChangeListener, ChatStyl
 
   /**
    * XGram: Expressive design draws {@code background} as the solid surface: the theme's own wallpaper
-   * ({@link #xgramIsDefault}) and, with Pure black, every color background ({@link #xgramPureBlack}). Never in the
-   * wallpaper picker or a wallpaper preview (setup mode), which show the real colors. Cheap, allocation free.
+   * ({@link #xgramIsDefault}), black with Pure black ({@link #xgramPureBlack}). The wallpaper picker's preview and
+   * its surface tile agree with this; only background previews ({@link #xgramAsIs}) show the real thing. Cheap,
+   * allocation free.
    */
   private boolean xgramCovered (@Nullable TGBackground background) {
-    if (inSetupMode || !com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+    if (xgramAsIs || !com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
       return false;
     }
     return xgramIsDefault(background) || xgramPureBlack(background);
   }
 
   /**
-   * XGram: Pure black is drawing (on, and the theme is dark) and {@code background} is empty, a fill, a pattern or the
-   * theme's default: the chat is then the black surface, so nothing grey or tinted shows around the bubbles. Photo
-   * and custom (gallery) backgrounds still draw as picked.
+   * XGram: Pure black is drawing (on, and the theme is dark) and {@code background} is no wallpaper, the theme's
+   * default or a colorless library pattern: the chat is then the black surface. A color, pattern or photo background
+   * the user picked draws as picked, as its picker tile shows it; the picker's "Pure black" tile is the black one.
    */
   private boolean xgramPureBlack (@Nullable TGBackground background) {
-    if (inSetupMode || !com.fahadali.xgram.appearance.XgramAmoled.isActive()) {
+    if (xgramAsIs || !com.fahadali.xgram.appearance.XgramAmoled.isActive()) {
       return false;
     }
-    if (background == null || background.isEmpty() || background.isFill() || background.isPattern()) {
+    if (background == null || background.isEmpty() || com.fahadali.xgram.appearance.XgramWallpaperDraw.drawsPlainBlack(background)) {
       return true;
     }
     return xgramIsDefault(background);
   }
 
   /**
-   * XGram: the background is the theme's own (none, the legacy built-in cats every Telegram X theme defaults to, or
-   * the theme's default wallpaper), not one the user picked. The default's name is compared without its parameters
-   * ("slug?intensity=..", how themes store it) on both sides. Other legacy wallpapers are photos the user picks from
-   * the picker, so they still draw.
+   * XGram: the background is the theme's own (none, or the theme's default wallpaper: the cats a built-in Telegram X
+   * theme defaults to), or one of Telegram's colorless library patterns (a plain black square), not one the user
+   * picked. The default's name is compared without its parameters ("slug?intensity=..", how themes store it) on both
+   * sides. Other cats and legacy wallpapers are photos the user picks from the picker, so they draw.
    */
   private static boolean xgramIsDefault (@Nullable TGBackground background) {
-    if (background == null || background.isEmpty() || background.isBuiltIn() || background.isCat()) {
+    if (background == null || background.isEmpty() || com.fahadali.xgram.appearance.XgramWallpaperDraw.drawsPlainBlack(background)) {
       return true;
     }
     if (background.isCustom()) {
       return false;
     }
     return org.thunderdog.challegram.telegram.TdlibWallpaperManager.isSameWallpaperName(background.getName(), Theme.getDefaultWallpaper());
+  }
+
+  /**
+   * XGram M3E: an inverted pattern composites through two offscreen layers (XgramWallpaperDraw.drawInverted). A
+   * hardware layer renders that once per change instead of on every frame the chat scrolls; any other background
+   * goes back to no layer, so no texture is kept for it. Expressive off never gets here with an inverted pattern.
+   */
+  private void xgramUpdateLayer () {
+    final boolean need = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && (xgramMayDrawInverted(wallpaper) || xgramMayDrawInverted(previewWallpaper));
+    final int layerType = need ? LAYER_TYPE_HARDWARE : LAYER_TYPE_NONE;
+    if (getLayerType() != layerType) {
+      setLayerType(layerType, null);
+    }
+  }
+
+  private static boolean xgramMayDrawInverted (@Nullable TGBackground background) {
+    return background != null && background.isPatternInverted() && !background.isColorlessPattern();
   }
 
   /** XGram: one wallpaper layer, or the solid surface in its place when Expressive design covers it. */

@@ -89,35 +89,6 @@ public final class XgramR5Chat {
     return text;
   }
 
-  // Wallpaper picker
-
-  /**
-   * The note above the wallpaper picker while Pure black draws (on, and the theme is dark): bodySmall in
-   * onSurfaceVariant on the picker's surface, 16dp from the sides. The picker itself shows the real colors; the chat
-   * then shows color backgrounds as black. Null when Pure black does not draw.
-   */
-  @Nullable
-  public static TextView newPureBlackNote (@NonNull Context context, @Nullable ViewController<?> themeProvider) {
-    if (!on() || !XgramAmoled.isActive()) {
-      return null;
-    }
-    TextView note = new TextView(context);
-    XgramExpressive.applyText(note, XgramExpressive.TS_BODY_S, false);
-    note.setTextColor(XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT));
-    if (themeProvider != null) {
-      themeProvider.addThemeTextColorListener(note, ColorId.textLight); // onSurfaceVariant
-    }
-    note.setText(Lang.getString(R.string.XgramR5ChatPureBlackNote));
-    // Aligned by the app language (the root's layout direction is always LTR)
-    note.setGravity(Lang.gravity(Gravity.CENTER_VERTICAL));
-    note.setTextAlignment(View.TEXT_ALIGNMENT_GRAVITY);
-    int side = Screen.dp(16f);
-    note.setPadding(side, Screen.dp(8f), side, Screen.dp(4f));
-    ViewSupport.setThemedBackground(note, ColorId.drawer, themeProvider); // the picker's sheet color
-    note.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-    return note;
-  }
-
   // Text size and Chat look (PREVIEW_MODE_FONT_SIZE)
 
   /**
