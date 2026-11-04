@@ -1410,6 +1410,10 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
       shareHeader = preview != null && right.shareCustomHeaderView() && !right.inTransformMode() && !left.inTransformMode();
       translationMode = shareHeader || !right.useHeaderTranslation() ? MODE_NONE : translationMode;
     }
+    // XGram M3E: back from a profile opened from its chat. Telegram X morphs the chat's header in its place, which grows
+    // the avatar into a full-width photo (Expressive keeps the profile's avatar round): the profile's own header shrinks
+    // instead and the chat's header takes over once the transition is done, the mirror of the way in.
+    xgramShareBack = shareHeader && !forward && XgramExpressive.isEnabled();
 
     boolean previewIsText;
 
@@ -1437,7 +1441,7 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
       }
     }
 
-    if (shareHeader) {
+    if (shareHeader && !xgramShareBack) { // XGram: kept on screen back from a profile (see xgramShareBack)
       title.setVisibility(View.GONE);
     }
 
@@ -1566,6 +1570,7 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
 
   private int translationMode;
   private boolean shareHeader;
+  private boolean xgramShareBack; // XGram M3E: shareHeader going back, the closing page's own header morphs (see genPreview)
   private boolean translateForward;
   private boolean useBackFade;
   private float fromBackButtonFactor, toBackButtonFactor;
@@ -1699,6 +1704,15 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
         title.setAlpha(xgramOutAlpha(raptor) * xgramTextAlpha(title, baseItem));
         preview.setAlpha(xgramInAlpha(raptor) * xgramTextAlpha(preview, previewItem));
 
+        break;
+      }
+      case MODE_NONE: {
+        if (xgramShareBack) {
+          // XGram M3E: the profile's header (its round avatar) shrinks to the bar, the chat's header shows at the end
+          final boolean done = raptor >= 1f;
+          title.setAlpha(done ? 0f : 1f);
+          preview.setAlpha(done ? 1f : 0f);
+        }
         break;
       }
     }
@@ -1857,6 +1871,13 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
       tempView = textTitle;
       textTitle = textPreview;
       textPreview = (TextView) tempView;
+    }
+    if (xgramShareBack) {
+      title.setAlpha(1f); // XGram: the chat's header, even if the last frame stopped short of the end
+      if (preview != null) {
+        preview.setAlpha(1f); // the closing page's header leaves as it came (hidden by the last frame)
+      }
+      xgramShareBack = false;
     }
 
     if (current != null) {
@@ -2494,7 +2515,7 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
         break;
       }
       case MODE_NONE: {
-        preview.setAlpha(xgramTextAlpha(preview, previewItem));
+        preview.setAlpha(xgramShareBack ? 0f : xgramTextAlpha(preview, previewItem)); // XGram: see xgramShareBack
         axisShift = 0f;
 
         break;
@@ -2853,6 +2874,10 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
     }
     title.setAlpha(xgramTextAlpha(title, stack.getCurrent()));
     title.setTranslationX(0f);
+    if (xgramShareBack) {
+      preview.setAlpha(1f); // XGram: the chat's header goes back to its chat as Telegram X leaves it (shown)
+      xgramShareBack = false;
+    }
     removeView(preview);
     removeView(menuPreview);
     ViewController<?> current = stack.getCurrent();

@@ -80,6 +80,11 @@ public class ChatHeaderView extends ComplexHeaderView {
 
   @Override
   public void setScaleFactor (float scaleFactor, float fromFactor, float toScaleFactor, boolean byScroll) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: a chat's app bar stays the bar. Telegram X stretches it with the header between a chat and a profile,
+      // its avatar growing into a full-width photo, but the Expressive profile keeps a round avatar (not centred here).
+      scaleFactor = fromFactor = toScaleFactor = 0f;
+    }
     if (this.scaleFactor != scaleFactor) {
       boolean layout = this.scaleFactor == 0f || scaleFactor == 0f;
       super.setScaleFactor(scaleFactor, fromFactor, toScaleFactor, byScroll);
