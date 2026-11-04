@@ -724,6 +724,12 @@ public final class XgramMotion {
     return link != null ? link.lift : 0f;
   }
 
+  /** Where the lift of {@code c} is going: 0 once the list is at its top, 1 as soon as it has left it. */
+  public static float liftTargetOf (@Nullable ViewController<?> c) {
+    ScrollLink link = linkOf(c);
+    return link != null ? link.liftSpring.getTarget() : 0f;
+  }
+
   public static float collapseOf (@Nullable ViewController<?> c) {
     ScrollLink link = linkOf(c);
     return link != null ? link.collapse : 0f;

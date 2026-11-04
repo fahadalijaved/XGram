@@ -612,6 +612,53 @@ public class OverlayButtonWrap extends FrameLayoutFix implements View.OnClickLis
     return Screen.dp(xgramFabMargin);
   }
 
+  /** How far the FAB and its menu column are moved down from their place, in px (they follow a floating toolbar). */
+  private float xgramContentOffsetY;
+
+  /**
+   * Moves the FAB and its menu items down by {@code y} px together, as one unit (the chat list's FAB following the
+   * floating navigation toolbar). The wrap itself stays in place: its translationY is the snackbars' lift, and it still
+   * covers the screen for a tap that closes the open menu. Expressive design only.
+   */
+  public void xgramSetContentOffsetY (float y) {
+    if (!xgram || xgramContentOffsetY == y) {
+      return;
+    }
+    xgramContentOffsetY = y;
+    for (int i = 0; i < getChildCount(); i++) {
+      View view = getChildAt(i);
+      if (view != null) {
+        view.setTranslationY(y);
+      }
+    }
+  }
+
+  public float xgramContentOffsetY () {
+    return xgramContentOffsetY;
+  }
+
+  private final int[] xgramLocation = new int[2];
+
+  /**
+   * The main FAB's container where it is on screen now, in window coordinates, into {@code out}: its follow offset,
+   * the snackbars' lift and its show and hide scale included. Returns its corner radius in px, or -1 when it is not
+   * showing. Expressive design only.
+   */
+  public float xgramFabInWindow (@NonNull android.graphics.RectF out) {
+    if (!xgram || mainButton == null || mainButton.getAlpha() <= 0f || !mainButton.isShown()) {
+      return -1f;
+    }
+    final float radius = mainButton.xgramFabContainer(out);
+    if (radius < 0f) {
+      return -1f;
+    }
+    // Where its top left corner is with every translation and its scale (around its pivot) applied
+    mainButton.getLocationInWindow(xgramLocation);
+    final float sx = mainButton.getScaleX(), sy = mainButton.getScaleY();
+    out.set(xgramLocation[0] + out.left * sx, xgramLocation[1] + out.top * sy, xgramLocation[0] + out.right * sx, xgramLocation[1] + out.bottom * sy);
+    return radius * Math.min(sx, sy);
+  }
+
   private int xgramGravity () {
     return Lang.rtl() ? Gravity.LEFT | Gravity.BOTTOM : Gravity.RIGHT | Gravity.BOTTOM;
   }
@@ -627,6 +674,7 @@ public class OverlayButtonWrap extends FrameLayoutFix implements View.OnClickLis
     button.setId(id);
     button.setOnClickListener(this);
     button.setLayoutParams(params);
+    button.setTranslationY(xgramContentOffsetY);
     parent.addThemeInvalidateListener(button);
 
     addView(mainButton = button);
@@ -641,6 +689,7 @@ public class OverlayButtonWrap extends FrameLayoutFix implements View.OnClickLis
     item.setOnClickListener(this);
     item.setEnabled(false);
     item.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(XgramFabMenuItemView.HEIGHT), xgramGravity()));
+    item.setTranslationY(xgramContentOffsetY);
     parent.addThemeInvalidateListener(item);
     index = Math.min(index, xgramItems.size());
     xgramItems.add(index, item);

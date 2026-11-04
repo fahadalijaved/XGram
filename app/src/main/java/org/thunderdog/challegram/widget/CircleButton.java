@@ -670,6 +670,19 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
     return e > 0f ? size + (Math.max(size, xgramExtendedDp()) - size) * e : size;
   }
 
+  /**
+   * XGram M3E: the FAB's container as drawn now (narrower than the view while it shrinks from extended, smaller as its
+   * menu opens), in this view's coordinates, into {@code out}. Returns its corner radius in px, or -1 when this is not
+   * an Expressive FAB or not laid out yet.
+   */
+  public float xgramFabContainer (@NonNull android.graphics.RectF out) {
+    if (xgramMorph == null || !xgramFab) {
+      return -1f;
+    }
+    xgramMorph.getPath().computeBounds(out, true);
+    return out.isEmpty() ? -1f : xgramMorph.cornerPx();
+  }
+
   private void xgramApplyShape () {
     if (xgramMorph == null || !xgramFab) {
       return;

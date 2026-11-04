@@ -22,6 +22,7 @@ import android.graphics.Path;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.RectF;
+import android.graphics.Region;
 import android.graphics.Shader;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
@@ -230,7 +231,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
   /** Shrunk to its icons: every tab's width and the pill's (the padding and the tabs). */
   private float fitUC, fitWC;
   private final XgramExpressive.Spring widthSpring, leftSpring;
-  private int notifiedEndInset = Integer.MIN_VALUE;
+  private int notifiedEndInset = Integer.MIN_VALUE, notifiedCompactEndInset = Integer.MIN_VALUE;
 
   // State
   private boolean shown, destroyed;
@@ -245,6 +246,11 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
 
   // Hiding (8.5): 0 = on screen, 1 = slid below the window
   private final XgramExpressive.Spring hideSpring;
+  /**
+   * The chat list's compose button at the side follows the bar's scroll hiding only (Hide): 0 = on screen, 1 = slid
+   * away, in step with hideSpring. Not its forced steps aside (search, selection, the FAB's own menu, the keyboard).
+   */
+  private final XgramExpressive.Spring scrollAwaySpring;
   private boolean scrollHidden;
   private int forceMask;
   // What scrolling down does (XgramSettings.NAV_SCROLL_*): Hide slides it away (hideSpring); Shrink and Collapse make
@@ -401,9 +407,13 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     this.leftSpring = new XgramExpressive.Spring(XgramExpressive.SPATIAL_DEFAULT, 0f, (s, value) -> layoutGroup()).setThreshold(.5f);
     this.hideSpring = new XgramExpressive.Spring(XgramExpressive.SPATIAL_DEFAULT, 0f, (s, value) -> applyHide()).setThreshold(.002f);
     this.hideSpring.setEndListener(this::applyHide);
+    this.scrollAwaySpring = new XgramExpressive.Spring(XgramExpressive.SPATIAL_DEFAULT, 0f, (s, value) -> notifyFabFollow()).setThreshold(.002f);
     this.menuBadgeSpring = new XgramExpressive.Spring(XgramExpressive.EFFECTS_DEFAULT, 0f, (s, value) -> invalidateMenuBadge()).setThreshold(.002f);
     // The refit springs' token: shrinking feels like a change of the tabs (both ways; Reduce motion snaps it)
-    this.compactSpring = new XgramExpressive.Spring(XgramExpressive.SPATIAL_DEFAULT, 0f, (s, value) -> layoutGroup()).setThreshold(.001f);
+    this.compactSpring = new XgramExpressive.Spring(XgramExpressive.SPATIAL_DEFAULT, 0f, (s, value) -> {
+      layoutGroup();
+      notifyFabFollow(); // the compose button at the side moves with the compact bar
+    }).setThreshold(.001f);
     this.compactSpring.setEndListener(this::onCompactSettled);
     this.badges = preview ? null : new XgramNavBadges(badgeCallback);
     if (preview) {
@@ -433,6 +443,16 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
   /** What the lists keep clear: the band too, so their last row ends where it starts. */
   public static int listRoom () {
     return Screen.dp(SCREEN_OFFSET + HEIGHT + BAND_ABOVE);
+  }
+
+  /** The compact bar's centre line above the navigation bar: its bottom stays 16dp above it as it shrinks to 56dp. */
+  public static int compactRowCenterPx () {
+    return Screen.dp(SCREEN_OFFSET + HEIGHT_COMPACT / 2f);
+  }
+
+  /** How much lower the compact bar's top is than the full one's (64dp to 56dp, the bottom kept). */
+  public static int compactDropPx () {
+    return Screen.dp(HEIGHT - HEIGHT_COMPACT);
   }
 
   @Nullable
@@ -632,6 +652,16 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     return inline;
   }
 
+  /** How far scrolling has slid the bar away now (Hide): 0 on screen, 1 gone. Its forced steps aside do not count. */
+  public float scrollAwayNow () {
+    return scrollAwaySpring.getValue();
+  }
+
+  /** How compact scrolling has made the bar now (Shrink, Collapse): 0 full, 1 compact, a little past both in a bounce. */
+  public float compactProgress () {
+    return compactNow();
+  }
+
   /** The chat list's compose button sits on the toolbar's row (no band), or above it. */
   public void setInline (boolean inline) {
     if (this.inline != inline) {
@@ -665,6 +695,60 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     }
     float end = Lang.rtl() ? fitGroupLeft : fitWidth - (fitGroupLeft + fitGroupW);
     return Math.max(0, Math.round(end));
+  }
+
+  /**
+   * groupEndInsetPx() once the bar is fully compact, from the fit (steady while it animates): shrunk, the group stays
+   * centred where it was (Shrink); folded, the pill is the selected tab's width at the start edge and the profile
+   * button has faded out (Collapse). Right to left mirrors both, as groupEndInsetPx does.
+   */
+  public int compactEndInsetPx () {
+    if (fitWidth <= 0) {
+      return groupEndInsetPx();
+    }
+    if (foldsIntoTabWhenCompact()) {
+      final float pillW = 2f * Screen.dpf(PAD) + tabs[selectedIndex].s;
+      return Math.max(0, Math.round(fitWidth - Screen.dpf(SCREEN_OFFSET) - pillW));
+    }
+    final float fullW = fitW + (buttonMode ? Screen.dpf(BUTTON + BUTTON_GAP) : 0f);
+    final float compactW = fitWC + (buttonMode ? Screen.dpf(BUTTON_COMPACT + BUTTON_GAP) : 0f);
+    return groupEndInsetPx() + Math.max(0, Math.round((fullW - compactW) / 2f));
+  }
+
+  /**
+   * How compact the bar is (0..1) once nothing of its group is within {@code columnPx} of the window's end edge, on its
+   * way to compact: 0 when nothing ever was, 1 when it never clears. Follows layoutGroup, where both are linear: the
+   * shrinking group's end (Shrink); the folding pill's end, with the profile button at the group's end gone by
+   * 1 / FOLD_FADE (Collapse).
+   */
+  public float compactClearsAt (int columnPx) {
+    final int endInset = groupEndInsetPx(), compactEndInset = compactEndInsetPx();
+    if (foldsIntoTabWhenCompact()) {
+      final int pillEndInset = endInset + (buttonMode ? Screen.dp(BUTTON + BUTTON_GAP) : 0);
+      final float pill = clearsAt(pillEndInset, compactEndInset, columnPx);
+      return buttonMode && endInset < columnPx ? Math.max(pill, 1f / FOLD_FADE) : pill;
+    }
+    return clearsAt(endInset, compactEndInset, columnPx);
+  }
+
+  /** Where an end inset moving linearly from {@code fromInset} to {@code toInset} reaches {@code columnPx}. */
+  private static float clearsAt (int fromInset, int toInset, int columnPx) {
+    if (fromInset >= columnPx) {
+      return 0f;
+    }
+    if (toInset <= columnPx) {
+      return 1f;
+    }
+    return (columnPx - fromInset) / (float) (toInset - fromInset);
+  }
+
+  /**
+   * Compact, the bar folds into its selected tab: the kind it is compact in (or the setting's, while it is full) is
+   * Collapse and a tab is selected (with the profile button's own profile it shrinks instead).
+   */
+  private boolean foldsIntoTabWhenCompact () {
+    final int kind = compactSpring.getValue() > .001f || compactSpring.getTarget() >= 1f ? compactKind : scrollMode;
+    return kind == XgramSettings.NAV_SCROLL_COLLAPSE && selectedIndex >= 0 && selectedIndex < tabs.length;
   }
 
   /** Shows or hides the toolbar (two panes, the rail and the setting decide). Hidden, it keeps its state. */
@@ -937,6 +1021,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     attachScrollSource(null);
     dropWarm();
     hideSpring.cancel();
+    scrollAwaySpring.cancel();
     compactSpring.cancel();
     cancelPreviewDemo();
     widthSpring.cancel();
@@ -1505,14 +1590,19 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     float target = (scrollHidden && hideOnScroll) || forceMask != 0 ? 1f : 0f;
     // Hiding and showing animate only while the toolbar is on a tab screen (also back from slid away, while invisible)
     final boolean animate = animated && canAnimateHide();
+    // The compose button at the side goes with the scroll hiding only, on the same spring from the same frame
+    final float away = scrollHidden && hideOnScroll ? 1f : 0f;
     if (animate) {
       hideSpring.animateTo(target);
+      scrollAwaySpring.animateTo(away);
     } else {
       hideSpring.setValue(target);
+      scrollAwaySpring.setValue(away);
     }
     applyHide();
     // Shrunk by scrolling: it stays so while a search, a selection or the keyboard slides it away, and comes back so
     setCompact(scrollHidden && !hideOnScroll, animate);
+    notifyFabFollow(); // a snap calls no spring listener
   }
 
   /** How compact the bar is now: 0 full, 1 shrunk or folded (a little past both ends while the spring overshoots). */
@@ -1615,6 +1705,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     } else if (compactSpring.getValue() != target || compactSpring.isRunning()) {
       compactSpring.setValue(target); // no listener call: laid out here
       layoutGroup();
+      notifyFabFollow();
       onCompactSettled();
     }
     if (targetChanged) {
@@ -1880,6 +1971,9 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     profile.setSelectedState(dest == DEST_PROFILE && buttonMode, animated);
     onTabsMoved();
     updateFoldedAccessibility(); // folded into one tab: the one in reach is the selected one
+    if (fitWidth > 0 && (scrollMode == XgramSettings.NAV_SCROLL_COLLAPSE || compactKind == XgramSettings.NAV_SCROLL_COLLAPSE)) {
+      checkGroupEndInset(); // folded, the bar is as wide as the selected tab: the compose button may change its place
+    }
   }
 
   // Fit (5.3)
@@ -2011,8 +2105,11 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
 
   private void checkGroupEndInset () {
     int endInset = groupEndInsetPx();
-    if (endInset != notifiedEndInset) {
+    // Compact, the end the bar leaves free decides whether the compose button at the side goes onto its row
+    int compactEndInset = compactEndInsetPx();
+    if (endInset != notifiedEndInset || compactEndInset != notifiedCompactEndInset) {
       notifiedEndInset = endInset;
+      notifiedCompactEndInset = compactEndInset;
       UI.cancel(layoutNotify);
       UI.post(layoutNotify); // after this layout pass: the chat list moves its compose button
     }
@@ -2021,6 +2118,16 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
   private void notifyRootLayout () {
     if (!destroyed && !preview && root != null && isRootOf(root)) {
       root.xgramOnToolbarLayout();
+    }
+  }
+
+  /**
+   * The bar slid or got compact by a frame (or snapped): the chat list's compose button at the side follows it. Only
+   * translations, so it runs right away (no layout, no post).
+   */
+  private void notifyFabFollow () {
+    if (!destroyed && !preview && root != null && isRootOf(root)) {
+      root.xgramOnToolbarMoved();
     }
   }
 
@@ -3035,6 +3142,10 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     private float holeAlpha;
     @Nullable private Paint holePaint;
     private int touchMode;
+    // The chat list's compose button where it is over the band (fabOverBand)
+    private final RectF fabRect = new RectF();
+    private final Path fabPath = new Path();
+    private final int[] location = new int[2];
 
     HostView (Context context) {
       super(context);
@@ -3180,6 +3291,48 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       if (band <= 0f) {
         return;
       }
+      if (!fabOverBand()) {
+        drawBand(c, band, mid, end);
+        return;
+      }
+      // The compose button going onto the compact bar's row passes through the band, which is drawn over it: its shape
+      // is left out, so it is never washed with the page's colour. It is opaque, so nothing else changes; its shadow
+      // stays under the band (a ring cut around it would show the rows unfaded).
+      final int save = c.save();
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        c.clipOutPath(fabPath);
+      } else {
+        c.clipPath(fabPath, Region.Op.DIFFERENCE);
+      }
+      drawBand(c, band, mid, end);
+      c.restoreToCount(save);
+    }
+
+    /**
+     * The chat list's compose button overlaps this view: fabPath is its container, in this view's coordinates. Read
+     * while drawing, so it is where the FAB is now; the toolbar's compact frames (when it moves onto the row) redraw it.
+     */
+    private boolean fabOverBand () {
+      final MainController root = XgramNavToolbar.this.root;
+      if (root == null) {
+        return false;
+      }
+      final float radius = root.xgramFabInWindow(fabRect);
+      if (radius < 0f) {
+        return false;
+      }
+      getLocationInWindow(location);
+      fabRect.offset(-location[0], -location[1]);
+      if (!fabRect.intersects(0f, 0f, getWidth(), getHeight())) {
+        return false;
+      }
+      fabPath.rewind();
+      fabPath.addRoundRect(fabRect, radius, radius, Path.Direction.CW);
+      return true;
+    }
+
+    /** The band: the page's colour fading in above the pill, faded to {@code band} as the bar gets compact. */
+    private void drawBand (Canvas c, float band, int mid, int end) {
       if (transitionActive && tabL && tabR) {
         // A fade between two tab screens: the band of the one it leaves, then the other's over it
         boolean forward = tForward;

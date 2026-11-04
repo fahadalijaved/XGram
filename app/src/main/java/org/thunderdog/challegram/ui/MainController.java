@@ -1289,6 +1289,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     if (xgramNavBar != null) {
       xgramNavBar.setBottomOffset(xgramBottomBarsInset()); // XGram
     }
+    xgramApplyFabFollow(); // XGram M3E: a new place, size or toolbar (or none): where it follows the toolbar from
   }
 
   /**
@@ -1296,7 +1297,8 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
    * pill: at its usual end margin from the window's edge whatever the toolbar's width (New chat button: At the side),
    * or end-aligned with the profile button so the collapsed FAB stands right over it (With the navigation bar). On a
    * wide and low window where the extended FAB clears the toolbar by 16dp at its usual end margin, on the toolbar's
-   * row instead (either way). The pages keep the room it takes (xgramToolbarPagesRoom).
+   * row instead (either way). The pages keep the room it takes (xgramToolbarPagesRoom). At the side and above the
+   * toolbar, it follows the toolbar as scrolling hides it or makes it compact (xgramFabFollowPx).
    */
   private void xgramPlaceFabByToolbar (com.fahadali.xgram.layout.XgramNavToolbar toolbar) {
     final int margin = composeWrap.xgramFabMarginPx();
@@ -1331,18 +1333,77 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   }
 
   /**
-   * XGram M3E: the floating navigation toolbar shows here and the compose button is at the side: it stays where it is
-   * when the toolbar slides away on scroll (it still shrinks to the plain FAB once the list leaves its top).
+   * XGram M3E: the floating navigation toolbar shows here and the compose button is at the side: it stays on screen
+   * when the toolbar slides away on scroll and follows it down (xgramFabFollowPx), plain once the list leaves its top.
    */
   private boolean xgramFabStaysOnScroll () {
     return xgramFabAtSide() && xgramToolbar() != null;
   }
 
+  /** XGram M3E: the floating snackbar's visibility (0..1): above it, the FAB stays lifted instead of following the toolbar. */
+  private float xgramFabSnackFactor;
+
+  /**
+   * XGram M3E: how far the compose button at the side is below its place above the floating navigation toolbar, in px.
+   * It follows the toolbar's scroll hiding every frame, on its spring, with its menu as one unit. Hide: down by the
+   * room the bar leaves, to its usual margin above the navigation bar. Shrink and Collapse: onto the compact bar's row,
+   * centred on it, when the end the bar leaves fits the plain FAB (the inline rule; scrolling made it plain), once the
+   * bar's group is out of its column; otherwise it keeps its gap above the shrunk pill. It only ever goes down from the
+   * place the pages' room is made for (xgramToolbarPagesRoom), so the last row stays clear and nothing jumps.
+   */
+  private float xgramFabFollowPx (@Nullable com.fahadali.xgram.layout.XgramNavToolbar toolbar) {
+    if (toolbar == null || composeWrap == null || !xgramFabAtSide() || toolbar.isInline() || composeWrap.getVisibility() == View.GONE) {
+      return 0f; // on the toolbar's row already (inline), or it goes with the bar (With the navigation bar)
+    }
+    final int margin = composeWrap.xgramFabMarginPx();
+    final int fab = xgramFabSizePx(margin);
+    final int room = com.fahadali.xgram.layout.XgramNavToolbar.room();
+    float y = toolbar.scrollAwayNow() * room;
+    final float k = toolbar.compactProgress();
+    if (k != 0f) {
+      if (toolbar.compactEndInsetPx() > margin + fab + Screen.dp(16f)) {
+        // Onto the row, moving down only once the pill (and the photo, folding) is out of the FAB's column
+        final float from = toolbar.compactClearsAt(margin + fab + Screen.dp(8f));
+        final float q = from >= 1f ? 0f : Math.max(0f, (k - from) / (1f - from));
+        y += q * (room + margin + fab / 2f - com.fahadali.xgram.layout.XgramNavToolbar.compactRowCenterPx());
+      } else {
+        y += k * com.fahadali.xgram.layout.XgramNavToolbar.compactDropPx(); // its 16dp above the lower, shrunk pill
+      }
+    }
+    return y;
+  }
+
+  /** XGram M3E: the compose button at the side where the toolbar puts it now (less while a floating snackbar is up). */
+  private void xgramApplyFabFollow () {
+    if (composeWrap != null) {
+      composeWrap.xgramSetContentOffsetY(Math.round(xgramFabFollowPx(xgramToolbar()) * (1f - MathUtils.clamp(xgramFabSnackFactor))));
+    }
+  }
+
+  /** XGram M3E: the floating navigation toolbar slid or got compact by a frame: the compose button at the side follows. */
+  public void xgramOnToolbarMoved () {
+    if (!isDestroyed()) {
+      xgramApplyFabFollow();
+    }
+  }
+
+  /**
+   * XGram M3E: the compose button's container on screen now, in window coordinates: the floating navigation toolbar's
+   * band leaves it out where it covers it (the FAB going onto the compact bar's row). Its corner radius in px, or -1
+   * when it is not showing.
+   */
+  public float xgramFabInWindow (android.graphics.RectF out) {
+    if (isDestroyed() || composeWrap == null || composeWrap.getVisibility() != View.VISIBLE) {
+      return -1f;
+    }
+    return composeWrap.xgramFabInWindow(out);
+  }
+
   /**
    * XGram M3E: what the pages keep clear at the bottom for the floating navigation toolbar: its band, so their last row
-   * ends where it starts; with the compose button at the side above the toolbar (it stays when the toolbar hides), the
-   * FAB too, so it never covers the last row. On the toolbar's row (inline) or hidden (Hide the compose button) the
-   * band is enough.
+   * ends where it starts; with the compose button at the side above the toolbar, the FAB too, so it never covers the
+   * last row (following the toolbar on scroll, it only goes lower: the room stays). On the toolbar's row (inline) or
+   * hidden (Hide the compose button) the band is enough.
    */
   private int xgramToolbarPagesRoom (boolean inline) {
     int room = com.fahadali.xgram.layout.XgramNavToolbar.listRoom();
@@ -1589,7 +1650,21 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   private boolean xgramFabSettling;
 
   private void xgramSettleFab () {
-    if (composeWrap == null || updateSnackBar != null || composeWrap.getTranslationY() == 0f) {
+    if (composeWrap == null || updateSnackBar != null) {
+      return;
+    }
+    // Following the toolbar in full again (no snackbar to stay above): the wrap's lift takes that step at once, so the
+    // FAB springs from where it is to where the toolbar puts it
+    final float before = composeWrap.xgramContentOffsetY();
+    xgramFabSnackFactor = 0f;
+    xgramApplyFabFollow();
+    final float moved = composeWrap.xgramContentOffsetY() - before;
+    if (moved != 0f) {
+      composeWrap.animate().cancel();
+      xgramFabSettling = false;
+      composeWrap.setTranslationY(composeWrap.getTranslationY() - moved);
+    }
+    if (composeWrap.getTranslationY() == 0f) {
       return;
     }
     xgramFabSettling = true;
@@ -1672,6 +1747,8 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
           if (composeWrap != null && updateSnackBar == null && v != xgramConnSwiped) {
             xgramStopFabSettle();
             composeWrap.setTranslationY(-xgramFabLiftFor(v) * factor); // the same lift as for the update snackbar
+            xgramFabSnackFactor = factor; // above the snackbar, not down with a slid away toolbar
+            xgramApplyFabFollow();
           }
         }
 
@@ -1679,6 +1756,8 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
         public void onDestroySnackBar (SnackBar v) {
           if (composeWrap != null && updateSnackBar == null && v != xgramConnSwiped) {
             composeWrap.setTranslationY(0f);
+            xgramFabSnackFactor = 0f;
+            xgramApplyFabFollow();
           }
           if (xgramConnSnackBar == v) {
             xgramConnRemoveSnackBar();
@@ -1743,6 +1822,8 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       bar.removeThemeListeners(this);
       if (composeWrap != null && updateSnackBar == null && bar != xgramConnSwiped) {
         composeWrap.setTranslationY(0f);
+        xgramFabSnackFactor = 0f;
+        xgramApplyFabFollow();
       }
     }
   }
@@ -1762,6 +1843,8 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
             // room, 8dp above it, as for the connection snackbar
             xgramStopFabSettle();
             composeWrap.setTranslationY(-xgramFabLiftFor(v) * factor);
+            xgramFabSnackFactor = factor; // above the snackbar, not down with a slid away toolbar
+            xgramApplyFabFollow();
             return;
           }
           if (xgramNavBar != null) {
@@ -1832,7 +1915,18 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
 
   private final com.fahadali.xgram.appearance.XgramMotion.LiftListener xgramFabLift = (c, lift, collapse) -> {
     if (composeWrap != null && c == getCurrentPagerItem()) {
-      composeWrap.xgramSetExtended(lift < .5f);
+      if (xgramToolbar() == null) {
+        composeWrap.xgramSetExtended(lift < .5f);
+        return;
+      }
+      // XGram M3E: with the floating toolbar, extended only at the top of the list (not while the lift still rises
+      // from it: a scroll down makes it plain at once), and the toolbar comes back there with it (also after a jump to
+      // the top), as on the toolbar's own tab screens: no extended FAB beside a compact or slid away bar
+      final boolean atTop = lift < .5f && com.fahadali.xgram.appearance.XgramMotion.liftTargetOf(c) == 0f;
+      composeWrap.xgramSetExtended(atTop);
+      if (atTop) {
+        showComposeWrap(c);
+      }
     }
   };
 
@@ -2588,7 +2682,11 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
           return false; // XGram: the first tab's archive row while All chats has no tab
         }
         if (!xgramFabStaysOnScroll()) {
-          composeWrap.hide(); // XGram M3E: a FAB at the side stays where it is while the floating toolbar slides away
+          composeWrap.hide();
+        } else {
+          // XGram M3E: a FAB at the side stays on screen and follows the floating toolbar (xgramFabFollowPx), plain
+          // before the bar starts to go (a compact bar may take it onto its row)
+          composeWrap.xgramSetExtended(false);
         }
         if (xgramNavBar != null) {
           xgramNavBar.setScrollHidden(true); // XGram: scrolling down hides the bottom navigation bar with the FAB
