@@ -1077,6 +1077,27 @@ public final class XgramSettings {
     pmc().putBoolean(KEY_CHAT_FABS_AVATAR_SHAPE, value);
   }
 
+  /**
+   * "Material icons on bot buttons" (Appearance, Expressive design): a common emoji a bot button starts with (✏️, ➡️,
+   * ❌...) shows as its Material icon (com.fahadali.xgram.chats.XgramBotButtonLabel).
+   */
+  public static final String KEY_BOT_BUTTON_ICONS = "xgram_bot_button_icons";
+  private volatile int botButtonIcons = -1; // -1: not read yet
+
+  /** On by default. Cached: read every time a bot button draws. */
+  public boolean botButtonIcons () {
+    int value = botButtonIcons;
+    if (value < 0) {
+      botButtonIcons = value = pmc().getBoolean(KEY_BOT_BUTTON_ICONS, true) ? 1 : 0;
+    }
+    return value == 1;
+  }
+
+  public void setBotButtonIcons (boolean value) {
+    botButtonIcons = value ? 1 : 0;
+    pmc().putBoolean(KEY_BOT_BUTTON_ICONS, value);
+  }
+
   private int chatLongPress = -1;
 
   /** What holding a chat in the chat list does: 0 Telegram X preview, 1 quick actions, 2 compact preview. */

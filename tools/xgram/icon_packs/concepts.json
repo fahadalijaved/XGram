@@ -2880,5 +2880,29 @@
   "where": [
    "java/com/fahadali/xgram/chats/XgramTextSelection.java"
   ]
+ },
+ "remove": {
+  "tgx": [
+   "baseline_remove_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/chats/XgramBotButtonLabel.java"
+  ]
+ },
+ "inventory_2": {
+  "tgx": [
+   "baseline_inventory_2_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/chats/XgramBotButtonLabel.java"
+  ]
+ },
+ "shopping_cart": {
+  "tgx": [
+   "baseline_shopping_cart_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/chats/XgramBotButtonLabel.java"
+  ]
  }
 }

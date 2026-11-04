@@ -45,6 +45,8 @@ public final class XgramBackup {
     XgramSettings.KEY_PURE_BLACK,
     // Chat buttons match avatar shape (Appearance, with Expressive design)
     XgramSettings.KEY_CHAT_FABS_AVATAR_SHAPE,
+    // Material icons on bot buttons (Appearance, with Expressive design): on by default, so turning it off is kept too
+    XgramSettings.KEY_BOT_BUTTON_ICONS,
     XgramSettings.KEY_DRAG_DROP, XgramSettings.KEY_OPEN_BESIDE,
     // Reactions in channels (Messages)
     XgramSettings.KEY_CHANNEL_REACTIONS,

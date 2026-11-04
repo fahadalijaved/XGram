@@ -371,8 +371,11 @@ public final class XgramFolderIcons {
     return found != 0 ? TABLE.get(found) : null;
   }
 
-  /** The end of the emoji starting at {@code start}: a pictograph with its modifiers and joined ones, a flag or a keycap; -1 for none. */
-  private static int emojiEnd (String s, int start) {
+  /**
+   * The end of the emoji starting at {@code start}: a pictograph with its modifiers and joined ones, a flag or a keycap; -1 for none.
+   * Also used by {@link XgramBotButtonLabel} for the emoji a bot button starts with.
+   */
+  static int emojiEnd (String s, int start) {
     final int length = s.length();
     if (start >= length) {
       return -1;

@@ -175,7 +175,8 @@ public class TGInlineKeyboard {
   }
 
   public static int getButtonHeight () {
-    return Screen.dp(39f);
+    // XGram M3E: an even 40dp row (an M3 small button); every label is one line (XgramBotButtonLabel)
+    return Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.chats.XgramBotButtonLabel.HEIGHT : 39f);
   }
 
   public static int getButtonSpacing () {
@@ -212,6 +213,10 @@ public class TGInlineKeyboard {
 
   private void buildLayout (int maxWidth, int retryWidth) {
     if (keyboard == null) {
+      return;
+    }
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !isCustom) {
+      xgramBuildLayout(maxWidth, retryWidth);
       return;
     }
 
@@ -259,6 +264,72 @@ public class TGInlineKeyboard {
     }
   }
 
+  /**
+   * XGram M3E: every label on one line (com.fahadali.xgram.chats.XgramBotButtonLabel). A row's cells are equal while
+   * every label fits its share; otherwise short labels keep their natural width and long ones share the rest (see
+   * XgramBotButtonLabel.cellWidths). The keyboard only grows past the bubble, as Telegram X's does, when a row can't
+   * fit even at the smallest label size with the usual padding (a type's hint never counts), so it stays flush with
+   * the bubble whenever the labels can fit. Only a keyboard that can't grow any more takes the padding down to
+   * Telegram X's 4dp before a label ends with an ellipsis.
+   */
+  private void xgramBuildLayout (int maxWidth, int retryWidth) {
+    this.maxWidth = maxWidth;
+
+    final int buttonSpacing = getButtonSpacing();
+    final int buttonPadding = getButtonPadding();
+    final int preparedButtonCount = buttons.size();
+    int buttonCount = 0;
+    float widestRow = 0f;
+    for (TdApi.InlineKeyboardButton[] row : keyboard.rows) {
+      // Telegram X's wrapper is still built (its text tells set() when the button changed); it is never drawn here
+      final int buttonWidth = (maxWidth - buttonSpacing * (row.length - 1)) / Math.max(1, row.length);
+      final int textWidth = Math.max(0, buttonWidth - buttonPadding * 2);
+      float rowWidth = buttonSpacing * Math.max(0, row.length - 1);
+      for (TdApi.InlineKeyboardButton rawButton : row) {
+        Button button;
+        if (buttonCount >= preparedButtonCount) {
+          button = new Button(this, parent, rawButton, textWidth);
+          button.setViewProvider(viewProvider);
+          buttons.add(button);
+        } else {
+          button = buttons.get(buttonCount);
+          button.set(rawButton, textWidth);
+        }
+        rowWidth += button.xgramLabel != null ? button.xgramLabel.naturalWidth(true) : buttonPadding * 2;
+        buttonCount++;
+      }
+      widestRow = Math.max(widestRow, rowWidth);
+    }
+    while (buttons.size() > buttonCount) {
+      buttons.remove(buttons.size() - 1);
+    }
+
+    if (retryWidth != 0 && retryWidth > maxWidth && widestRow > maxWidth) {
+      xgramBuildLayout((int) Math.min(Math.ceil(widestRow), retryWidth), 0);
+      return;
+    }
+
+    int index = 0;
+    for (TdApi.InlineKeyboardButton[] row : keyboard.rows) {
+      final int count = row.length;
+      final float[] least = new float[count], smallest = new float[count], natural = new float[count];
+      final int[] widths = new int[count];
+      for (int i = 0; i < count; i++) {
+        final com.fahadali.xgram.chats.XgramBotButtonLabel label = buttons.get(index + i).xgramLabel;
+        least[i] = label != null ? label.leastWidth() : buttonPadding * 2;
+        smallest[i] = label != null ? label.naturalWidth(true) : buttonPadding * 2;
+        natural[i] = label != null ? label.naturalWidth(false) : buttonPadding * 2;
+      }
+      com.fahadali.xgram.chats.XgramBotButtonLabel.cellWidths(least, smallest, natural, maxWidth - buttonSpacing * Math.max(0, count - 1), widths);
+      int x = 0;
+      for (int i = 0; i < count; i++) {
+        buttons.get(index + i).xgramLayout(x, widths[i]);
+        x += widths[i] + buttonSpacing;
+      }
+      index += count;
+    }
+  }
+
   private int lastStartX, lastStartY;
 
   public void draw (MessageView view, Canvas c, int startX, int startY) {
@@ -293,7 +364,12 @@ public class TGInlineKeyboard {
         if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
           button.xgramSetGroup(keyboard.rows.length, row.length);
         }
-        button.draw(view, c, cx, cy, buttonWidth, buttonHeight, strokePadding, rounder, buttonRow, buttonColumn);
+        if (button.xgramCellW > 0) {
+          // XGram M3E: the cell's own place and width (xgramBuildLayout)
+          button.draw(view, c, startX + button.xgramCellX, cy, button.xgramCellW, buttonHeight, strokePadding, rounder, buttonRow, buttonColumn);
+        } else {
+          button.draw(view, c, cx, cy, buttonWidth, buttonHeight, strokePadding, rounder, buttonRow, buttonColumn);
+        }
         cx += buttonWidth + buttonSpacing;
         buttonIndex++;
         buttonColumn++;
@@ -351,6 +427,23 @@ public class TGInlineKeyboard {
     final int buttonHeight = getButtonHeight();
     int cy = 0;
 
+    if (xgramHasCells()) {
+      // XGram M3E: the cells' own places (xgramBuildLayout)
+      int rowStart = 0;
+      for (TdApi.InlineKeyboardButton[] row : keyboard.rows) {
+        if (index < rowStart + row.length) {
+          activeX = buttons.get(index).xgramCellX;
+          activeY = cy;
+          return;
+        }
+        rowStart += row.length;
+        cy += buttonHeight + buttonSpacing;
+      }
+      activeX = -1;
+      activeY = -1;
+      return;
+    }
+
     int i = 0;
     for (TdApi.InlineKeyboardButton[] row : keyboard.rows) {
       final int buttonWidth = (maxWidth - buttonSpacing * (row.length - 1)) / row.length;
@@ -379,6 +472,10 @@ public class TGInlineKeyboard {
         return 0;
       }
       return -1;
+    }
+
+    if (keyboard != null && xgramHasCells()) {
+      return xgramFindButtonByPosition(x, y, buttonHeight, buttonSpacing);
     }
 
     if (keyboard == null || x < 0 || y < 0) {
@@ -420,6 +517,54 @@ public class TGInlineKeyboard {
     return -1;
   }
 
+  /** XGram M3E: the buttons were laid out by xgramBuildLayout, each with its own place and width. */
+  private boolean xgramHasCells () {
+    return !isCustom && !buttons.isEmpty() && buttons.get(0).xgramCellW > 0;
+  }
+
+  /**
+   * XGram M3E: the 2dp gaps between cells belong to the cells on both sides (half each), so there is no dead line
+   * between buttons, and the top row also takes the gap above it up to the bubble. Nothing below the last row: the
+   * reaction bubbles and the comment button are there.
+   */
+  private int xgramFindButtonByPosition (int x, int y, int buttonHeight, int buttonSpacing) {
+    if (keyboard == null || x < 0 || x > maxWidth || y < -buttonSpacing) {
+      return -1;
+    }
+    final int before = buttonSpacing / 2, after = buttonSpacing - before;
+    final int rowCount = keyboard.rows.length;
+    int cy = 0;
+    int index = 0;
+    for (int rowIndex = 0; rowIndex < rowCount; rowIndex++) {
+      final TdApi.InlineKeyboardButton[] row = keyboard.rows[rowIndex];
+      final int top = rowIndex == 0 ? -buttonSpacing : cy - after;
+      final int bottom = rowIndex == rowCount - 1 ? cy + buttonHeight : cy + buttonHeight + before;
+      if (y < top) {
+        return -1;
+      }
+      if (y > bottom) {
+        cy += buttonHeight + buttonSpacing;
+        index += row.length;
+        continue;
+      }
+      for (int column = 0; column < row.length; column++) {
+        if (index + column >= buttons.size()) {
+          return -1;
+        }
+        final Button button = buttons.get(index + column);
+        final int left = column == 0 ? 0 : button.xgramCellX - after;
+        final int right = column == row.length - 1 ? maxWidth : button.xgramCellX + button.xgramCellW + before;
+        if (x >= left && x <= right) {
+          activeX = button.xgramCellX;
+          activeY = cy;
+          return index + column;
+        }
+      }
+      return -1;
+    }
+    return -1;
+  }
+
   // Button
 
   private static String cleanButtonText (String in) {
@@ -450,6 +595,11 @@ public class TGInlineKeyboard {
     private float currencyCharWidth;
     private String rawText; // XGram: original button text for the long-press menu
 
+    // XGram M3E: the one-line label of an inline keyboard button with Expressive design (not of the setCustom pill
+    // buttons, which keep their own path) and the cell xgramBuildLayout gave the button
+    private @Nullable com.fahadali.xgram.chats.XgramBotButtonLabel xgramLabel;
+    private int xgramCellX, xgramCellW;
+
     public Button (TGInlineKeyboard context, @NonNull TGMessage parent, TdApi.InlineKeyboardButton button, int maxWidth) {
       this.context = context;
       this.parent = parent;
@@ -464,6 +614,9 @@ public class TGInlineKeyboard {
       if (type.getConstructor() == TdApi.InlineKeyboardButtonTypeBuy.CONSTRUCTOR) {
         currencyChar = CurrencyUtils.getCurrencyChar(((TdApi.MessageInvoice) parent.getMessage().content).currency);
         currencyCharWidth = U.measureText(currencyChar, Paints.getBoldTextPaint(CURRENCY_TEXT_SIZE_DP));
+      }
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !isCustom) {
+        this.xgramLabel = new com.fahadali.xgram.chats.XgramBotButtonLabel(text, xgramTypeIconRes());
       }
     }
 
@@ -497,6 +650,13 @@ public class TGInlineKeyboard {
         this.needFakeBold = Text.needFakeBold(text);
         TextPaint textPaint = Paints.getBoldPaint14(needFakeBold);
         this.wrapper = new EmojiString(uppercase(text), maxWidth, textPaint);
+      }
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !isCustom) {
+        // XGram M3E: a new label when the text or the type's hint changed; xgramBuildLayout lays it out next
+        final int typeIconRes = xgramTypeIconRes();
+        if (xgramLabel == null || reset || xgramLabel.typeIconRes() != typeIconRes) {
+          this.xgramLabel = new com.fahadali.xgram.chats.XgramBotButtonLabel(text, typeIconRes);
+        }
       }
       if (reset || !Td.equalsTo(type, button.type)) {
         if (contextId == Integer.MAX_VALUE) {
@@ -540,6 +700,40 @@ public class TGInlineKeyboard {
     void xgramSetGroup (int rowCount, int colCount) {
       this.xgramRowCount = rowCount;
       this.xgramColCount = colCount;
+    }
+
+    /** XGram M3E: the button's cell in its row (px from the keyboard's left edge) and the label laid out for it. */
+    void xgramLayout (int cellX, int cellWidth) {
+      this.xgramCellX = cellX;
+      this.xgramCellW = cellWidth;
+      if (xgramLabel != null) {
+        xgramLabel.layout(cellWidth);
+      }
+    }
+
+    /**
+     * XGram M3E: the button type's hint as an 18dp Material icon in the label's icon slot, instead of Telegram X's
+     * small glyph in the top-end corner (and the 10dp currency sign of Buy); 0 for types without one.
+     */
+    private @DrawableRes int xgramTypeIconRes () {
+      if (type == null) {
+        return 0;
+      }
+      switch (type.getConstructor()) {
+        case TdApi.InlineKeyboardButtonTypeSwitchInline.CONSTRUCTOR:
+          return R.drawable.baseline_alternate_email_24;
+        case TdApi.InlineKeyboardButtonTypeCallbackWithPassword.CONSTRUCTOR:
+          return R.drawable.baseline_lock_24;
+        case TdApi.InlineKeyboardButtonTypeUser.CONSTRUCTOR:
+          return R.drawable.baseline_person_24;
+        case TdApi.InlineKeyboardButtonTypeUrl.CONSTRUCTOR:
+        case TdApi.InlineKeyboardButtonTypeLoginUrl.CONSTRUCTOR:
+          return R.drawable.baseline_launch_24;
+        case TdApi.InlineKeyboardButtonTypeBuy.CONSTRUCTOR:
+          return R.drawable.baseline_payments_24;
+        default:
+          return 0;
+      }
     }
 
     private void xgramSetPressed (boolean pressed) {
@@ -622,8 +816,13 @@ public class TGInlineKeyboard {
       // float darkFactor = Theme.getDarkFactor();
       int inlineOutlineColor = customColorId != ColorId.NONE ? Theme.getColor(customColorId) : Theme.inlineOutlineColor(isOutBubble);
       int fillingColor = 0;
+      // XGram M3E: an inline keyboard button is a tonal cell in bubbles and in the flat layout alike; its colours are
+      // read from the roles every frame, so light, dark, Pure black and a theme switch all follow
+      final int xgramContent = xgramLabel != null ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER) : 0;
 
-      if (xgramM3) {
+      if (xgramLabel != null) {
+        c.drawPath(path, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER)));
+      } else if (xgramM3) {
         // XGram M3E: the connected cell shape; tonal (bubble_button) in bubbles, outlined otherwise
         if (useBubbleMode) {
           c.drawPath(path, Paints.fillingPaint(fillingColor = context.context.getBubbleButtonBackgroundColor()));
@@ -645,7 +844,7 @@ public class TGInlineKeyboard {
       int selectionColor = useBubbleMode ? context.context.getBubbleButtonRippleColor() : ColorUtils.fromToArgb(ColorUtils.color(0x1a, inlineOutlineColor), inlineOutlineColor, selectionColorFactor);
       if (xgramM3) {
         // XGram M3E: the touch-anchored ripple is the content colour's pressed state layer, the label keeps its colour
-        selectionColor = com.fahadali.xgram.appearance.XgramExpressiveC.stateLayerColor(useBubbleMode ? context.context.getBubbleButtonTextColor() : customColorId != ColorId.NONE ? Theme.getColor(customColorId) : Theme.inlineTextColor(isOutBubble));
+        selectionColor = com.fahadali.xgram.appearance.XgramExpressiveC.stateLayerColor(xgramLabel != null ? xgramContent : useBubbleMode ? context.context.getBubbleButtonTextColor() : customColorId != ColorId.NONE ? Theme.getColor(customColorId) : Theme.inlineTextColor(isOutBubble));
       }
       if (fadeFactor != 0f) {
         selectionColor = ColorUtils.color((int) ((float) Color.alpha(selectionColor) * (1f - fadeFactor)), selectionColor);
@@ -677,6 +876,14 @@ public class TGInlineKeyboard {
           }
           ViewSupport.restoreClipPath(c, saveCount);
         }
+      }
+
+      if (xgramLabel != null) {
+        // XGram M3E: the label, its leading icon and the type's hint on one line, centred as one unit; while a
+        // callback is answered the spinner takes their place (an M3 loading button)
+        xgramLabel.draw(c, this, cx, cy, buttonWidth, buttonHeight, xgramContent, 1f - progressFactor, com.fahadali.xgram.XgramSettings.instance().botButtonIcons());
+        drawProgress(c, useBubbleMode, 0f);
+        return;
       }
 
       //noinspection ConstantConditions
@@ -777,7 +984,7 @@ public class TGInlineKeyboard {
 
     private void drawProgress (Canvas c, boolean useBubbleMode, float textColorFactor) {
       if (progress != null) {
-        final int color = useBubbleMode ?  context.context.getBubbleButtonTextColor() : ColorUtils.fromToArgb(customColorId != ColorId.NONE ? Theme.getColor(customColorId) :Theme.inlineIconColor(context.context != null && context.context.isOutgoingBubble()), Theme.inlineTextActiveColor(), textColorFactor);
+        final int color = xgramLabel != null ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER) : useBubbleMode ?  context.context.getBubbleButtonTextColor() : ColorUtils.fromToArgb(customColorId != ColorId.NONE ? Theme.getColor(customColorId) :Theme.inlineIconColor(context.context != null && context.context.isOutgoingBubble()), Theme.inlineTextActiveColor(), textColorFactor);
         final int progressColor = ColorUtils.color((int) ((float) Color.alpha(color) * progressFactor), color);
         progress.forceColor(progressColor);
         progress.draw(c);
@@ -1035,6 +1242,13 @@ public class TGInlineKeyboard {
     private void setProgressBounds () {
       if (progress != null) {
         final int inset = xgramProgressInset = xgramCornerInset();
+        if (xgramLabel != null) {
+          // XGram M3E: an 18dp indicator in the middle of the button, where the label fades out
+          final int half = Screen.dp(com.fahadali.xgram.chats.XgramBotButtonLabel.ICON / 2f);
+          final int centerX = dirtyRect.centerX(), centerY = dirtyRect.centerY();
+          progress.setBounds(centerX - half, centerY - half, centerX + half, centerY + half);
+          return;
+        }
         progress.setBounds(dirtyRect.right - Screen.dp(16f) - inset, dirtyRect.top + inset, dirtyRect.right - inset, dirtyRect.top + Screen.dp(16f) + inset);
       }
     }
@@ -1054,7 +1268,9 @@ public class TGInlineKeyboard {
 
     private void animateProgressFactor (float toFactor) {
       if (progress == null) {
-        progress = new ProgressComponent(context.context.context(), Screen.dp(3.5f));
+        // XGram M3E: the expressive loading indicator at the icon size (ProgressComponent draws it for a radius of
+        // 3dp and more), in place of Telegram X's small corner spinner
+        progress = new ProgressComponent(context.context.context(), xgramLabel != null ? Screen.dp(com.fahadali.xgram.chats.XgramBotButtonLabel.ICON / 2f) : Screen.dp(3.5f));
         progress.setViewProvider(viewProvider);
         setProgressBounds();
       }

@@ -349,5 +349,8 @@
  "cloud_off": {"icon": "cloud", "slash": true},
  "telegram": "telegram",
  "currency_bitcoin": "currency-bitcoin-2",
- "select_all": "cursor-text"
+ "select_all": "cursor-text",
+ "remove": "subtract",
+ "inventory_2": "package",
+ "shopping_cart": "shopping-cart-1"
 }

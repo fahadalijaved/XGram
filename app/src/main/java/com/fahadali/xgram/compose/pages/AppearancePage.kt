@@ -175,6 +175,15 @@ fun AppearancePage() {
           settings.setChatFabsAvatarShape(it)
           XgramUi.invalidateAll(host.activity)
         }
+        // A bot button's leading emoji as a Material icon: the icon slot is the same either way (XgramBotButtonLabel),
+        // so open chats only need a redraw
+        switch(
+          R.id.btn_xgramBotButtonIcons, s(R.string.XgramBotButtonIcons), s(R.string.XgramBotButtonIconsSub),
+          checked = settings.botButtonIcons()
+        ) {
+          settings.setBotButtonIcons(it)
+          XgramUi.invalidateAll(host.activity)
+        }
       }
     }
 

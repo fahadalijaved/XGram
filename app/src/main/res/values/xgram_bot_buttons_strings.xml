@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: Material icons on bot buttons (Appearance > Messages and avatars, Expressive design; XgramSettings.botButtonIcons,
+     com.fahadali.xgram.chats.XgramBotButtonLabel) -->
+<resources>
+  <string name="XgramBotButtonIcons">Material icons on bot buttons</string>
+  <string name="XgramBotButtonIconsSub">Common emoji at the start of a bot button, like ✏️, ➡️ or ❌, show as icons</string>
+  <!-- Extra words the setting is found by in the settings search, one phrase between each '|' -->
+  <string name="XgramSearchKwBotButtons">bot|bots|bot buttons|inline buttons|inline keyboard|keyboard|buttons|emoji|icons|material</string>
+</resources>

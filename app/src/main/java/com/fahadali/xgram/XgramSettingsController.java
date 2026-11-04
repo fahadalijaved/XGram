@@ -382,6 +382,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.setData(avatarCornersName(settings.avatarCorners()));
         } else if (id == R.id.btn_xgramChatFabsAvatarShape) {
           view.getToggler().setRadioEnabled(settings.chatFabsAvatarShape(), isUpdate);
+        } else if (id == R.id.btn_xgramBotButtonIcons) {
+          view.getToggler().setRadioEnabled(settings.botButtonIcons(), isUpdate);
         } else if (id == R.id.btn_xgramChatListView) {
           view.setData(com.fahadali.xgram.chats.XgramChatListMode.name(org.thunderdog.challegram.unsorted.Settings.instance().getChatListMode()));
         } else if (id == R.id.btn_xgramChatListBigText) {
@@ -880,6 +882,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     if (expressive) {
       // XGram M3E: the chat's floating buttons in the avatars' shape (only Expressive design draws them as M3 FABs)
       chats.add(toggle(R.id.btn_xgramChatFabsAvatarShape, R.string.XgramChatFabsAvatarShape, R.string.XgramChatFabsAvatarShapeSub));
+      // XGram M3E: a bot button's leading emoji as a Material icon (only Expressive design draws M3 bot buttons)
+      chats.add(toggle(R.id.btn_xgramBotButtonIcons, R.string.XgramBotButtonIcons, R.string.XgramBotButtonIconsSub));
     }
     addRows(items, chats.toArray(new ListItem[0]));
 
@@ -1841,6 +1845,11 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     } else if (id == R.id.btn_xgramChatFabsAvatarShape) {
       settings.setChatFabsAvatarShape(adapter.toggleView(v));
       // Open chats (the other pane) redraw now; their buttons take the shape before they draw (CircleButton.draw)
+      com.fahadali.xgram.XgramUi.invalidateAll(context);
+      return;
+    } else if (id == R.id.btn_xgramBotButtonIcons) {
+      settings.setBotButtonIcons(adapter.toggleView(v));
+      // The icon slot is the same either way (XgramBotButtonLabel): open chats only need a redraw
       com.fahadali.xgram.XgramUi.invalidateAll(context);
       return;
     } else if (id == R.id.btn_xgramTapTimeDetails) {
