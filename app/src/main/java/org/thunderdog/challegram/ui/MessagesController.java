@@ -2479,7 +2479,16 @@ public class MessagesController extends ViewController<MessagesController.Argume
       }
 
       final TdApi.FormattedText caption = inputView != null ? inputView.getOutputText(applyMarkdown) : null;
-      final ArrayList<InlineResult<?>> selectedItems = attachedFiles.getCurrentItems();
+      final ArrayList<InlineResult<?>> selectedItems = new ArrayList<>(attachedFiles.getCurrentItems());
+      // XGram: documents over Telegram's upload limit are left out here (a file path's size is cheap to read), so Undo
+      // send and the caption only see what is sent; sendFiles checks content:// files it can only size on its thread
+      for (int i = selectedItems.size() - 1; i >= 0; i--) {
+        final InlineResult<?> item = selectedItems.get(i);
+        final String itemPath = item.getType() == InlineResult.TYPE_DOCUMENT ? item.getId() : null;
+        if (!StringUtils.isEmpty(itemPath) && !itemPath.startsWith("content://") && TD.xgramRefuseOversize(tdlib, U.getFileName(itemPath), TD.xgramFileSize(itemPath, false))) {
+          selectedItems.remove(i);
+        }
+      }
 
       final ArrayList<MediaBottomFilesController.MusicEntry> musicEntries = new ArrayList<>();
       final ArrayList<String> files = new ArrayList<>();
@@ -12516,14 +12525,32 @@ public class MessagesController extends ViewController<MessagesController.Argume
     Media.instance().post(() -> {
       boolean restrictionFailed = false;
       List<TdApi.InputMessageContent> content = new ArrayList<>();
-      for (int a = 0; a < paths.size(); a++) {
-        final String path = paths.get(a);
-        final boolean isLast = a == paths.size() - 1;
-        final TdApi.FormattedText caption = isLast ? lastFileCaption : null;
-        final boolean showCaptionAboveMedia = false; // FIXME: showCaptionAboveMedia
+      // XGram: files over Telegram's upload limit (2000 MB, 4000 MB with Premium) are left out first, so the caption
+      // goes to the last file that is sent, instead of being copied to the cache and uploaded only to fail at the end
+      final ArrayList<String> keptPaths = new ArrayList<>(paths.size());
+      final ArrayList<TD.FileInfo> keptInfos = new ArrayList<>(paths.size());
+      final ArrayList<TdApi.InputFile> keptFiles = new ArrayList<>(paths.size());
+      for (String path : paths) {
         TD.FileInfo info = new TD.FileInfo();
         TdApi.InputFile inputFile = TD.createInputFile(path, null, info);
-        TdApi.InputMessageContent inputMessageContent = TD.toInputMessageContent(path, inputFile, info, caption, showCaptionAboveMedia, allowAudio, allowGifs, allowVideos, allowDocs, false);
+        final long fileSize = info.knownSize > 0 ? info.knownSize : TD.xgramFileSize(path, true);
+        if (TD.xgramRefuseOversize(tdlib, !StringUtils.isEmpty(info.title) ? info.title : U.getFileName(path), fileSize)) {
+          continue;
+        }
+        keptPaths.add(path);
+        keptInfos.add(info);
+        keptFiles.add(inputFile);
+      }
+      if (keptPaths.isEmpty()) {
+        runOnUiThreadOptional(() -> onReadyToSend.runWithData(null));
+        return;
+      }
+      for (int a = 0; a < keptPaths.size(); a++) {
+        final String path = keptPaths.get(a);
+        final boolean isLast = a == keptPaths.size() - 1;
+        final TdApi.FormattedText caption = isLast ? lastFileCaption : null;
+        final boolean showCaptionAboveMedia = false; // FIXME: showCaptionAboveMedia
+        TdApi.InputMessageContent inputMessageContent = TD.toInputMessageContent(path, keptFiles.get(a), keptInfos.get(a), caption, showCaptionAboveMedia, allowAudio, allowGifs, allowVideos, allowDocs, false);
         if (inputMessageContent == null) {
           restrictionFailed = true;
           break;

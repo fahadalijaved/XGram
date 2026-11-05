@@ -676,17 +676,25 @@ public final class TdlibFileGenerationManager {
 
     File file = new File(destinationPath);
 
+    // XGram: progress every 5 KiB meant ~640,000 progress calls (each an updateFile for the chat to handle) and as
+    // many flushes for a 3 GB file, which hung the app. Now at most every 100ms, and only after 1 MiB (or 1%) more,
+    // with 256 KiB reads; TDLib may upload a prefix only once it is flushed, so flush right before each report.
+    final long notifyStep = Math.max(ByteUnit.MIB.toBytes(1), expectedSize > 0 ? expectedSize / 100 : 0);
+    long lastNotifyTime = 0;
     try (Sink sink = Okio.sink(file)) {
       try (BufferedSink out = Okio.buffer(sink)) {
         long done;
-        while ((done = in.read(out.getBuffer(), 20480)) != -1) {
+        while ((done = in.read(out.getBuffer(), ByteUnit.KIB.toBytes(256))) != -1) {
           if (canceled = (isCancelled != null && isCancelled.get())) {
             break;
           }
           totalDone += done;
-          if ((done == 0 && totalDone > 0) || totalDone - lastDoneNotify >= ByteUnit.KIB.toBytes(5)) {
+          out.emitCompleteSegments();
+          final long now = android.os.SystemClock.uptimeMillis();
+          if ((done == 0 && totalDone > 0 && totalDone != lastDoneNotify) || (totalDone - lastDoneNotify >= notifyStep && now - lastNotifyTime >= 100)) {
             out.flush();
             lastDoneNotify = totalDone;
+            lastNotifyTime = now;
             tdlib.client().send(new TdApi.SetFileGenerationProgress(conversionId, expectedSize, totalDone), tdlib.silentHandler());
           }
         }

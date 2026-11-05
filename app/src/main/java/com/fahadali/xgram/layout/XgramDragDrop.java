@@ -873,6 +873,9 @@ public final class XgramDragDrop {
     String caption = StringUtils.isEmpty(text) ? null : text;
     for (Dropped file : files) {
       try {
+        if (asFiles && TD.xgramRefuseOversize(tdlib, file.file.getName(), file.file.length())) {
+          continue; // XGram: over Telegram's upload limit (as shared, addShareUri checks the rest)
+        }
         if (asFiles) {
           TdApi.FormattedText fileCaption = null;
           if (caption != null && caption.codePointCount(0, caption.length()) <= tdlib.maxCaptionLength()) {

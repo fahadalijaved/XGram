@@ -1483,7 +1483,7 @@ public class TD {
       }
       if (path.startsWith("content://")) {
         String fileName = null;
-        int expectedSize = 0;
+        long expectedSize = 0; // XGram: long, files over 2 GiB overflowed an int
         long modified = Config.ALLOW_DATE_MODIFIED_RESOLVING ? 0 : System.currentTimeMillis();
         Uri uri = Uri.parse(path);
 
@@ -1503,7 +1503,7 @@ public class TD {
           c = UI.getContext().getContentResolver().query(uri, columns, null, null, null);
           if (c != null && c.moveToFirst()) {
             String displayName = c.getString(0).trim();
-            long size = c.getInt(1);
+            long size = c.getLong(1); // XGram: getInt cut sizes over 2 GiB
             String mimeType = null; try { mimeType = c.getString(2).trim(); } catch (Throwable ignored) { }
             if (Config.ALLOW_DATE_MODIFIED_RESOLVING) {
               try { modified = Math.max(0, c.getLong(3)); } catch (Throwable ignored) { }
@@ -1522,7 +1522,7 @@ public class TD {
               }
             }
             if (size > 0) {
-              expectedSize = (int) size;
+              expectedSize = size;
             }
           }
         } catch (Throwable t) {
@@ -1580,7 +1580,64 @@ public class TD {
     return new TdApi.InputFileGenerated(file.local.path, "copy" + GenerationInfo.randomStamp(), file.size);
   }
 
-  public static TdApi.InputFileGenerated newGeneratedFile (@Nullable String fileName, String path, int expectedSize, long modifiedDate) {
+  /** XGram: Telegram's upload limit for this account: 2000 MB, 4000 MB with Premium. */
+  public static long xgramUploadLimit (Tdlib tdlib) {
+    return ByteUnit.MIB.toBytes(tdlib.hasPremium() ? 4000 : 2000);
+  }
+
+  /**
+   * XGram: the size of a file path or a content:// URI, 0 when unknown. {@code openDescriptor}: for a URI whose provider
+   * gives no size, ask its descriptor too (worker threads only: some providers fetch the file first).
+   */
+  public static long xgramFileSize (String path, boolean openDescriptor) {
+    if (StringUtils.isEmpty(path)) {
+      return 0;
+    }
+    if (!path.startsWith("content://")) {
+      return Math.max(0, new File(path).length());
+    }
+    final Uri uri = Uri.parse(path);
+    try (Cursor c = UI.getContext().getContentResolver().query(uri, new String[] {android.provider.OpenableColumns.SIZE}, null, null, null)) {
+      if (c != null && c.moveToFirst() && !c.isNull(0)) {
+        final long size = c.getLong(0);
+        if (size > 0) {
+          return size;
+        }
+      }
+    } catch (Throwable ignored) { }
+    if (openDescriptor) {
+      try (android.content.res.AssetFileDescriptor fd = UI.getContext().getContentResolver().openAssetFileDescriptor(uri, "r")) {
+        if (fd != null) {
+          long size = fd.getLength();
+          if (size < 0 && fd.getParcelFileDescriptor() != null) {
+            size = fd.getParcelFileDescriptor().getStatSize();
+          }
+          return Math.max(0, size);
+        }
+      } catch (Throwable ignored) { }
+    }
+    return 0;
+  }
+
+  /**
+   * XGram: true when a file of {@code size} bytes is over the account's upload limit; then a message says it isn't sent.
+   * A file Telegram would refuse is left out at once, instead of being copied to the cache and uploaded only to fail at
+   * the end. Any thread.
+   */
+  public static boolean xgramRefuseOversize (Tdlib tdlib, @Nullable String name, long size) {
+    final long limit = xgramUploadLimit(tdlib);
+    if (size <= limit) {
+      return false;
+    }
+    final String fileName = StringUtils.isEmpty(name) ? Lang.getString(R.string.File) : name;
+    final String text = tdlib.hasPremium() ?
+      Lang.getString(R.string.XgramFileTooBig, fileName, Strings.buildSize(size), Strings.buildSize(limit)) :
+      Lang.getString(R.string.XgramFileTooBigPremium, fileName, Strings.buildSize(size), Strings.buildSize(limit), Strings.buildSize(ByteUnit.MIB.toBytes(4000)));
+    UI.showToast(text, android.widget.Toast.LENGTH_LONG);
+    return true;
+  }
+
+  public static TdApi.InputFileGenerated newGeneratedFile (@Nullable String fileName, String path, long expectedSize, long modifiedDate) {
     return new TdApi.InputFileGenerated(fileName, path + "," + expectedSize + "_" + modifiedDate, expectedSize);
   }
 

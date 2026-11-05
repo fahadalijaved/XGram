@@ -4136,6 +4136,12 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       }
     }
 
+    // XGram: a shared file over Telegram's upload limit is not sent (the caption then goes as text), instead of being
+    // copied to the cache and uploaded only to fail at the end
+    if (TD.xgramRefuseOversize(tdlib, U.getFileName(filePath), TD.xgramFileSize(filePath, true))) {
+      return false;
+    }
+
     final int captionCodePointCount = rawCaption != null ? rawCaption.codePointCount(0, rawCaption.length()) : 0;
     final TdApi.FormattedText messageCaption = captionCodePointCount > 0 && captionCodePointCount <= tdlib.maxCaptionLength() ? new TdApi.FormattedText(rawCaption, null) : null;
 

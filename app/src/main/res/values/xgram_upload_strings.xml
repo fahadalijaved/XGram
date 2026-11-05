@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: a picked file over Telegram's upload limit is not sent. %1$s file name, %2$s its size, %3$s the limit -->
+  <string name="XgramFileTooBig">%1$s is %2$s. Telegram sends files up to %3$s, so it wasn\'t sent.</string>
+  <string name="XgramFileTooBigPremium">%1$s is %2$s. Telegram sends files up to %3$s, or %4$s with Premium, so it wasn\'t sent.</string>
+</resources>
