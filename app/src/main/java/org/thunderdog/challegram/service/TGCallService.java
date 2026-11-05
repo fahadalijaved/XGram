@@ -1156,6 +1156,21 @@ public class TGCallService extends Service implements
       builder.setColor(tdlib.accountColor());
       builder.setVibrate(new long[0]);
       builder.setCategory(Notification.CATEGORY_CALL);
+      if (user != null) {
+        // Do not disturb lets starred contacts and repeat callers ring
+        String uri = !StringUtils.isEmpty(user.phoneNumber) ?
+          "tel:+" + user.phoneNumber :
+          "tg://user?local_id=" + tdlib.settings().getLocalChatId(ChatId.fromUserId(user.id)) +
+            "&account_id=" + tdlib.id();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+          builder.addPerson(new android.app.Person.Builder()
+            .setName(TD.getUserName(user))
+            .setUri(uri)
+            .build());
+        } else {
+          builder.addPerson(uri);
+        }
+      }
       // XGram: full screen until the app has shown this call over the lock screen (see xgramShownCallId). Unlocked with
       // the screen on it launches nothing, it only keeps the heads-up on screen: it stays then
       final boolean xgramLockedOrAsleep = com.fahadali.xgram.call.XgramCallOverLock.isLockedOrAsleep(this);
