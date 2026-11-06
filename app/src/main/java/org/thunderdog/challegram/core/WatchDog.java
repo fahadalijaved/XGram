@@ -380,7 +380,7 @@ public class WatchDog {
     }
   }
 
-  @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
+  @SuppressWarnings("InlinedApi")
   private static boolean filter (NetworkInfo info) {
     return info.isConnectedOrConnecting() && info.getType() != ConnectivityManager.TYPE_VPN;
   }
