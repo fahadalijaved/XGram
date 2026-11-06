@@ -3683,6 +3683,36 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     }
     final int count = ids.size();
 
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && com.fahadali.xgram.appearance.XgramCompactMenu.isEnabled()) {
+      // Appearance › Menus › Compact popups: the compact card below the ⋮, each item with the side menu's icon, the
+      // full screen calls warning in the error colour, the switches as checkable items (a check in place of the icon)
+      final int[] compactIds = ids.get();
+      final String[] compactTitles = titles.get();
+      final int[] compactKinds = kinds.get();
+      final int[] compactIcons = new int[count];
+      final int[] compactColors = new int[count];
+      for (int i = 0; i < count; i++) {
+        compactIcons[i] = com.fahadali.xgram.appearance.XgramHeaderMenuIcons.icon(compactIds[i], compactTitles[i]);
+        compactColors[i] = compactIds[i] == R.id.btn_xgramFullScreenCalls ? OptionColor.RED : OptionColor.NORMAL;
+      }
+      View anchor = headerView.xgramMoreAnchor();
+      if (anchor == null && xgramMoreButton != null && xgramMoreButton.isShown()) {
+        anchor = xgramMoreButton;
+      }
+      final PopupLayout compact = com.fahadali.xgram.appearance.XgramCompactMenu.showHeaderMenu(this, anchor, headerView.getMeasuredWidth(), compactIds, compactTitles, compactIcons, compactColors, null, this::xgramOnSideMenuItem);
+      if (compact != null) {
+        if (compact.getBoundView() instanceof MenuMoreWrap) {
+          final MenuMoreWrap card = (MenuMoreWrap) compact.getBoundView();
+          for (int i = 0; i < count; i++) {
+            if (compactKinds[i] != XGRAM_MENU_ROW) {
+              card.xgramSetCheckable(compactIds[i], compactKinds[i] == XGRAM_MENU_CHECK_ON);
+            }
+          }
+        }
+        return;
+      }
+    }
+
     final MenuMoreWrap menu = new MenuMoreWrap(context, /* scrollable */ true);
     menu.init(null); // made for this one showing: colours of the theme now, no listeners left behind
     final View.OnClickListener onClick = v -> {

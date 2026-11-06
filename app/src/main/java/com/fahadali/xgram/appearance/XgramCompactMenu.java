@@ -12,10 +12,12 @@
 package com.fahadali.xgram.appearance;
 
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.SystemClock;
 import android.text.Layout;
@@ -55,8 +57,11 @@ import org.thunderdog.challegram.util.OptionDelegate;
 import org.thunderdog.challegram.widget.PopupLayout;
 
 import java.lang.ref.WeakReference;
+import java.util.ArrayList;
+import java.util.List;
 
 import me.vkryl.core.StringUtils;
+import me.vkryl.core.lambda.RunnableInt;
 
 /**
  * XGram: Appearance › Menus › Compact popups ({@link XgramSettings#menuStyle()}). Telegram X's option menus
@@ -81,6 +86,9 @@ import me.vkryl.core.StringUtils;
  * under the last touch (at most a third of the window tall; a row wider than the card: at the finger along it, half a
  * card in from its ends; a list's row: that place in its list, which doesn't move with its rows), else a small square at
  * the touch. The touch is recorded for every window (BaseActivity and PopupLayout feed {@link #onTouch}).
+ * <p>
+ * With Expressive design on, the app bar's ⋮ menus are this card too ({@link #showHeaderMenu}): below the ⋮, its end
+ * edge on the button's, each row with a leading icon, as wide as the app bar allows (long labels wrap).
  * Main thread only.
  */
 public final class XgramCompactMenu {
@@ -487,6 +495,50 @@ public final class XgramCompactMenu {
    */
   @Nullable
   public static PopupLayout show (@NonNull ViewController<?> c, @NonNull ViewController.Options options, @Nullable OptionDelegate delegate, @Nullable ThemeDelegate forcedTheme) {
+    return show(c, options, delegate, forcedTheme, 0);
+  }
+
+  /**
+   * An app bar's ⋮ menu (HeaderView.showMore, the main screen's side menu items) as the compact card, with Expressive
+   * design and Compact popups on: the same rows in the same order with the same ids, each with a leading icon
+   * ({@code icons}, else {@link XgramHeaderMenuIcons#icon}), destructive ones in the error colour ({@code colors}, else
+   * {@link XgramHeaderMenuIcons#isDestructive}). It opens 8dp below {@code moreButton} with its end edge on the button's
+   * (null: at the last touch), at most {@code maxWidthPx} wide (the app bar's width; 0: the window's), where a label
+   * too long for it wraps rather than the menu becoming the sheet. A tap closes the card, then {@code onPick} gets the
+   * row's id, as Telegram X's ⋮ does (a menu it opens next, More…, comes once this one is leaving). Null when nothing
+   * was shown: the caller shows Telegram X's ⋮.
+   */
+  @Nullable
+  public static PopupLayout showHeaderMenu (@NonNull ViewController<?> c, @Nullable View moreButton, int maxWidthPx, @NonNull int[] ids, @NonNull String[] titles, @Nullable int[] icons, @Nullable int[] colors, @Nullable ThemeDelegate forcedTheme, @NonNull RunnableInt onPick) {
+    if (!XgramExpressive.isEnabled() || !isEnabled() || ids.length == 0 || titles.length < ids.length) {
+      return null;
+    }
+    final ViewController.OptionItem[] items = new ViewController.OptionItem[ids.length];
+    for (int i = 0; i < ids.length; i++) {
+      final int icon = icons != null && i < icons.length && icons[i] != 0 ? icons[i] : XgramHeaderMenuIcons.icon(ids[i], titles[i]);
+      final int color = colors != null && i < colors.length ? colors[i] :
+        XgramHeaderMenuIcons.isDestructive(ids[i], titles[i]) ? ViewController.OptionColor.RED : ViewController.OptionColor.NORMAL;
+      items[i] = new ViewController.OptionItem(ids[i], titles[i], color, icon); // the icon in the label's colour (error for red rows)
+    }
+    final ViewController.Options options = new ViewController.Options(null, null, null, items, org.thunderdog.challegram.util.text.Text.LINE_COUNT_UNLIMITED);
+    if (moreButton != null && moreButton.getWindowToken() != null && moreButton.isShown() && moreButton.getWidth() > 0 && moreButton.getHeight() > 0) {
+      options.xgramAnchor = moreButton;
+    }
+    // Closes first, then the choice: what it opens (Snooze chat…, Add to folder, More…) comes after this card starts leaving
+    final OptionDelegate delegate = (itemView, id) -> {
+      final PopupLayout popup = PopupLayout.parentOf(itemView);
+      if (popup != null && !popup.isWindowHidden()) {
+        popup.hideWindow(true);
+      }
+      onPick.runWithInt(id);
+      return false;
+    };
+    return show(c, options, delegate, forcedTheme, maxWidthPx > 0 ? maxWidthPx : Integer.MAX_VALUE);
+  }
+
+  /** {@link #show(ViewController, ViewController.Options, OptionDelegate, ThemeDelegate)}; {@code headerMaxWidth} > 0: an app bar's ⋮ menu, see {@link #showHeaderMenu}. */
+  @Nullable
+  private static PopupLayout show (@NonNull ViewController<?> c, @NonNull ViewController.Options options, @Nullable OptionDelegate delegate, @Nullable ThemeDelegate forcedTheme, int headerMaxWidth) {
     if (!fitsPopup(options, delegate)) {
       return null;
     }
@@ -498,7 +550,11 @@ public final class XgramCompactMenu {
     if (content == null || content.getWindowToken() == null || content.getWidth() <= 0 || content.getHeight() <= 0) {
       return null;
     }
-    int maxWidth = Math.max(Screen.dp(196f), Math.min(Screen.dp(MAX_WIDTH), content.getWidth() - Screen.dp(16f)));
+    final boolean header = headerMaxWidth > 0;
+    // An app bar's ⋮: as wide as its app bar (its pane) allows, not 320dp, so long labels in large fonts still fit
+    int maxWidth = Math.max(Screen.dp(196f), Math.min(header ? headerMaxWidth : Screen.dp(MAX_WIDTH), content.getWidth() - Screen.dp(16f)));
+    final ThemeListenerList listeners = c.getThemeListeners();
+    final List<Object> listenerTargets = new ArrayList<>(); // what the card's theme listeners are on: let go when it closes
     final PopupLayout popup;
     final MenuMoreWrap card;
     final Anchor anchor;
@@ -515,13 +571,15 @@ public final class XgramCompactMenu {
         maxWidth = Math.max(Screen.dp(196f), hit.getWidth());
       }
       popup = new PopupLayout(activity);
-      card = buildCard(c, activity, popup, options, delegate, forcedTheme, maxWidth);
+      card = buildCard(c, activity, popup, options, delegate, forcedTheme, maxWidth, header, listenerTargets);
       if (card == null) {
+        removeThemeListeners(listeners, listenerTargets); // the rows made before one didn't fit
         return null;
       }
       anchor = findAnchor(target, content, card.getItemsWidth());
     } catch (Throwable t) {
       Log.e("XGram: cannot build a compact menu, showing the sheet", t);
+      removeThemeListeners(listeners, listenerTargets);
       return null;
     }
 
@@ -540,7 +598,8 @@ public final class XgramCompactMenu {
     }
     popup.setDismissOtherPopUps(!options.ignoreOtherPopUps);
 
-    card.setAnchorMode(MenuMoreWrap.ANCHOR_MODE_CENTER);
+    // An app bar's ⋮: its end edge on the ⋮'s end edge (the left edges in RTL), as Material 3's overflow menu
+    card.setAnchorMode(header ? MenuMoreWrap.ANCHOR_MODE_RIGHT : MenuMoreWrap.ANCHOR_MODE_CENTER);
     card.setRightNumber(0);
     card.xgramSetMayCoverAnchor(true); // a long menu moves over its anchor rather than scroll while the screen has room
     card.xgramSetPopupAnchor(anchor.view, anchor.bounds, anchor.placement);
@@ -570,6 +629,10 @@ public final class XgramCompactMenu {
       @Override
       public void onPopupDismiss (PopupLayout p) {
         back.unregister();
+        // Each opening builds a new card: its listeners would stay in the screen's list for as long as the screen
+        removeThemeListeners(listeners, listenerTargets);
+        // Its rows' clicks still reach the popup: without the screen in its tag, a closed card cannot keep that alive
+        p.setTag(null);
       }
     });
     popup.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
@@ -590,11 +653,15 @@ public final class XgramCompactMenu {
     return popup;
   }
 
-  /** The card's rows, or null when a label would not fit it (the sheet shows it whole). */
+  /**
+   * The card's rows, or null when a label would not fit it (the sheet shows it whole; an app bar's ⋮, {@code header},
+   * wraps it instead). What its theme listeners are on goes to {@code listenerTargets}.
+   */
   @Nullable
-  private static MenuMoreWrap buildCard (@NonNull ViewController<?> c, @NonNull BaseActivity activity, @NonNull PopupLayout popup, @NonNull ViewController.Options options, @Nullable OptionDelegate delegate, @Nullable ThemeDelegate forcedTheme, int maxWidth) {
+  private static MenuMoreWrap buildCard (@NonNull ViewController<?> c, @NonNull BaseActivity activity, @NonNull PopupLayout popup, @NonNull ViewController.Options options, @Nullable OptionDelegate delegate, @Nullable ThemeDelegate forcedTheme, int maxWidth, boolean header, @NonNull List<Object> listenerTargets) {
     final ThemeListenerList listeners = c.getThemeListeners();
     final MenuMoreWrap card = new MenuMoreWrap(activity, /* scrollable */ true);
+    listenerTargets.add(card);
     card.init(listeners, forcedTheme);
     card.xgramSetMaxItemsWidth(maxWidth);
 
@@ -616,15 +683,28 @@ public final class XgramCompactMenu {
     };
 
     final int rowMaxWidth = maxWidth - 2 * Screen.dp(MenuMoreWrap.PADDING);
+    // Material 3 menus line their labels up: with Expressive design, a row without an icon in a card whose other rows
+    // have one keeps a blank icon's room (its label at 48dp too)
+    boolean anyIcon = false;
+    if (XgramExpressive.isEnabled()) {
+      for (ViewController.OptionItem item : options.items) {
+        if (item != null && item != ViewController.OptionItem.SEPARATOR && !XgramR5Sheets.isPlainCancel(item) && item.icon != 0) {
+          anyIcon = true;
+          break;
+        }
+      }
+    }
     boolean dividerNext = false;
     int rows = 0;
+    int extraHeight = 0; // how much taller than 48dp each the rows are: the info row, an app bar ⋮'s wrapped rows
     if (!StringUtils.isEmpty(options.info)) {
       final TextView infoRow = addInfoRow(card, options.info, listeners, forcedTheme, rowMaxWidth);
       if (infoRow == null) {
         return null; // over four lines at the card's width: the sheet shows it whole
       }
+      listenerTargets.add(infoRow);
       // Its wrapped height in place of the 48dp row the card counts (which side it opens on, its height cap)
-      card.xgramSetExtraItemsHeight(infoRow.getMeasuredHeight() - Screen.dp(MenuMoreWrap.ITEM_HEIGHT));
+      extraHeight += infoRow.getMeasuredHeight() - Screen.dp(MenuMoreWrap.ITEM_HEIGHT);
       dividerNext = true;
     }
     for (ViewController.OptionItem item : options.items) {
@@ -638,7 +718,18 @@ public final class XgramCompactMenu {
         continue; // a tap outside or Back cancels
       }
       final TextView row = card.addItem(item.id, item.name, item.icon, null, onClick);
-      if (row.getTag() instanceof Integer && (Integer) row.getTag() > rowMaxWidth) {
+      listenerTargets.add(row);
+      for (Drawable d : row.getCompoundDrawables()) {
+        if (d != null) {
+          listenerTargets.add(d); // its icon's tint listener (colorRow's too: the same drawable)
+        }
+      }
+      if (anyIcon && item.icon == 0) {
+        addIconSpace(row);
+      }
+      if (header) {
+        extraHeight += fitHeaderRow(row, rowMaxWidth);
+      } else if (row.getTag() instanceof Integer && (Integer) row.getTag() > rowMaxWidth) {
         return null;
       }
       colorRow(row, item, listeners, forcedTheme);
@@ -648,7 +739,64 @@ public final class XgramCompactMenu {
       dividerNext = false;
       rows++;
     }
+    if (extraHeight != 0) {
+      card.xgramSetExtraItemsHeight(extraHeight);
+    }
     return rows > 0 ? card : null;
+  }
+
+  /** A blank icon at the start of {@code row} (24dp, as the icons): its label starts where the other rows' labels do. */
+  private static void addIconSpace (@NonNull TextView row) {
+    final GradientDrawable space = new GradientDrawable();
+    space.setColor(Color.TRANSPARENT);
+    space.setSize(Screen.dp(24f), Screen.dp(24f));
+    if (Lang.rtl()) {
+      row.setCompoundDrawablesWithIntrinsicBounds(null, null, space, null); // as MenuMoreWrap.addItem places icons
+    } else {
+      row.setCompoundDrawablesWithIntrinsicBounds(space, null, null, null);
+    }
+    row.measure(View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+    row.setTag(row.getMeasuredWidth()); // the width the card counts (MenuMoreWrap.getItemsWidth)
+  }
+
+  /**
+   * A row of an app bar's ⋮ ({@link #showHeaderMenu}) that doesn't fit one 48dp line: a label wider than the card wraps
+   * (up to three lines, then an ellipsis), and a row taller than 48dp in the app's font grows, at least 48dp tall with
+   * 12dp above and below its text. Returns how much taller than 48dp it is (the card counts it: which side it opens
+   * on, its height cap and scrolling).
+   */
+  private static int fitHeaderRow (@NonNull TextView row, int rowMaxWidth) {
+    final int rowHeight = Screen.dp(MenuMoreWrap.ITEM_HEIGHT);
+    final boolean wide = row.getTag() instanceof Integer && (Integer) row.getTag() > rowMaxWidth;
+    if (!wide && row.getMeasuredHeight() <= rowHeight) {
+      return 0;
+    }
+    if (wide) {
+      row.setSingleLine(false);
+      row.setMaxLines(3);
+      row.setEllipsize(TextUtils.TruncateAt.END);
+    }
+    row.setMinHeight(rowHeight);
+    final int vertical = Screen.dp(12f);
+    row.setPadding(row.getPaddingLeft(), vertical, row.getPaddingRight(), vertical);
+    final ViewGroup.LayoutParams params = row.getLayoutParams();
+    if (params != null) {
+      params.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+      row.setLayoutParams(params);
+    }
+    row.measure(View.MeasureSpec.makeMeasureSpec(Math.max(0, rowMaxWidth), View.MeasureSpec.AT_MOST), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+    row.setTag(Math.min(row.getMeasuredWidth(), rowMaxWidth));
+    return Math.max(0, row.getMeasuredHeight() - rowHeight);
+  }
+
+  /** Takes the card's theme listeners (its own, its rows', their icons') out of the screen's list. */
+  private static void removeThemeListeners (@Nullable ThemeListenerList listeners, @NonNull List<Object> targets) {
+    if (listeners != null) {
+      for (Object target : targets) {
+        listeners.removeThemeListenerByTarget(target);
+      }
+    }
+    targets.clear();
   }
 
   /**

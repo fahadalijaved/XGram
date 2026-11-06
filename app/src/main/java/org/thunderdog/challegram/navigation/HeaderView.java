@@ -43,6 +43,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 
+import com.fahadali.xgram.appearance.XgramCompactMenu;
 import com.fahadali.xgram.appearance.XgramExpressive;
 
 import org.thunderdog.challegram.R;
@@ -66,6 +67,7 @@ import org.thunderdog.challegram.widget.EmojiTextView;
 import org.thunderdog.challegram.widget.PopupLayout;
 import org.thunderdog.challegram.widget.RootFrameLayout;
 
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -428,6 +430,7 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
 
   @Override
   public void onClick (View v) {
+    xgramLastButton = new WeakReference<>(v); // XGram: the ⋮ a compact ⋮ menu opens at (xgramMoreAnchor)
     if (navigation == null || (!navigation.isDestroyed() && !navigation.isAnimating())) {
       ViewController<?> item = stack.getCurrent();
       if (item != null && ((!item.inSelectMode() && item.getMenuId() != 0) || (item.inSelectMode() && item.getSelectMenuId() != 0))) {
@@ -1126,6 +1129,25 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
     if (ids.length == 0) {
       return;
     }
+    if (themeProvider != null && XgramExpressive.isEnabled() && XgramCompactMenu.isEnabled()) {
+      // XGram: Appearance › Menus › Compact popups: the ⋮ menu is the compact card (icons, red destructive rows) below
+      // the ⋮; a layered one (the media viewer edge to edge) only in its screen's own theme
+      final org.thunderdog.challegram.theme.ThemeDelegate forcedTheme = themeProvider.xgramMoreMenuForcedTheme();
+      if (!isLayered || forcedTheme != null) {
+        final PopupLayout popup = XgramCompactMenu.showHeaderMenu(themeProvider, xgramMoreAnchor(), getMeasuredWidth(), ids, titles, icons, null, forcedTheme, id -> {
+          ViewController<?> c = stack.getCurrent();
+          if (c instanceof MoreDelegate) {
+            ((MoreDelegate) c).onMoreItemPressed(id); // as Telegram X's ⋮ (a pager passes it to its page)
+          }
+        });
+        if (popup != null) {
+          final View bound = popup.getBoundView();
+          // Weak: a closed card's rows still lead to its screen (popup, tag), which must not outlive its close
+          xgramCompactMore = bound instanceof MenuMoreWrap ? new WeakReference<>((MenuMoreWrap) bound) : null;
+          return;
+        }
+      }
+    }
     ThemeListenerList themeListenerList = navigation != null ? navigation.getThemeListeners() : themeProvider != null ? themeProvider.getThemeListeners() : null;
     if (moreWrap == null) {
       moreWrap = xgramNewMoreWrap();
@@ -1155,7 +1177,39 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
    * once it has gone (the chat menu's More…).
    */
   public boolean xgramIsMoreMenuShowing () {
-    return moreWrap != null && moreWrap.isAttachedToWindow();
+    if (moreWrap != null && moreWrap.isAttachedToWindow()) {
+      return true;
+    }
+    // While shown or closing the card is in the popup's views, so the weak reference still holds it
+    final MenuMoreWrap compact = xgramCompactMore != null ? xgramCompactMore.get() : null;
+    if (compact != null && compact.isAttachedToWindow()) {
+      return true;
+    }
+    xgramCompactMore = null; // gone
+    return false;
+  }
+
+  /** XGram: the ⋮ menu last shown as a compact card (Compact popups), while it may still be on screen. */
+  private @Nullable WeakReference<MenuMoreWrap> xgramCompactMore;
+  /** XGram: the header button last tapped (onClick). */
+  private @Nullable WeakReference<View> xgramLastButton;
+
+  /**
+   * XGram: the ⋮ button a compact ⋮ menu opens at: the one just tapped (the profile's, a selection's, this pane's), else
+   * the ⋮ of this header's menu (More…'s second menu, opened with no tap); null when none is on screen (the menu then
+   * opens at the last touch).
+   */
+  public @Nullable View xgramMoreAnchor () {
+    final View last = xgramLastButton != null ? xgramLastButton.get() : null;
+    if (last != null && last.getId() == R.id.menu_btn_more && xgramIsOnScreen(last)) {
+      return last;
+    }
+    final View own = menu != null ? menu.findViewById(R.id.menu_btn_more) : null;
+    return own != null && xgramIsOnScreen(own) ? own : null;
+  }
+
+  private static boolean xgramIsOnScreen (@NonNull View view) {
+    return view.getWindowToken() != null && view.isShown() && view.getWidth() > 0 && view.getHeight() > 0;
   }
 
   /**

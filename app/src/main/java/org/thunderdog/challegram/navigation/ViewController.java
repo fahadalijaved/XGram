@@ -1657,6 +1657,14 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     }
   }
 
+  /**
+   * XGram: the theme this screen's ⋮ menu is drawn in as a compact popup (Appearance › Menus › Compact popups), as its
+   * other menus: null for the app's theme; the media viewer's night theme over media.
+   */
+  public @Nullable ThemeDelegate xgramMoreMenuForcedTheme () {
+    return null;
+  }
+
   // Permissions alerts
 
   @UiThread

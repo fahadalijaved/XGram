@@ -1813,6 +1813,11 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   }
 
   @Override
+  public @Nullable ThemeDelegate xgramMoreMenuForcedTheme () {
+    return getForcedTheme(); // XGram: the ⋮ as a compact popup over media, in the night theme as the viewer's other menus
+  }
+
+  @Override
   public boolean shouldDisallowScreenshots () {
     return mode == MODE_SECRET || !stack.getCurrent().canBeSaved() || super.shouldDisallowScreenshots();
   }
