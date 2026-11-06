@@ -25,6 +25,7 @@ import android.graphics.drawable.Drawable;
 import android.graphics.drawable.RippleDrawable;
 import android.os.Build;
 import android.text.TextPaint;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewOutlineProvider;
 
@@ -533,6 +534,37 @@ public final class XgramM3Chat {
     return dateTextPaint;
   }
 
+  private static Paint floatingChipPaint;
+  private static int floatingChipShadowColor, floatingChipShadowRadius;
+
+  /**
+   * The fill of a chip that floats over the messages (the sticky date) in {@code color}, with the M3 elevation level 2
+   * shadow under it (3dp blur, 1dp down, black at .25 of {@code shadowFactor}): over a bubble of nearly the same tone
+   * (the light scheme) it still reads as lifted. Shapes only cast it on a hardware canvas from Android 9, before that
+   * this is the plain fill. Cached, so a scroll frame allocates nothing. Main thread.
+   */
+  public static Paint floatingChipPaint (@ColorInt int color, float shadowFactor) {
+    if (floatingChipPaint == null) {
+      floatingChipPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+      floatingChipPaint.setStyle(Paint.Style.FILL);
+    }
+    floatingChipPaint.setColor(color);
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+      final int shadowColor = shadowFactor > 0f ? ((int) (255f * .25f * Math.min(1f, shadowFactor))) << 24 : 0;
+      final int shadowRadius = Screen.dp(3f);
+      if (shadowColor != floatingChipShadowColor || shadowRadius != floatingChipShadowRadius) {
+        floatingChipShadowColor = shadowColor;
+        floatingChipShadowRadius = shadowRadius;
+        if (shadowColor != 0) {
+          floatingChipPaint.setShadowLayer(shadowRadius, 0f, Screen.dp(1f), shadowColor);
+        } else {
+          floatingChipPaint.clearShadowLayer();
+        }
+      }
+    }
+    return floatingChipPaint;
+  }
+
   /** Buttons: labelLarge (14sp, 500). */
   public static TextPaint labelLargePaint (@ColorInt int color) {
     if (labelLargePaint == null) {
@@ -550,10 +582,13 @@ public final class XgramM3Chat {
    * The vibrant floating toolbar: a primaryContainer pill, 64dp tall with 8dp padding, holding 48dp icon buttons in
    * onPrimaryContainer with a .10 state layer (a destructive one, delete, in error) and a plain tooltip naming each. It
    * enters with a scale (.8 to 1) and a fade on a spatial spring (SPATIAL_DEFAULT, or the token given), and only fades
-   * with Reduce motion. It floats over the content, so it keeps a small elevation like a FAB.
+   * with Reduce motion. It leaves at once, with a fade and a scale to .9 on the fast effects spring (EFFECTS_FAST, about
+   * 120ms), never a delay or a bounce, and instantly with Reduce motion; a leaving toolbar takes no new touches, so a
+   * tap goes to the message under it. It floats over the content, so it keeps a small elevation like a FAB.
    */
   public static final class FloatingToolbar extends android.widget.LinearLayout {
     private static final long REDUCED_FADE_MS = 150L;
+    private static final float EXIT_SCALE = .9f;
 
     private final XgramExpressive.Spring visibility;
     private boolean shown;
@@ -565,7 +600,7 @@ public final class XgramM3Chat {
       this(context, XgramExpressive.SPATIAL_DEFAULT);
     }
 
-    /** {@code springToken}: the spatial spring it enters and leaves on (XgramExpressive.SPATIAL_*). */
+    /** {@code springToken}: the spatial spring it enters on (XgramExpressive.SPATIAL_*); it always leaves on EFFECTS_FAST. */
     public FloatingToolbar (Context context, int springToken) {
       super(context);
       setOrientation(android.widget.LinearLayout.HORIZONTAL);
@@ -652,36 +687,89 @@ public final class XgramM3Chat {
     }
 
     public void setShown (boolean shown, boolean animated) {
-      if (this.shown == shown && (animated || visibility.getValue() == (shown ? 1f : 0f))) {
+      if (!shown) {
+        hide(animated);
         return;
       }
-      this.shown = shown;
-      if (shown && getVisibility() != View.VISIBLE) {
+      if (this.shown && (animated || visibility.getValue() == 1f)) {
+        return;
+      }
+      this.shown = true;
+      // Ends a running exit without its end action; a show during the exit carries on from where its fade is
+      animate().cancel();
+      if (getVisibility() != View.VISIBLE) {
+        visibility.setValue(0f);
         setVisibility(View.VISIBLE);
+      } else if (!visibility.isRunning()) {
+        visibility.setValue(Math.max(0f, Math.min(1f, getAlpha())));
       }
       if (animated && XgramMotion.reduce()) {
         // Reduce motion: a short crossfade at full size, no scale
-        visibility.setValue(shown ? 1f : 0f);
+        visibility.setValue(1f);
         setScaleX(1f);
         setScaleY(1f);
-        animate().cancel();
-        animate().alpha(shown ? 1f : 0f).setDuration(REDUCED_FADE_MS).withEndAction(() -> {
+        animate().alpha(1f).setDuration(REDUCED_FADE_MS).withEndAction(() -> {
           if (!this.shown) {
             setVisibility(View.GONE);
           }
         }).start();
         return;
       }
-      animate().cancel();
       if (animated) {
-        visibility.animateTo(shown ? 1f : 0f);
-      } else {
-        visibility.setValue(shown ? 1f : 0f);
-        applyVisibility(shown ? 1f : 0f);
-        if (!shown) {
-          setVisibility(View.GONE);
+        visibility.animateTo(1f);
+        if (!visibility.isRunning()) {
+          applyVisibility(1f); // shown again before the exit had moved it
         }
+      } else {
+        visibility.setValue(1f);
+        applyVisibility(1f);
       }
+    }
+
+    /**
+     * Leaves at once: a fade and a scale to .9 on EFFECTS_FAST (about 120ms), no start delay and never the bouncy
+     * spatial spring it enters on. Instant with Reduce motion, and when not animated (even in the middle of an exit).
+     */
+    private void hide (boolean animated) {
+      final boolean wasShown = shown;
+      shown = false;
+      if (getVisibility() == View.GONE) {
+        visibility.setValue(0f);
+        return;
+      }
+      if (!wasShown && animated) {
+        return; // the exit is already running
+      }
+      // Stops the enter spring (its end listener does not run on a cancel) before the exit takes alpha and scale
+      visibility.setValue(0f);
+      animate().cancel();
+      if (!animated || XgramMotion.reduce()) {
+        applyVisibility(0f);
+        setVisibility(View.GONE);
+        return;
+      }
+      animate()
+        .alpha(0f)
+        .scaleX(Math.min(getScaleX(), EXIT_SCALE))
+        .scaleY(Math.min(getScaleY(), EXIT_SCALE))
+        .setStartDelay(0)
+        .setDuration(XgramAppMotion.springDuration(XgramExpressive.EFFECTS_FAST))
+        .setInterpolator(XgramAppMotion.springClamped(XgramExpressive.EFFECTS_FAST))
+        .withEndAction(() -> {
+          if (!shown) {
+            setVisibility(View.GONE);
+          }
+        })
+        .start();
+    }
+
+    @Override
+    public boolean dispatchTouchEvent (MotionEvent e) {
+      // A leaving toolbar takes no new touch (it goes to the message under it); a gesture already on it still ends
+      if (!shown && e.getActionMasked() == MotionEvent.ACTION_DOWN) {
+        return false;
+      }
+      return super.dispatchTouchEvent(e);
     }
 
     public boolean isToolbarShown () {

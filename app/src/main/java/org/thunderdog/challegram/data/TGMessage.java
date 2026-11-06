@@ -1995,8 +1995,8 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     TextPaint textPaint;
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
       // XGram: Material 3 Expressive date (and merged forum topic header): the chat chip, labelMedium in
-      // onSurfaceVariant; text only on the solid surface, a surfaceContainerHigh pill over a wallpaper or while it
-      // floats, the card step with Pure black. Plain (no bubbles) mode draws the same chip.
+      // onSurfaceVariant; text only on the solid surface, a surfaceContainerHigh pill over a wallpaper, the card step
+      // with Pure black, and a surfaceContainerHighest pill while it floats. Plain (no bubbles) mode draws the same chip.
       final boolean bubbles = useBubbles();
       int color = bubbles ? getBubbleDateBackgroundColor() : com.fahadali.xgram.appearance.XgramM3Colors.noWallpaperPillColor();
       int textColor = bubbles ? getBubbleDateTextColor() : com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
@@ -2004,12 +2004,17 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       int chipTop = startY + Screen.dp(bubbles ? 5f : 7f);
       rectF.set(centerX - pDateWidth / 2f - padding, chipTop, centerX + pDateWidth / 2f + padding, chipTop + Screen.dp(com.fahadali.xgram.appearance.XgramR5Chat.CHIP_HEIGHT));
       int pillColor = color;
-      if (((color >>> 24) & 0xff) == 0 && detachFactor > 0f) {
-        pillColor = ColorUtils.alphaColor(detachFactor, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH));
+      if (detachFactor > 0f) {
+        // While it floats over the messages the chip takes the floating chip step (surfaceContainerHighest) and a
+        // small shadow, not the incoming bubble's own tone (surfaceContainerHigh): it read as printed into the bubble
+        // under it, the sender name looking cut off
+        final int floating = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGHEST);
+        pillColor = ((color >>> 24) & 0xff) == 0 ? ColorUtils.alphaColor(detachFactor, floating) : ColorUtils.fromToArgb(color, floating, detachFactor);
       }
       if (((pillColor >>> 24) & 0xff) != 0) {
         float radius = rectF.height() / 2f;
-        c.drawRoundRect(rectF, radius, radius, Paints.fillingPaint(ColorUtils.alphaColor(alpha, pillColor)));
+        final int fillColor = ColorUtils.alphaColor(alpha, pillColor);
+        c.drawRoundRect(rectF, radius, radius, detachFactor > 0f ? com.fahadali.xgram.appearance.XgramM3Chat.floatingChipPaint(fillColor, detachFactor * alpha) : Paints.fillingPaint(fillColor));
       }
       TextPaint datePaint = com.fahadali.xgram.appearance.XgramM3Chat.datePaint(textColor);
       float baseline = rectF.centerY() - (datePaint.ascent() + datePaint.descent()) / 2f;

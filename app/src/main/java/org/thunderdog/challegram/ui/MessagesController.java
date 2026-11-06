@@ -6394,6 +6394,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
         }
         clearSelectedMessageIds();
       }
+      // XGram M3E: the selection toolbar leaves now (even when the app bar is still opening and skips its close), and
+      // at once for a controller reused for another chat (-2: no app bar close, so no onLeaveSelectMode)
+      xgramUpdateSelectionToolbar(position == -1);
       if (pagerContentAdapter != null) {
         iterateMediaTabs(c ->
           c.setInMediaSelectMode(false)
@@ -13363,6 +13366,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
       animator.addUpdateListener(xgramAppBarColorListener);
     }
+    if (!open && xgramSelectionToolbar != null && inSelectMode()) {
+      // XGram M3E: the selection toolbar leaves as the selection closes, not after the app bar's fade (onLeaveSelectMode)
+      xgramSelectionToolbar.setShown(false, true);
+    }
     super.startHeaderTransformAnimator(animator, mode, open);
   }
 
@@ -13390,10 +13397,17 @@ public class MessagesController extends ViewController<MessagesController.Argume
       return;
     }
     boolean selecting = inSelectMode() && selectedMessageIds != null && selectedMessageIds.size() > 0;
+    boolean show = false;
+    if (selecting) {
+      for (int id : XGRAM_TOOLBAR_ACTIONS) {
+        show |= xgramToolbarActionAvailable(id);
+      }
+    }
     for (int id : XGRAM_TOOLBAR_ACTIONS) {
-      View button = xgramSelectionToolbar.findViewById(id);
+      // Hiding keeps the last buttons, so the toolbar fades out at its width instead of collapsing to its padding
+      View button = show ? xgramSelectionToolbar.findViewById(id) : null;
       if (button != null) {
-        int visibility = selecting && xgramToolbarActionAvailable(id) ? View.VISIBLE : View.GONE;
+        int visibility = xgramToolbarActionAvailable(id) ? View.VISIBLE : View.GONE;
         if (button.getVisibility() != visibility) {
           button.setVisibility(visibility);
         }
@@ -13402,7 +13416,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
         headerView.updateButton(R.id.menu_messageActions, id, View.GONE, 0);
       }
     }
-    xgramSelectionToolbar.setShown(selecting && xgramSelectionToolbar.hasVisibleButtons(), animated);
+    xgramSelectionToolbar.setShown(show, animated);
   }
 
   /**

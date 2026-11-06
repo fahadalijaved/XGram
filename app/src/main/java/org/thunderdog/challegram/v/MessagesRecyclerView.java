@@ -724,6 +724,22 @@ public class MessagesRecyclerView extends RecyclerView implements FactorAnimator
             }
             boolean isLast = i == lastIndex;
             int checkTop = viewTop - topOffset;
+            if (isLast && checkTop < 0 && msg.hasDate() && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+              // XGram: the top message's own date with its gap going under the bars. At rest the chip stays in its
+              // gap and scrolls away with it: pinned at the top it lay on the sender name and never faded. The pinned
+              // copy shows only while scrolling and fades with the other floating dates. Its floating look comes in
+              // over the first 3dp, while it is still inside its gap, so it is opaque before it can reach any text.
+              final float restAlpha = 1f - scrollFactor;
+              if (restAlpha > 0f) {
+                msg.drawDate(c, centerX, viewTop, 0f, restAlpha);
+              }
+              msg.drawDate(c, centerX, top, MathUtils.clamp((float) -checkTop / (float) Screen.dp(3f)), scrollFactor);
+              hasDrawn = true;
+              lastTop = top;
+              lastMessage = msg;
+              lastAlpha = scrollFactor;
+              continue;
+            }
             float detachFactor = !isLast || checkTop >= 0 ? 0f : MathUtils.clamp((float) -checkTop / (float) dateHeight);
             float alpha = isLast ? scrollFactor : 1f;
             float drawAlpha = detachFactor == 1f ? alpha : 1f;
