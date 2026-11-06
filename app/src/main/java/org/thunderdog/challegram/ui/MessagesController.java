@@ -628,6 +628,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   @Override
   protected void onBottomInsetChanged (int extraBottomInset, int extraBottomInsetWithoutIme, boolean isImeInset) {
     super.onBottomInsetChanged(extraBottomInset, extraBottomInsetWithoutIme, isImeInset);
+    xgramUpdateBottomGap(); // XGram M3E: the gap under the composer row follows the navigation bar
     if (emojiKeyboardFrameLayout != null) {
       emojiKeyboardFrameLayout.setExtraBottomInset(extraBottomInset, extraBottomInsetWithoutIme);
     }
@@ -635,8 +636,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
     iterateMediaTabs(c ->
       c.setBottomInset(extraBottomInset, extraBottomInsetWithoutIme)
     );
-    Views.setLayoutHeight(bottomBar, Screen.dp(48f) + extraBottomInsetWithoutIme + xgramBottomBarRoom() * 2);
-    Views.setPaddingBottom(bottomBar, extraBottomInsetWithoutIme + xgramBottomBarRoom());
+    Views.setLayoutHeight(bottomBar, Screen.dp(48f) + xgramBarInsetWithoutIme() + xgramBottomBarRoom() * 2);
+    Views.setPaddingBottom(bottomBar, xgramBarInsetWithoutIme() + xgramBottomBarRoom());
     checkScrollButtonOffsets();
     xgramLastBottomInset = extraBottomInset; // XGram: the full-height side tabs' last tabs clear the navigation bar or keyboard
     if (xgramSideTabs != null) {
@@ -645,14 +646,66 @@ public class MessagesController extends ViewController<MessagesController.Argume
     updateMessagesViewInset();
     onMessagesFrameChanged();
     if (searchControlsForChannel) {
-      Views.setLayoutHeight(searchControlsLayout, Screen.dp(48f) + extraBottomInset);
+      Views.setLayoutHeight(searchControlsLayout, Screen.dp(48f) + xgramBarInset());
     }
-    Views.setPaddingBottom(searchControlsReveal, extraBottomInset);
+    Views.setPaddingBottom(searchControlsReveal, xgramBarInset());
     if (searchControlsLayout != null && needSearchControlsTranslate()) {
-      searchControlsLayout.setTranslationY((Screen.dp(49f) + extraBottomInset) * (1f - searchControlsFactor));
+      searchControlsLayout.setTranslationY((Screen.dp(49f) + xgramBarInset()) * (1f - searchControlsFactor));
     }
     updateSearchControlsInset();
     updateCommandKeyboardHeight();
+  }
+
+  // XGram M3E: the gap under the composer row and the bars that take its place (the Join / Mute bar, the search bar)
+  // while the keyboard is down: 8dp above the navigation bar and clear of the display's rounded corners
+  // (XgramM3Composer.bottomGap). -1 while unknown or with Expressive design off: the system inset then, as before.
+  private int xgramBottomGap = -1;
+
+  /** XGram: the chats that keep the gap (as the M3E corners view): not the wallpaper and text size previews or a peek. */
+  private boolean xgramBottomGapOn () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !isInForceTouchMode() && (previewMode == PREVIEW_MODE_NONE || previewMode == PREVIEW_MODE_EVENT_LOG || previewMode == PREVIEW_MODE_SEARCH);
+  }
+
+  /** XGram: the bottom inset of the composer row and the bars without the keyboard: the gap when it is larger. */
+  private int xgramBarInsetWithoutIme () {
+    return xgramBottomGapOn() && xgramBottomGap >= 0 ? Math.max(extraBottomInsetWithoutIme, xgramBottomGap) : extraBottomInsetWithoutIme;
+  }
+
+  /** XGram: the bottom inset of the composer row and the bars: the keyboard's while it is up (it covers the corners). */
+  private int xgramBarInset () {
+    return !xgramBottomGapOn() || extraBottomInset > extraBottomInsetWithoutIme ? extraBottomInset : xgramBarInsetWithoutIme();
+  }
+
+  /** XGram: measures the gap again (the navigation bar, the display and its corners); true when it changed. */
+  private boolean xgramUpdateBottomGap () {
+    final int gap = xgramBottomGapOn() ? com.fahadali.xgram.appearance.XgramM3Composer.bottomGap(contentView, context().getWindow().getDecorView(), extraBottomInsetWithoutIme) : -1;
+    if (xgramBottomGap != gap) {
+      xgramBottomGap = gap;
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * XGram: moves the composer row, the bars in its place, the buttons over the messages and the list's end to the
+   * gap: the bars' part of onBottomInsetChanged. That one does not run while the inset stays 0 (the gesture hint
+   * hidden), nor when only the display changes (the Fold's two screens have different corners).
+   */
+  private void xgramApplyBottomGap () {
+    updateBottomWrapOffset();
+    Views.setLayoutHeight(bottomBar, Screen.dp(48f) + xgramBarInsetWithoutIme() + xgramBottomBarRoom() * 2);
+    Views.setPaddingBottom(bottomBar, xgramBarInsetWithoutIme() + xgramBottomBarRoom());
+    checkScrollButtonOffsets();
+    updateMessagesViewInset();
+    onMessagesFrameChanged();
+    if (searchControlsForChannel) {
+      Views.setLayoutHeight(searchControlsLayout, Screen.dp(48f) + xgramBarInset());
+    }
+    Views.setPaddingBottom(searchControlsReveal, xgramBarInset());
+    if (searchControlsLayout != null && needSearchControlsTranslate()) {
+      searchControlsLayout.setTranslationY((Screen.dp(49f) + xgramBarInset()) * (1f - searchControlsFactor));
+    }
+    updateSearchControlsInset();
   }
 
   private void updateSearchControlsInset () {
@@ -660,14 +713,14 @@ public class MessagesController extends ViewController<MessagesController.Argume
       for (int i = 0; i < searchControlsLayout.getChildCount(); i++) {
         View view = searchControlsLayout.getChildAt(i);
         if (view != null && view != searchControlsReveal) {
-          Views.setBottomMargin(view, extraBottomInset / 2);
+          Views.setBottomMargin(view, xgramBarInset() / 2);
         }
       }
     }
   }
 
   private void updateMessagesViewInset () {
-    int inset = bottomWrap != null && bottomWrap.getVisibility() == View.VISIBLE ? 0 : extraBottomInset;
+    int inset = bottomWrap != null && bottomWrap.getVisibility() == View.VISIBLE ? 0 : xgramBarInset();
     int appliedInset = Views.getAppliedBottomInset(messagesView);
     if (inset != appliedInset) {
       manager.maintainScrollPositionAndOffset(() -> {
@@ -1670,7 +1723,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
     // Bottom bar
 
-    params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(48f) + extraBottomInsetWithoutIme + xgramBottomBarRoom() * 2);
+    xgramUpdateBottomGap(); // XGram M3E: the gap under the bars, from the window until this chat is laid out in it
+    params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(48f) + xgramBarInsetWithoutIme() + xgramBottomBarRoom() * 2);
     params.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
     params.bottomMargin = -xgramBottomBarRoom();
 
@@ -1681,7 +1735,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
         updateBottomBarStyle();
       }
     };
-    bottomBar.setPadding(0, xgramBottomBarRoom(), 0, extraBottomInsetWithoutIme + xgramBottomBarRoom());
+    bottomBar.setPadding(0, xgramBottomBarRoom(), 0, xgramBarInsetWithoutIme() + xgramBottomBarRoom());
     bottomBar.setOnClickListener(this);
     bottomBar.setLayoutParams(params);
     addThemeInvalidateListener(bottomBar);
@@ -1770,6 +1824,22 @@ public class MessagesController extends ViewController<MessagesController.Argume
     contentView.addView(searchByUserViewWrapper);
 
     updateView();
+
+    if (xgramBottomGapOn()) {
+      // XGram M3E: the gap under the composer row. While the inset stays 0 (the gesture hint hidden) onBottomInsetChanged
+      // never runs, so it is applied here. The corners it clears differ per display, so it is measured again when the
+      // chat's size changes (first layout, rotation, the Fold folded or unfolded, multi-window), not on every frame.
+      xgramApplyBottomGap();
+      contentView.addOnLayoutChangeListener((gv, gl, gt, gr, gb, gol, got, gor, gob) -> {
+        if (gr - gl != gor - gol || gb - gt != gob - got) {
+          gv.post(() -> {
+            if (!isDestroyed() && xgramUpdateBottomGap()) {
+              xgramApplyBottomGap();
+            }
+          });
+        }
+      });
+    }
 
     TGLegacyManager.instance().addEmojiListener(this);
 
@@ -4615,6 +4685,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
   @Override
   public void onFocus () {
     super.onFocus();
+    if (xgramBottomGapOn() && xgramUpdateBottomGap()) {
+      xgramApplyBottomGap(); // XGram M3E: measured from where the chat is laid out now that it is in front
+    }
     xgramUpdateSnackbarRoom(); // XGram: snackbars float above the message box (first: Later's in-chat snackbar below)
     xgramCheckForumLayout(); // XGram: the user's own topics layout changed while this chat was covered
     xgramCheckAutoTranslate(); // XGram: e.g. a chat preview opened in full
@@ -6966,7 +7039,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     // XGram: the scroll button's spring overshoots past 1 with Expressive design: it moves the bar, but the collapse
     // (colors, outline and icon alpha) and the bar's alpha take the clamped factor. The same value with it off.
     float collapseFactor = MathUtils.clamp(detachFactor);
-    int barHeight = Screen.dp(48f) + extraBottomInset;
+    int barHeight = Screen.dp(48f) + xgramBarInset(); // XGram M3E: the bar is taller by the gap under it
     int baseY = needSearchControlsTranslate() ? (int) ((float) barHeight * MathUtils.clamp(searchControlsFactor)) : 0;
     float fromY = bottomButtonFactor == 1f ? baseY : baseY + (int) ((float) barHeight * (1f - bottomButtonFactor));
     float alpha = (1f - 1f * collapseFactor * (1f - bottomButtonFactor)) * (1f - searchControlsFactor);
@@ -6975,7 +7048,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     // (xgramFabPitch); the bar's own centre is 24dp up, so 16dp + half the FAB - 24dp (16dp for the 48dp FAB) + pitch
     final boolean xgramFabs = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
     int moveBy = xgramFabPitch();
-    float toY = -getButtonsOffset() - Screen.dp(xgramFabs ? 16f + CircleButton.XGRAM_CHAT_FAB_DP / 2f - 24f : 16f) - moveBy - moveBy * mentionButtonFactor + (bottomWrap.getVisibility() == View.VISIBLE ? 0 : extraBottomInsetWithoutIme); //  -getReplyOffset() - (Screen.dp(74f) - Screen.dp(48f)) / 2f;
+    float toY = -getButtonsOffset() - Screen.dp(xgramFabs ? 16f + CircleButton.XGRAM_CHAT_FAB_DP / 2f - 24f : 16f) - moveBy - moveBy * mentionButtonFactor + (bottomWrap.getVisibility() == View.VISIBLE ? 0 : xgramBarInsetWithoutIme()); //  -getReplyOffset() - (Screen.dp(74f) - Screen.dp(48f)) / 2f;
     bottomBar.setCollapseFactor(collapseFactor);
     bottomBar.setAlpha(alpha);
     int dx = (int) ((bottomBar.getMeasuredWidth() / 2f - Screen.dp(16f) - Screen.dp(xgramFabs ? CircleButton.XGRAM_CHAT_FAB_DP : 48f) / 2f) * detachFactor);
@@ -8141,7 +8214,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   private float getButtonsOffset () {
-    return getReplyOffset() + getAttachedFilesOffset() + xgramUndoBarOffset() /* XGram: the Undo send bar */ + xgramBottomOverlayRoom /* XGram: the chat export's bar */ + getSearchControlsOffset() + getKeyboardOffset() + (bottomWrap.getVisibility() == View.VISIBLE ? 0 : extraBottomInsetWithoutIme);
+    return getReplyOffset() + getAttachedFilesOffset() + xgramUndoBarOffset() /* XGram: the Undo send bar */ + xgramBottomOverlayRoom /* XGram: the chat export's bar */ + getSearchControlsOffset() + getKeyboardOffset() + (bottomWrap.getVisibility() == View.VISIBLE ? 0 : xgramBarInsetWithoutIme() /* XGram M3E: above the gap */);
   }
 
   // XGram: Undo send. The bar of waiting messages sits right above the reply bar (and below the files to send and the
@@ -10869,7 +10942,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   private void updateBottomWrapOffset () {
     if (bottomWrap != null) {
-      int height = emojiShown || commandsShown ? 0 : extraBottomInset;
+      int height = emojiShown || commandsShown ? 0 : xgramBarInset(); // XGram M3E: the gap under the row
       Views.setPaddingBottom(bottomWrap, height);
       if (bottomSpace.setLayoutHeight(height, false)) {
         onMessagesFrameChanged();
@@ -14744,7 +14817,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     searchControlsReveal = new RippleRevealView(context);
     searchControlsReveal.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     searchControlsLayout.addView(searchControlsReveal);
-    Views.setPaddingBottom(searchControlsReveal, extraBottomInset);
+    Views.setPaddingBottom(searchControlsReveal, xgramBarInset());
     addThemeInvalidateListener(searchControlsReveal);
 
     fp = FrameLayoutFix.newParams(Screen.dp(52f), Screen.dp(49f), Gravity.LEFT | Gravity.CENTER_VERTICAL);
@@ -14880,7 +14953,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
           rp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
           rp.addRule(RelativeLayout.ALIGN_BOTTOM, 0);
           rp.addRule(RelativeLayout.ALIGN_TOP, 0);
-          rp.height = Screen.dp(48f) + extraBottomInset;
+          rp.height = Screen.dp(48f) + xgramBarInset();
         } else {
           rp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM, 0);
           rp.addRule(RelativeLayout.ALIGN_BOTTOM, R.id.msg_bottom);
@@ -14977,7 +15050,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       if (xgramSearchBackground != null) {
         xgramSearchBackground.setFactor(translate ? 1f : factor); // XGram: the M3E bar fades in instead
       }
-      searchControlsLayout.setTranslationY(translate ? (Screen.dp(49f) + extraBottomInset) * (1f - factor) : 0f);
+      searchControlsLayout.setTranslationY(translate ? (Screen.dp(49f) + xgramBarInset()) * (1f - factor) : 0f);
       if (translate) {
         checkScrollButtonOffsets();
       }

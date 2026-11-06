@@ -23,13 +23,17 @@ import android.os.Build;
 import android.os.SystemClock;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.RoundedCorner;
 import android.view.View;
+import android.view.ViewParent;
+import android.view.WindowInsets;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 
 import androidx.annotation.ColorInt;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
 
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.tool.Screen;
@@ -60,6 +64,18 @@ public final class XgramM3Composer {
   public static final float RECORD_EXTRA_GAP = 6f;
   /** End padding of the icon buttons while the record button is hidden: the field end margin. */
   public static final float ATTACH_END_PADDING = 8f;
+  /** M3 space between a bar anchored to the bottom and the navigation bar (or the screen edge). */
+  public static final float BOTTOM_GAP = 8f;
+  /** Room kept between the resting round ends of the row (the send / record circle, the field's ends) and the screen outline. */
+  public static final float CORNER_MARGIN = 4f;
+  /** Minimum bottom gap while the display's corners are unknown (before Android 12, or none reported). */
+  public static final float CORNER_FALLBACK_GAP = 12f;
+  /**
+   * Distance from a side edge to the centre of the round end nearest it. The record button's circle (2dp margin, 2dp
+   * padding, half of its 45dp) is the closest at 26.5dp; the send button (27.5dp), the field's rounded start and the
+   * emoji button (28dp) sit further in, so one value covers both corners, also in RTL.
+   */
+  public static final float END_CIRCLE_INSET = 26.5f;
 
   // Field geometry
 
@@ -160,6 +176,131 @@ public final class XgramM3Composer {
 
   /** Hint opacity while the chat does not let the user write (M3 disabled label, about onSurface at 38%). */
   public static final float DISABLED_HINT_ALPHA = .6f;
+
+  // Bottom gap
+
+  /**
+   * The gap (px) under the composer row, and under the bars that take its place, while the keyboard is down: 8dp
+   * above the navigation bar, and at least what the display's rounded bottom corners need for the row's round ends
+   * to stay inside the screen outline ({@link #cornerGap}). At least 12dp while the corners are unknown. With the
+   * gesture hint hidden the navigation inset is 0, and without this the row sat on the very edge, cut by the corners.
+   *
+   * @param content the chat's view: its own edges once it is laid out in its window and in view
+   * @param windowRoot the activity's decor view: the whole window until then
+   * @param navigationInset the bottom system inset without the keyboard
+   */
+  public static int bottomGap (@Nullable View content, @Nullable View windowRoot, int navigationInset) {
+    final int corners = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ? cornerGap(content, windowRoot) : -1;
+    return Math.max(navigationInset + Screen.dp(BOTTOM_GAP), corners >= 0 ? corners : Screen.dp(CORNER_FALLBACK_GAP));
+  }
+
+  /**
+   * How far (px) the row's bottom has to stay above the bottom of the chat for the display's rounded bottom corners,
+   * rounded up to the 4dp grid; 0 when the corners are out of the way, -1 when they are unknown. The resting 40dp
+   * circles nearest the sides keep {@link #CORNER_MARGIN} inside the outline, and the pressed shape (the same box with
+   * 8dp corners, which reaches further into the corner) stays inside it.
+   */
+  @RequiresApi(Build.VERSION_CODES.S)
+  private static int cornerGap (@Nullable View content, @Nullable View windowRoot) {
+    try {
+      View window = windowRoot;
+      float left = 0f, right = 0f, bottom = 0f;
+      boolean placed = false;
+      if (content != null && content.isAttachedToWindow() && content.getWidth() > 0 && content.getHeight() > 0) {
+        // Where the chat is laid out in its window, not where a running slide draws it (the corners are window-relative)
+        window = content.getRootView();
+        int x = 0, y = 0;
+        View view = content;
+        while (view != window) {
+          x += view.getLeft();
+          y += view.getTop();
+          final ViewParent parent = view.getParent();
+          if (!(parent instanceof View)) {
+            break;
+          }
+          view = (View) parent;
+          x -= view.getScrollX();
+          y -= view.getScrollY();
+        }
+        // Only while it is in view: a chat on a pager page scrolled away (its media tabs) counts as the whole window
+        if (x >= 0 && y >= 0 && x + content.getWidth() <= window.getWidth() && y + content.getHeight() <= window.getHeight()) {
+          left = x;
+          right = x + content.getWidth();
+          bottom = y + content.getHeight();
+          placed = true;
+        }
+      }
+      if (window == null) {
+        return -1;
+      }
+      if (!placed) {
+        if (window.getWidth() <= 0 || window.getHeight() <= 0) {
+          return -1;
+        }
+        right = window.getWidth();
+        bottom = window.getHeight();
+      }
+      final WindowInsets insets = window.getRootWindowInsets();
+      if (insets == null) {
+        return -1;
+      }
+      // null when the display has square corners or the window does not reach that corner (split screen)
+      final RoundedCorner bottomLeft = insets.getRoundedCorner(RoundedCorner.POSITION_BOTTOM_LEFT);
+      final RoundedCorner bottomRight = insets.getRoundedCorner(RoundedCorner.POSITION_BOTTOM_RIGHT);
+      if (bottomLeft == null && bottomRight == null) {
+        return -1;
+      }
+      final float inset = Screen.dpf(END_CIRCLE_INSET);
+      float need = 0f;
+      if (bottomLeft != null) {
+        need = Math.max(need, cornerNeed(bottomLeft, bottom, bottomLeft.getCenter().x - (left + inset)));
+      }
+      if (bottomRight != null) {
+        need = Math.max(need, cornerNeed(bottomRight, bottom, (right - inset) - bottomRight.getCenter().x));
+      }
+      if (need <= 0f) {
+        return 0;
+      }
+      final float grid = Screen.dpf(4f);
+      return (int) Math.ceil(Math.ceil(need / grid) * grid);
+    } catch (Throwable ignored) {
+      return -1;
+    }
+  }
+
+  /**
+   * The gap one bottom corner needs for the round end whose centre is {@code hx} px from the corner's centre towards
+   * the side edge, half the row above the row's bottom.
+   */
+  @RequiresApi(Build.VERSION_CODES.S)
+  private static float cornerNeed (RoundedCorner corner, float bottom, float hx) {
+    final float radius = corner.getRadius();
+    final float centerY = corner.getCenter().y;
+    final float above = Screen.dpf(ROW_HEIGHT) / 2f;
+    final float half = Screen.dpf(XgramExpressiveC.ICON_BUTTON_BOX) / 2f; // the field's ends have the same 20dp radius
+    // Resting: the full circle, CORNER_MARGIN inside the outline
+    float need = discNeed(radius, centerY, bottom, hx, above, half + Screen.dpf(CORNER_MARGIN));
+    // Pressed: a box with 8dp corners, whose outer corner is an 8dp disc that must stay inside the outline
+    final float pressed = Screen.dpf(XgramExpressive.CORNER_S);
+    final float shift = half - pressed;
+    need = Math.max(need, discNeed(radius, centerY, bottom, hx + shift, above - shift, pressed));
+    return need;
+  }
+
+  /**
+   * A disc of radius {@code r} lies inside a rounded corner of radius R when its centre is within R - r of the
+   * corner's centre. For a disc centred {@code hx} px from the corner's centre towards the side edge and
+   * {@code above} px over the row's bottom, returns how far the row's bottom must stay above {@code bottom}: 0 when
+   * the straight edges alone keep it in (the corner is smaller than the disc, or the disc is beside it).
+   */
+  private static float discNeed (float radius, float centerY, float bottom, float hx, float above, float r) {
+    final float inner = radius - r;
+    if (inner <= 0f || hx <= 0f) {
+      return 0f;
+    }
+    final float lowest = hx < inner ? centerY + (float) Math.sqrt(inner * inner - hx * hx) : centerY;
+    return bottom - above - lowest;
+  }
 
   // Bars that take the composer's place
 
