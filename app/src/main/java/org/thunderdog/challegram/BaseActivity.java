@@ -2373,6 +2373,20 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
     }
   }
 
+  /**
+   * XGram: a tracked dialog is on screen (the update's welcome card, an AlertDialog, a picker): a prompt that would
+   * open under it waits (XgramFullScreenCalls).
+   */
+  public boolean xgramAnyDialogShowing () {
+    for (int i = xgramDialogs.size() - 1; i >= 0; i--) {
+      android.app.Dialog dialog = xgramDialogs.get(i).get();
+      if (dialog != null && dialog.isShowing()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   @Nullable
   private static View xgramDecorOf (@NonNull android.app.Dialog dialog) {
     final android.view.Window window = dialog.getWindow();

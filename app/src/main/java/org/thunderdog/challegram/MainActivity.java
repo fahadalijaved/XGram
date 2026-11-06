@@ -137,6 +137,7 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
     TdlibManager.instance().global().addAccountListener(this);
     TdlibManager.instance().global().addCountersListener(this);
     TdlibManager.instance().global().addResolvableProblemAvailabilityListener(this);
+    com.fahadali.xgram.call.XgramFullScreenCalls.addListener(xgramFullScreenCallsListener); // XGram: the ☰'s dot
     reloadTdlib();
     com.fahadali.xgram.export.XgramExport.onAppLaunch(); // XGram: chat export, what an export killed with the app left
 
@@ -263,6 +264,19 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
     return xgramMenuBadgeColorId;
   }
 
+  /**
+   * XGram: the badge of the ☰ itself, of the chat list pane's ☰ and of the navigation rail's menu button: the one above,
+   * or the error dot while full-screen calls are off (the side menu's first row allows them). The floating toolbar's
+   * photo keeps the one above, as its long press doesn't lead there.
+   */
+  @ColorId private int xgramMenuBadgeWithFsi = ColorId.NONE;
+
+  public @ColorId int getXgramMenuBadgeWithFsi () {
+    return xgramMenuBadgeWithFsi;
+  }
+
+  private final com.fahadali.xgram.call.XgramFullScreenCalls.Listener xgramFullScreenCallsListener = off -> updateCounter();
+
   private void updateCounter () {
     Tdlib tdlib = currentTdlib();
     boolean animated = getActivityState() == UI.State.RESUMED;
@@ -275,16 +289,27 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
       } else {
         colorId = ColorId.headerBadgeFailed;
       }
-      backButton.setMenuBadge(colorId, animated);
     } else {
       TdlibBadgeCounter counter = TdlibManager.instance().getTotalUnreadBadgeCounter(tdlib.accountId());
       if (counter.getCount() > 0) {
         colorId = counter.isMuted() ? ColorId.headerBadgeMuted : ColorId.headerBadge;
-        backButton.setMenuBadge(colorId, animated);
       } else {
         colorId = ColorId.NONE;
-        backButton.hideMenuBadge(animated);
       }
+    }
+    // XGram: calls can't ring full screen (Android 14+): the error dot, over another account's unread chats
+    final boolean fsiOff = com.fahadali.xgram.call.XgramFullScreenCalls.isOff(this);
+    @ColorId final int withFsi = fsiOff ? ColorId.headerBadgeFailed : colorId;
+    if (withFsi != ColorId.NONE) {
+      backButton.setMenuBadge(withFsi, animated);
+    } else {
+      backButton.hideMenuBadge(animated);
+    }
+    backButton.xgramSetMenuDescription(fsiOff ? Lang.getString(R.string.XgramFullScreenCallsBadgeDescription, Lang.getString(R.string.XgramNavRailOpenMenu)) : null);
+    xgramMenuBadgeWithFsi = withFsi;
+    com.fahadali.xgram.layout.XgramTwoPane twoPane = xgramTwoPane();
+    if (twoPane != null) {
+      twoPane.setMenuBadge(withFsi, animated); // the chat list pane's ☰ and the rail's menu button
     }
     xgramMenuBadgeColorId = colorId;
     com.fahadali.xgram.layout.XgramNavToolbar toolbar = com.fahadali.xgram.layout.XgramNavToolbar.of(this);
@@ -1783,6 +1808,11 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
     Log.i("MainActivity.onResume");
     // Log.e("%s", Strings.getHexColor(U.compositeColor(Theme.headerColor(), Theme.getColor(ColorId.statusBar)), false));
     tdlib.contacts().makeSilentPermissionCheck(this);
+    // XGram: full-screen calls may have been allowed (or turned off) on Android's page: the dot, the side menu's row,
+    // the Calls banner and Settings follow; the notify below draws the ☰ again
+    com.fahadali.xgram.call.XgramFullScreenCalls.refresh(this);
+    // XGram: an update's "Update this app?" that couldn't open while XGram was off screen opens now; "XGram updated" goes
+    com.fahadali.xgram.update.XgramInstallReceiver.onResume(this);
     tdlib.context().global().notifyResolvableProblemAvailabilityMightHaveChanged();
     tdlib.context().dateManager().checkCurrentDate();
     UI.startNotificationService();
@@ -1794,6 +1824,7 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
     TdlibManager.instance().global().removeAccountListener(this);
     TdlibManager.instance().global().removeCountersListener(this);
     TdlibManager.instance().global().removeResolvableProblemAvailabilityListener(this);
+    com.fahadali.xgram.call.XgramFullScreenCalls.removeListener(xgramFullScreenCallsListener); // XGram
     destroyMessageControllers();
 
     Log.i("MainActivity.onDestroy");

@@ -546,8 +546,20 @@ public class AppUpdater implements InstallStateUpdatedListener, FileUpdateListen
         // TODO guide on how to allow installing APKs
         // XGram: the installer opens only when the file's SHA-256 matches the post's "SHA-256:" line.
         final Tdlib.UpdateFileInfo updateFile = telegramChannelFile;
-        XgramUpdates.verifyThenInstall(telegramChannelTdlib, xgramUpdate, () ->
-          UI.openFile(new TdlibContext(context, telegramChannelTdlib), updateFile.document.fileName, new File(updateFile.document.document.local.path), updateFile.document.mimeType, 0),
+        final Tdlib updateTdlib = telegramChannelTdlib;
+        XgramUpdates.verifyThenInstall(telegramChannelTdlib, xgramUpdate, () -> {
+            final File apk = new File(updateFile.document.document.local.path);
+            final Runnable systemInstaller = () ->
+              UI.openFile(new TdlibContext(context, updateTdlib), updateFile.document.fileName, apk, updateFile.document.mimeType, 0);
+            // XGram: Android 14+ installs it through a session that keeps full-screen calls allowed (an update reset
+            // them); the system installer as before when that can't be done
+            if (!com.fahadali.xgram.update.XgramSelfInstaller.install(context, apk, systemInstaller)) {
+              systemInstaller.run();
+            } else {
+              // The system shows no "App installed / Open" after a session: said now, so XGram closing isn't a crash
+              com.fahadali.xgram.appearance.XgramR6B3Shell.snackbar(org.thunderdog.challegram.core.Lang.getString(org.thunderdog.challegram.R.string.XgramUpdSelfCloses), true);
+            }
+          },
           this::downloadUpdate, // XGram M3E r6: "Download again" on the snackbar of a bad file
           onChecked
         );

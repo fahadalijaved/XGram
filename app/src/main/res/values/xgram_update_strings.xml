@@ -83,4 +83,13 @@
   <string name="XgramUpdCheckAgain">Check again</string>
   <string name="XgramUpdTryAgain">Try again</string>
   <string name="XgramUpdSettings">Update settings</string>
+
+  <!-- The update installed by XGram itself (com.fahadali.xgram.update.XgramSelfInstaller, Android 14+): XGram closes as
+       it updates, and the system shows no "App installed / Open" after it -->
+  <string name="XgramUpdSelfChannel">XGram updates</string>
+  <string name="XgramUpdSelfCloses">XGram will close to finish updating.</string>
+  <string name="XgramUpdSelfConfirmTitle">Tap to finish updating XGram</string>
+  <string name="XgramUpdSelfConfirmText">Android asks you to confirm the update.</string>
+  <string name="XgramUpdSelfDoneTitle">XGram updated to %1$s</string>
+  <string name="XgramUpdSelfDoneText">Tap to open</string>
 </resources>

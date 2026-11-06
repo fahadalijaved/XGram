@@ -218,6 +218,7 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
   public void onActivityResume () {
     super.onActivityResume();
     checkSettingsClickBait();
+    xgramUpdateFullScreenCallsRow(); // XGram
   }
 
   @Override
@@ -328,6 +329,17 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
         if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && position >= 0 && position < getItems().size()) {
           xgramBindRow(holder.itemView, getItems().get(position));
         }
+      }
+
+      @Override
+      protected org.thunderdog.challegram.ui.SettingHolder initCustom (ViewGroup parent, int customViewType) {
+        if (customViewType == com.fahadali.xgram.call.XgramFullScreenCallsRow.VIEW_TYPE) {
+          // XGram: full-screen calls are off (Android 14+): the row opens Android's page and the menu closes
+          com.fahadali.xgram.call.XgramFullScreenCallsRow row = com.fahadali.xgram.call.XgramFullScreenCallsRow.forDrawer(parent.getContext());
+          row.setOnClickListener(v -> xgramOpenFullScreenCallsSettings());
+          return new org.thunderdog.challegram.ui.SettingHolder(row);
+        }
+        return super.initCustom(parent, customViewType);
       }
     };
     adapter.setOnLongClickListener(this);
@@ -575,6 +587,7 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
     TdlibManager.instance().global().addTokenStateListener(this);
     com.fahadali.xgram.activity.XgramActivityBadge.instance().addListener(xgramActivityBadgeListener); // XGram
     com.fahadali.xgram.XgramSettings.instance().addListener(xgramActivitySettingsListener); // XGram
+    com.fahadali.xgram.call.XgramFullScreenCalls.addListener(xgramFullScreenCallsListener); // XGram
 
     return contentView;
   }
@@ -592,6 +605,37 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
     TdlibManager.instance().global().removeTokenStateListener(this);
     com.fahadali.xgram.activity.XgramActivityBadge.instance().removeListener(xgramActivityBadgeListener); // XGram
     com.fahadali.xgram.XgramSettings.instance().removeListener(xgramActivitySettingsListener); // XGram
+    com.fahadali.xgram.call.XgramFullScreenCalls.removeListener(xgramFullScreenCallsListener); // XGram
+  }
+
+  // XGram: the warning row at the top of the menu while full-screen calls are off (Android 14+). It goes as soon as
+  // they are allowed (XgramFullScreenCalls reads it again on every resume, so right after Android's page).
+
+  private final com.fahadali.xgram.call.XgramFullScreenCalls.Listener xgramFullScreenCallsListener = off -> xgramUpdateFullScreenCallsRow();
+
+  private static ListItem xgramFullScreenCallsItem () {
+    return new ListItem(ListItem.TYPE_CUSTOM - com.fahadali.xgram.call.XgramFullScreenCallsRow.VIEW_TYPE, R.id.btn_xgramFullScreenCalls);
+  }
+
+  private void xgramUpdateFullScreenCallsRow () {
+    if (adapter == null || isDestroyed()) {
+      return;
+    }
+    final boolean off = com.fahadali.xgram.call.XgramFullScreenCalls.isOff(context);
+    final int index = adapter.indexOfViewById(R.id.btn_xgramFullScreenCalls);
+    if (off && index == -1) {
+      final int start = xgramMenuStart(); // right before the menu's first item, under the accounts when they are open
+      if (start != -1) {
+        adapter.addItem(start, xgramFullScreenCallsItem());
+      }
+    } else if (!off && index != -1) {
+      adapter.removeItem(index);
+    }
+  }
+
+  private void xgramOpenFullScreenCallsSettings () {
+    com.fahadali.xgram.call.XgramFullScreenCalls.openSettings(context);
+    close(0f, null);
   }
 
   // XGram: Activity's row follows its count, and comes or goes with the Activity switch
@@ -833,6 +877,10 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
   private void addMenuItems (List<ListItem> items) {
     // XGram: side menu items can be hidden and reordered (Settings → XGram → Side menu).
     com.fahadali.xgram.XgramSettings xgram = com.fahadali.xgram.XgramSettings.instance();
+    if (com.fahadali.xgram.call.XgramFullScreenCalls.isOff(context)) {
+      // XGram: calls can't ring full screen (Android 14+): a warning first, never sorted with the items below
+      items.add(xgramFullScreenCallsItem());
+    }
     final int xgramMainStart = items.size();
     if (com.fahadali.xgram.activity.XgramActivity.isOn() && !xgram.drawerItemHidden("activity")) {
       // XGram: Activity (every mention, reply and reaction), with its count
@@ -1034,11 +1082,14 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
     }
   }
 
-  /** XGram: where the menu starts, at its first item whatever it is (items can be hidden or moved; Settings is always there). */
+  /**
+   * XGram: where the menu starts, at its first item whatever it is (items can be hidden or moved; Settings is always
+   * there). The full-screen calls warning before it is part of the menu: rebuilt with it, kept when the accounts close.
+   */
   private int xgramMenuStart () {
     List<ListItem> items = adapter.getItems();
     for (int i = 0; i < items.size(); i++) {
-      if (com.fahadali.xgram.XgramDrawerItemsController.keyOf(items.get(i)) != null) {
+      if (items.get(i).getId() == R.id.btn_xgramFullScreenCalls || com.fahadali.xgram.XgramDrawerItemsController.keyOf(items.get(i)) != null) {
         return i;
       }
     }

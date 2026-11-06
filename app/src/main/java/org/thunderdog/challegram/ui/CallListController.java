@@ -182,6 +182,12 @@ public class CallListController extends RecyclerViewController<Void> implements
 
       @Override
       protected SettingHolder initCustom (ViewGroup parent, int customViewType) {
+        if (customViewType == com.fahadali.xgram.call.XgramFullScreenCallsBanner.VIEW_TYPE) {
+          // XGram M3E: full-screen calls are off (Android 14+): the banner opens Android's page
+          com.fahadali.xgram.call.XgramFullScreenCallsBanner banner = new com.fahadali.xgram.call.XgramFullScreenCallsBanner(parent.getContext());
+          banner.setOnClickListener(v -> com.fahadali.xgram.call.XgramFullScreenCalls.openSettings(v.getContext()));
+          return new SettingHolder(banner);
+        }
         if (customViewType == com.fahadali.xgram.appearance.XgramR5People.STATE_ROW) {
           // XGram M3E: the empty state (a phone on a soft burst, "No recent calls") with a tonal "Start a call"
           return new SettingHolder(com.fahadali.xgram.appearance.XgramR5People.newStateViewWithAction(parent.getContext(),
@@ -197,8 +203,16 @@ public class CallListController extends RecyclerViewController<Void> implements
       protected void modifyCustom (SettingHolder holder, int position, ListItem item, int customViewType, View view, boolean isUpdate) {
         if (customViewType == com.fahadali.xgram.appearance.XgramR5People.STATE_ROW) {
           com.fahadali.xgram.appearance.XgramR5People.bindState(view, true, R.drawable.baseline_phone_24, Lang.getString(R.string.XgramR5PeopleNoCalls), Lang.getString(R.string.XgramR5PeopleNoCallsHint));
+          if (xgramFsiBanner) {
+            // XGram: under the banner the empty state and its button take their own height, not the list's
+            ViewGroup.LayoutParams params = view.getLayoutParams();
+            if (params != null && params.height != ViewGroup.LayoutParams.WRAP_CONTENT) {
+              params.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+              view.setLayoutParams(params);
+            }
+          }
         } else if (customViewType == com.fahadali.xgram.appearance.XgramR5People.LOADING_ROW) {
-          com.fahadali.xgram.appearance.XgramR5People.bindState(view, true, 0, null, null);
+          com.fahadali.xgram.appearance.XgramR5People.bindState(view, !xgramFsiBanner, 0, null, null); // XGram: 240dp under the banner
         } else {
           super.modifyCustom(holder, position, item, customViewType, view, isUpdate);
         }
@@ -261,6 +275,64 @@ public class CallListController extends RecyclerViewController<Void> implements
     tdlib.client().send(new TdApi.GetTopChats(new TdApi.TopChatCategoryCalls(), 30), this);
     tdlib.listeners().subscribeForGlobalUpdates(this);
     tdlib.context().dateManager().addListener(this);
+    com.fahadali.xgram.call.XgramFullScreenCalls.addListener(xgramFsiListener); // XGram
+  }
+
+  // XGram M3E: while full-screen calls are off (Android 14+) a banner at the very top of the list allows them, gone as
+  // soon as they are allowed. Every position Telegram X counts from the top moves down by xgramTop() while it shows.
+
+  private boolean xgramFsiBanner;
+
+  private int xgramTop () {
+    return xgramFsiBanner ? 1 : 0;
+  }
+
+  private boolean xgramWantsFsiBanner () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && com.fahadali.xgram.call.XgramFullScreenCalls.isOff(context);
+  }
+
+  private static ListItem xgramFsiBannerItem () {
+    return new ListItem(ListItem.TYPE_CUSTOM - com.fahadali.xgram.call.XgramFullScreenCallsBanner.VIEW_TYPE, R.id.btn_xgramFullScreenCalls);
+  }
+
+  private final com.fahadali.xgram.call.XgramFullScreenCalls.Listener xgramFsiListener = off -> xgramUpdateFsiBanner();
+
+  private void xgramUpdateFsiBanner () {
+    if (adapter == null || isDestroyed()) {
+      return;
+    }
+    final boolean want = xgramWantsFsiBanner();
+    if (want == xgramFsiBanner) {
+      return;
+    }
+    final List<ListItem> items = adapter.getItems();
+    if (want) {
+      final RecyclerView recyclerView = getRecyclerView();
+      final boolean atTop = recyclerView != null && !recyclerView.canScrollVertically(-1);
+      items.add(0, xgramFsiBannerItem());
+      xgramFsiBanner = true;
+      adapter.notifyItemInserted(0);
+      if (atTop) {
+        // LinearLayoutManager keeps the old first row where it was, so the banner would go above the screen: at the top
+        // of the list it shows (a list scrolled down stays where it is; the banner is there on the way back up)
+        recyclerView.scrollToPosition(0);
+      }
+    } else {
+      if (items.isEmpty() || items.get(0).getId() != R.id.btn_xgramFullScreenCalls) {
+        xgramFsiBanner = false;
+        return;
+      }
+      items.remove(0);
+      xgramFsiBanner = false;
+      adapter.notifyItemRemoved(0);
+    }
+    // The loading and empty rows are as tall as the list only while nothing is above them
+    for (int i = 0; i < items.size(); i++) {
+      final int viewType = items.get(i).getViewType();
+      if (viewType == ListItem.TYPE_CUSTOM - com.fahadali.xgram.appearance.XgramR5People.STATE_ROW || viewType == ListItem.TYPE_CUSTOM - com.fahadali.xgram.appearance.XgramR5People.LOADING_ROW) {
+        adapter.notifyItemChanged(i);
+      }
+    }
   }
 
   @Override
@@ -354,15 +426,16 @@ public class CallListController extends RecyclerViewController<Void> implements
     }
 
     if (hasChats != hadChats && hasSections) {
+      final int top = xgramTop(); // XGram: below the full-screen calls banner
       if (hasChats) {
         List<ListItem> items = adapter.getItems();
-        items.add(1, newPeopleItem());
-        items.add(2, new ListItem(ListItem.TYPE_SHADOW_TOP));
-        items.add(3, new ListItem(ListItem.TYPE_RECYCLER_HORIZONTAL, R.id.search_top));
-        items.add(4, new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
-        adapter.notifyItemRangeInserted(1, 4);
+        items.add(top + 1, newPeopleItem());
+        items.add(top + 2, new ListItem(ListItem.TYPE_SHADOW_TOP));
+        items.add(top + 3, new ListItem(ListItem.TYPE_RECYCLER_HORIZONTAL, R.id.search_top));
+        items.add(top + 4, new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+        adapter.notifyItemRangeInserted(top + 1, 4);
       } else {
-        adapter.removeRange(1, 4);
+        adapter.removeRange(top + 1, 4);
       }
     }
   }
@@ -399,6 +472,11 @@ public class CallListController extends RecyclerViewController<Void> implements
 
   private void buildCells () {
     ArrayList<ListItem> items = new ArrayList<>();
+    xgramFsiBanner = xgramWantsFsiBanner(); // XGram M3E: calls can't ring full screen (Android 14+)
+    if (xgramFsiBanner) {
+      items.add(xgramFsiBannerItem());
+    }
+    final int top = items.size();
     if (sections == null) {
       items.add(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ?
         new ListItem(ListItem.TYPE_CUSTOM - com.fahadali.xgram.appearance.XgramR5People.LOADING_ROW) : // XGram M3E
@@ -431,9 +509,9 @@ public class CallListController extends RecyclerViewController<Void> implements
         }
         items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
       }
-      if (items.isEmpty() && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      if (items.size() == top && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
         items.add(new ListItem(ListItem.TYPE_CUSTOM - com.fahadali.xgram.appearance.XgramR5People.STATE_ROW)); // XGram M3E: the empty state
-      } else if (items.isEmpty()) {
+      } else if (items.size() == top) {
         items.add(new ListItem(ListItem.TYPE_EMPTY, 0, 0, R.string.NoCalls));
       } else {
         items.add(new ListItem(ListItem.TYPE_LIST_INFO_VIEW, R.id.btn_calls));
@@ -515,10 +593,11 @@ public class CallListController extends RecyclerViewController<Void> implements
 
     CallSection currentSection = sections.isEmpty() ? null : sections.get(sections.size() - 1);
     boolean needReplace = currentSection == null;
+    final int top = xgramTop(); // XGram: the full-screen calls banner stays
     if (needReplace) {
-      adapter.removeRange(0, adapter.getItems().size());
+      adapter.removeRange(top, adapter.getItems().size() - top);
     }
-    int startIndex = needReplace ? 0 : adapter.getItems().size() - 2;
+    int startIndex = needReplace ? top : adapter.getItems().size() - 2;
 
     for (TdApi.Message message : messages) {
       this.messages.add(message);
@@ -606,22 +685,23 @@ public class CallListController extends RecyclerViewController<Void> implements
     }
     CallItem item = new CallItem(tdlib, message);
     int state = this.sections.get(0).prependItem(item);
+    final int top = xgramTop(); // XGram: below the full-screen calls banner
     switch (state) {
       case CallSection.STATE_INSERTED: {
-        int startIndex = hasTopChats() ? 7 : 3;
+        int startIndex = top + (hasTopChats() ? 7 : 3);
         adapter.getItems().add(startIndex, new ListItem(ListItem.TYPE_SEPARATOR));
         adapter.getItems().add(startIndex, new ListItem(ListItem.TYPE_CHAT_BETTER, R.id.call).setData(item));
-        adapter.notifyItemRangeInserted(3, 2);
+        adapter.notifyItemRangeInserted(startIndex, 2); // XGram: where they went (Telegram X said 3, wrong with People above)
         break;
       }
       case CallSection.STATE_MERGED: {
-        adapter.updateValuedSettingByPosition(3);
+        adapter.updateValuedSettingByPosition(top + (hasTopChats() ? 7 : 3)); // XGram: the first call, as above
         break;
       }
       case CallSection.STATE_NONE: {
         CallSection section = new CallSection(item);
         sections.add(0, section);
-        int startIndex = hasTopChats() ? 5 : 1;
+        int startIndex = top + (hasTopChats() ? 5 : 1);
         adapter.getItems().add(startIndex, new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
         adapter.getItems().add(startIndex, new ListItem(ListItem.TYPE_CHAT_BETTER, R.id.call).setData(item));
         adapter.getItems().add(startIndex, new ListItem(ListItem.TYPE_SHADOW_TOP));
@@ -696,6 +776,7 @@ public class CallListController extends RecyclerViewController<Void> implements
     super.destroy();
     tdlib.listeners().unsubscribeFromGlobalUpdates(this);
     tdlib.context().dateManager().removeListener(this);
+    com.fahadali.xgram.call.XgramFullScreenCalls.removeListener(xgramFsiListener); // XGram
   }
 
   @Override

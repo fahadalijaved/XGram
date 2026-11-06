@@ -165,6 +165,21 @@ public class BackHeaderButton extends HeaderButton implements View.OnClickListen
     menuHintBadgeVisible.setValue(needShow, animated);
   }
 
+  /** XGram: what screen readers say for the ☰ while its badge means something to fix (null: nothing, as before). */
+  @Nullable private CharSequence xgramMenuDescription;
+
+  public void xgramSetMenuDescription (@Nullable CharSequence description) {
+    this.xgramMenuDescription = description;
+  }
+
+  @Override
+  public void onInitializeAccessibilityNodeInfo (android.view.accessibility.AccessibilityNodeInfo info) {
+    super.onInitializeAccessibilityNodeInfo(info);
+    if (xgramMenuDescription != null && factor == 0f) {
+      info.setContentDescription(xgramMenuDescription); // only while it is the ☰, not the back arrow
+    }
+  }
+
   @Override
   public void onDraw (Canvas c) {
     super.onDraw(c);

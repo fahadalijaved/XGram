@@ -294,6 +294,11 @@
         <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
       </intent-filter>
     </receiver>
+    <!-- XGram: the status of an update XGram installs itself (com.fahadali.xgram.update.XgramSelfInstaller, Android 14+):
+         only the system's PendingIntent reaches it, no intent filter -->
+    <receiver
+      android:name="com.fahadali.xgram.update.XgramInstallReceiver"
+      android:exported="false" />
 
     <activity
       android:name=".voip.gui.VoIPFeedbackActivity"

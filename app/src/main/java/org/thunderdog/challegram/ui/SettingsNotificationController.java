@@ -1326,12 +1326,28 @@ public class SettingsNotificationController extends RecyclerViewController<Setti
     tdlib.listeners().subscribeToSettingsUpdates(this);
     tdlib.settings().addNotificationProblemAvailabilityChangeListener(this);
     tdlib.context().global().addTokenStateListener(this);
+    com.fahadali.xgram.call.XgramFullScreenCalls.addListener(xgramFullScreenCallsListener); // XGram
 
     if (isCommonScreen()) {
       tdlib.listeners().addOptionsListener(this);
       tdlib.disableContactRegisteredNotifications(true);
     }
   }
+
+  // XGram: allowed on Android's page (read again on resume): the full-screen calls row and its frame go at once
+  private final com.fahadali.xgram.call.XgramFullScreenCalls.Listener xgramFullScreenCallsListener = off -> {
+    if (off || adapter == null || isDestroyed()) {
+      return;
+    }
+    final int index = adapter.indexOfViewById(R.id.btn_xgramFullScreenCalls);
+    final List<ListItem> items = adapter.getItems();
+    if (index >= 1 && index + 2 < items.size() &&
+      items.get(index - 1).getViewType() == ListItem.TYPE_SHADOW_TOP &&
+      items.get(index + 1).getViewType() == ListItem.TYPE_SHADOW_BOTTOM &&
+      items.get(index + 2).getViewType() == ListItem.TYPE_DESCRIPTION) {
+      adapter.removeRange(index - 1, 4);
+    }
+  };
 
   private static void addBadgeCounterItems (List<ListItem> items) {
     items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_appBadgeCountMuted, 0, R.string.BadgeCounterMuted).setIntValue(Settings.BADGE_FLAG_MUTED));
@@ -2268,6 +2284,7 @@ public class SettingsNotificationController extends RecyclerViewController<Setti
     tdlib.listeners().unsubscribeFromSettingsUpdates(this);
     tdlib.settings().removeNotificationProblemAvailabilityChangeListener(this);
     tdlib.context().global().removeTokenStateListener(this);
+    com.fahadali.xgram.call.XgramFullScreenCalls.removeListener(xgramFullScreenCallsListener); // XGram
     if (isCommonScreen()) {
       tdlib.listeners().removeOptionListener(this);
     }

@@ -17,4 +17,11 @@
   <string name="XgramFullScreenCallsLater">Not now</string>
   <string name="XgramFullScreenCallsRow">Allow full-screen calls</string>
   <string name="XgramFullScreenCallsRowInfo">Full-screen notifications are off for XGram, so calls that come while it is closed don\'t ring on the lock screen.</string>
+  <string name="XgramFullScreenCallsPromptReset">XGram was updated and Android turned off its full-screen notifications, so calls can\'t ring on the lock screen or over other apps. Turn them on again?</string>
+  <string name="XgramFullScreenCallsWarning">Calls can\'t ring full screen</string>
+  <string name="XgramFullScreenCallsWarningHint">Tap to allow full-screen notifications</string>
+  <string name="XgramFullScreenCallsBannerText">Calls that come while XGram is closed or the screen is locked only show a small notification.</string>
+  <string name="XgramFullScreenCallsBannerTextReset">Android turned off full-screen notifications for XGram after the update, so calls that come while it is closed or the screen is locked only show a small notification.</string>
+  <string name="XgramFullScreenCallsBannerAction">Allow</string>
+  <string name="XgramFullScreenCallsBadgeDescription">%1$s, calls can\'t ring full screen</string>
 </resources>

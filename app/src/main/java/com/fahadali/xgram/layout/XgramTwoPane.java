@@ -216,6 +216,41 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     return isActive;
   }
 
+  // The ☰'s badge (MainActivity#updateCounter: another account's unread chats, a problem to resolve, full-screen calls
+  // off). It only reached the main header's ☰, which is hidden under two panes: the chat list pane's ☰ and the rail's
+  // menu button show it as well.
+
+  /** The badge as MainActivity last set it (ColorId.NONE: none). */
+  private @ColorId int currentMenuBadge () {
+    return context instanceof org.thunderdog.challegram.MainActivity ? ((org.thunderdog.challegram.MainActivity) context).getXgramMenuBadgeWithFsi() : ColorId.NONE;
+  }
+
+  /** From MainActivity#updateCounter. */
+  public void setMenuBadge (@ColorId int colorId, boolean animated) {
+    applyLeftMenuBadge(colorId, animated);
+    if (rail != null) {
+      rail.setMenuBadge(colorId);
+    }
+  }
+
+  private void applyLeftMenuBadge (@ColorId int colorId, boolean animated) {
+    if (!isActive || leftNavigation == null || leftNavigation.isDestroyed()) {
+      return;
+    }
+    org.thunderdog.challegram.navigation.HeaderView header = leftNavigation.getHeaderView();
+    org.thunderdog.challegram.navigation.BackHeaderButton button = header != null ? header.getBackButton() : null;
+    if (button == null) {
+      return;
+    }
+    if (colorId != ColorId.NONE) {
+      button.setMenuBadge(colorId, animated);
+    } else {
+      button.hideMenuBadge(animated);
+    }
+    button.xgramSetMenuDescription(com.fahadali.xgram.call.XgramFullScreenCalls.isOff(context) ?
+      Lang.getString(R.string.XgramFullScreenCallsBadgeDescription, Lang.getString(R.string.XgramNavRailOpenMenu)) : null);
+  }
+
   public static boolean isWideEnough (BaseActivity context) {
     return isWideEnough(context, false);
   }
@@ -433,6 +468,7 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     if (show) {
       if (rail == null) {
         rail = new XgramNavRail(context, this);
+        rail.setMenuBadge(currentMenuBadge());
       }
       View view = rail.view();
       if (view.getParent() == null) {
@@ -777,6 +813,7 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     container.addView(handle, container.indexOfChild(placeholder) + 1);
 
     isActive = true;
+    applyLeftMenuBadge(currentMenuBadge(), false); // a new pane's ☰, or a kept one that missed changes while folded
     leftMain.xgramUpdatePaneInset();
     layout();
     android.util.Log.i("XGram", "two-pane on, chat list " + leftWidth + "px of " + context.getResources().getConfiguration().screenWidthDp + "dp");

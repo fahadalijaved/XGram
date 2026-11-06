@@ -66,6 +66,7 @@ import org.thunderdog.challegram.telegram.TdlibBadgeCounter;
 import org.thunderdog.challegram.telegram.TdlibCounter;
 import org.thunderdog.challegram.telegram.TdlibManager;
 import org.thunderdog.challegram.telegram.TdlibUi;
+import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.theme.ColorState;
 import org.thunderdog.challegram.theme.Theme;
 import org.thunderdog.challegram.theme.ThemeChangeListener;
@@ -416,6 +417,20 @@ public final class XgramNavRail {
 
   void onThemeChanged () {
     invalidateAll();
+  }
+
+  /** The ☰'s badge (MainActivity#updateCounter), on the menu button that stands in for it. ColorId.NONE: none. */
+  @ColorId private int menuBadgeColorId = ColorId.NONE;
+
+  void setMenuBadge (@ColorId int colorId) {
+    if (menuBadgeColorId != colorId) {
+      menuBadgeColorId = colorId;
+      rail.menu.invalidate();
+    }
+    // While full-screen calls are off the badge leads to the expanded rail's warning row: screen readers say so
+    final boolean fsiOff = colorId != ColorId.NONE && com.fahadali.xgram.call.XgramFullScreenCalls.isOff(context);
+    final String label = Lang.getString(R.string.XgramNavRailOpenMenu);
+    setLabel(rail.menu, fsiOff ? Lang.getString(R.string.XgramFullScreenCallsBadgeDescription, label) : label);
   }
 
   /** Closes the expanded rail at once (the rail is going away). */
@@ -1268,6 +1283,17 @@ public final class XgramNavRail {
       setStateShape(cx - r, cy - r, cx + r, cy + r, r);
       drawState(c);
       drawMenuGlyph(c, cx, cy, open ? 1f : 0f, color(XgramExpressive.ON_SURFACE_VARIANT), rtl);
+      if (!open && menuBadgeColorId != ColorId.NONE) {
+        // The ☰'s badge as the small badge (BadgeTokens) at the glyph's top end corner, as on the destinations; a 1.5dp
+        // ring of the rail's surface keeps it off the top line's end, as the ☰'s cutout does
+        float size = Screen.dpf(BADGE_SMALL);
+        float iconStart = rtl ? cx + Screen.dpf(ICON / 2f) : cx - Screen.dpf(ICON / 2f);
+        float left = rtl ? iconStart - Screen.dpf(BADGE_SMALL_START) - size : iconStart + Screen.dpf(BADGE_SMALL_START);
+        float badgeX = left + size / 2f, badgeY = cy - Screen.dpf(ICON / 2f) + size / 2f;
+        int badgeColor = menuBadgeColorId == ColorId.headerBadgeFailed ? color(XgramExpressive.ERROR) : Theme.getColor(menuBadgeColorId);
+        c.drawCircle(badgeX, badgeY, size / 2f + Screen.dpf(1.5f), Paints.fillingPaint(color(XgramExpressive.SURFACE_CONTAINER)));
+        c.drawCircle(badgeX, badgeY, size / 2f, Paints.fillingPaint(badgeColor));
+      }
     }
   }
 
@@ -1476,6 +1502,18 @@ public final class XgramNavRail {
           close();
         });
         list.addView(row, params(match, Screen.dp(ROW_HEIGHT), i == 0 ? Screen.dp(HEADER_GAP) : 0, false));
+      }
+
+      // Full-screen calls are off (Android 14+): the side menu's warning, under the destinations (they stay over the
+      // collapsed rail's), where the menu button's badge leads
+      if (com.fahadali.xgram.call.XgramFullScreenCalls.isOff(context)) {
+        com.fahadali.xgram.call.XgramFullScreenCallsRow warning = com.fahadali.xgram.call.XgramFullScreenCallsRow.forRail(context);
+        warning.setOnClickListener(v -> {
+          markShown();
+          com.fahadali.xgram.call.XgramFullScreenCalls.openSettings(v.getContext());
+          close();
+        });
+        list.addView(warning, params(match, ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(SECTION_GAP), false));
       }
 
       // Accounts

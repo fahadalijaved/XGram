@@ -2121,7 +2121,8 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     xgramUpdateGhostButton(); // XGram
     xgramConnCheckSnackBar(); // XGram M3E: a connection snackbar held back while another page was on top
     com.fahadali.xgram.update.XgramUpdateScreen.welcomeIfNeeded(this); // XGram: What's new in XGram <version>, once after an update
-    com.fahadali.xgram.call.XgramFullScreenCalls.promptIfNeeded(this); // XGram: calls ring full screen only when allowed (Android 14+)
+    com.fahadali.xgram.call.XgramFullScreenCalls.refresh(context); // XGram: calls ring full screen only when allowed (Android 14+)
+    com.fahadali.xgram.call.XgramFullScreenCalls.promptIfNeeded(this); // once per version while they are off
     // FIXME check tdlib.isUnauthorized()
     tdlib.context().changePreferredAccountId(tdlib.id(), TdlibManager.SWITCH_REASON_NAVIGATION);
     if (UI.TEST_MODE == UI.TEST_MODE_USER) {
@@ -3301,8 +3302,13 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       return;
     }
     final com.fahadali.xgram.layout.XgramNavToolbar toolbar = xgramToolbar();
-    final int colorId = toolbar != null && !toolbar.hasProfile() && xgramHidesDrawer() && context instanceof MainActivity ?
-      ((MainActivity) context).getXgramMenuBadgeColorId() : ColorId.NONE;
+    final int colorId;
+    if (xgramHidesDrawer() && com.fahadali.xgram.call.XgramFullScreenCalls.isOff(context)) {
+      colorId = ColorId.headerBadgeFailed; // XGram: calls can't ring full screen: the ⋮'s first item allows them
+    } else {
+      colorId = toolbar != null && !toolbar.hasProfile() && xgramHidesDrawer() && context instanceof MainActivity ?
+        ((MainActivity) context).getXgramMenuBadgeColorId() : ColorId.NONE;
+    }
     final HeaderButton more = xgramMoreButton;
     if (more != null) {
       more.xgramSetDot(colorId, animated);
@@ -3517,6 +3523,14 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     final IntList ids = new IntList(16);
     final IntList kinds = new IntList(16);
     final StringList titles = new StringList(16);
+    final boolean fsiOff = com.fahadali.xgram.call.XgramFullScreenCalls.isOff(context);
+    if (fsiOff) {
+      // XGram: calls can't ring full screen (Android 14+): first, in the error colour (where the ⋮'s dot leads), as
+      // the side menu's warning row
+      ids.append(R.id.btn_xgramFullScreenCalls);
+      titles.append(R.string.XgramFullScreenCallsRow);
+      kinds.append(XGRAM_MENU_ROW);
+    }
     if (toolbar != null && !toolbar.hasProfile()) {
       // No photo on the toolbar to long press: the accounts, as at the top of the side menu
       ids.append(R.id.btn_xgramNavSwitchAccount);
@@ -3660,7 +3674,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       titles.append("Send TDLib log");
       kinds.append(XGRAM_MENU_ROW);
     }
-    if (ids.size() == 0) {
+    if (ids.size() == (fsiOff ? 1 : 0)) {
       // Everything else is hidden or a tab: Settings, which the side menu never hides (a tab: the tab's screen). The ⋮
       // is always there while the side menu is hidden, so a tap on it always opens something.
       ids.append(R.id.btn_settings);
@@ -3688,6 +3702,10 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     for (int i = 0; i < count; i++) {
       if (kindArray[i] != XGRAM_MENU_ROW) {
         menu.xgramSetCheckable(idArray[i], kindArray[i] == XGRAM_MENU_CHECK_ON);
+      }
+      if (idArray[i] == R.id.btn_xgramFullScreenCalls && rows[i] != null) {
+        rows[i].setTextColor(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ?
+          com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ERROR) : Theme.getColor(ColorId.textNegative));
       }
     }
     // The rows are in a scroll view here: the menu takes the widest row's width itself (at most the app bar's, less
@@ -3726,7 +3744,9 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     if (isDestroyed()) {
       return;
     }
-    if (id == R.id.btn_xgramNavSwitchAccount) {
+    if (id == R.id.btn_xgramFullScreenCalls) {
+      com.fahadali.xgram.call.XgramFullScreenCalls.openSettings(context); // Android's page (Android 14+)
+    } else if (id == R.id.btn_xgramNavSwitchAccount) {
       com.fahadali.xgram.layout.XgramNavToolbar toolbar = xgramToolbar();
       if (toolbar != null) {
         toolbar.showAccountMenu();
