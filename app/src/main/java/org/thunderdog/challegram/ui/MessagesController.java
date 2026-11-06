@@ -639,9 +639,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
     Views.setLayoutHeight(bottomBar, Screen.dp(48f) + xgramBarInsetWithoutIme() + xgramBottomBarRoom() * 2);
     Views.setPaddingBottom(bottomBar, xgramBarInsetWithoutIme() + xgramBottomBarRoom());
     checkScrollButtonOffsets();
-    xgramLastBottomInset = extraBottomInset; // XGram: the full-height side tabs' last tabs clear the navigation bar or keyboard
+    xgramLastBottomInset = xgramBarInset(); // XGram: the full-height side tabs' last tabs clear the navigation bar or keyboard (and, in Expressive, the rounded corner like the composer)
     if (xgramSideTabs != null) {
-      xgramSideTabs.xgramSetBottomInset(xgramRailFullHeight() ? extraBottomInset : 0);
+      xgramSideTabs.xgramSetBottomInset(xgramRailFullHeight() ? xgramLastBottomInset : 0);
     }
     updateMessagesViewInset();
     onMessagesFrameChanged();
@@ -693,6 +693,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
    */
   private void xgramApplyBottomGap () {
     updateBottomWrapOffset();
+    xgramLastBottomInset = xgramBarInset(); // the full-height side tabs end level with the lifted composer
+    if (xgramSideTabs != null) {
+      xgramSideTabs.xgramSetBottomInset(xgramRailFullHeight() ? xgramLastBottomInset : 0);
+    }
     Views.setLayoutHeight(bottomBar, Screen.dp(48f) + xgramBarInsetWithoutIme() + xgramBottomBarRoom() * 2);
     Views.setPaddingBottom(bottomBar, xgramBarInsetWithoutIme() + xgramBottomBarRoom());
     checkScrollButtonOffsets();
