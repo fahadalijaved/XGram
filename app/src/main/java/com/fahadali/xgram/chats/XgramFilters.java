@@ -89,6 +89,24 @@ public final class XgramFilters {
     }
   }
 
+  /** XGram: the hidden senders of this account (user ids above 0, chat ids below), for the Hidden people list. */
+  public static long[] shadowBannedIds (Tdlib tdlib) {
+    String prefix = BAN_PREFIX + tdlib.id() + "_";
+    List<Long> ids = new ArrayList<>();
+    for (String key : banned()) {
+      if (key.startsWith(prefix)) {
+        try {
+          ids.add(Long.parseLong(key.substring(prefix.length())));
+        } catch (NumberFormatException ignored) { }
+      }
+    }
+    long[] out = new long[ids.size()];
+    for (int i = 0; i < out.length; i++) {
+      out[i] = ids.get(i);
+    }
+    return out;
+  }
+
   public static int shadowBannedCount (Tdlib tdlib) {
     String prefix = BAN_PREFIX + tdlib.id() + "_";
     int count = 0;

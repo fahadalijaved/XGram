@@ -96,4 +96,16 @@
   <string name="XgramChatCallButtons">Call buttons in chats</string>
   <string name="XgramChatCallButtonsSub">Call and Video call next to ⋮ in private chats (reopen a chat to see the change)</string>
   <string name="XgramFullScreenCallsNever">Don\'t ask again</string>
+  <!-- XGram: hidden people -->
+  <string name="XgramShadowBanAdd">Hide someone by username</string>
+  <string name="XgramShadowBanAddSub">Their messages disappear from every chat; they aren\'t blocked or told</string>
+  <string name="XgramShadowBanAddHint">@username</string>
+  <string name="XgramShadowBanHide">Hide</string>
+  <string name="XgramShadowBanNotFound">No one found as @%1$s</string>
+  <string name="XgramShadowBanHidden">%1$s is hidden</string>
+  <string name="XgramShadowBanList">Hidden</string>
+  <string name="XgramShadowBanTapToShow">Tap to show their messages again</string>
+  <string name="XgramShadowBanShowAgain">Show messages from %1$s again?</string>
+  <string name="XgramShadowBanShow">Show again</string>
+  <string name="XgramShadowBanLinkSub">Hide someone\'s messages in all chats without blocking them</string>
 </resources>

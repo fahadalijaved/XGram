@@ -14,4 +14,6 @@
   <item name="btn_xgramHeaderCall" type="id" />
   <item name="btn_xgramHeaderVideoCall" type="id" />
   <item name="btn_xgramFullScreenCallsNever" type="id" />
+  <item name="btn_xgramShadowBanAdd" type="id" />
+  <item name="btn_xgramShadowBanEntry" type="id" />
 </resources>

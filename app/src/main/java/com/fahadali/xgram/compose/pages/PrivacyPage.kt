@@ -43,6 +43,13 @@ fun PrivacyPage() {
     }
     description(R.string.XgramGhostModeInfo)
 
+    // Hidden people: hide someone's messages everywhere without blocking them (also under Filters)
+    group {
+      link(R.id.btn_xgramShadowBanList, s(R.string.XgramShadowBanned), s(R.string.XgramShadowBanLinkSub), R.drawable.baseline_eye_off_24) {
+        host.openPage(com.fahadali.xgram.compose.XgramPage.HIDDEN_PEOPLE)
+      }
+    }
+
     header(R.string.XgramHeaderReading)
     group {
       switch(R.id.btn_xgramGhostDontRead, s(R.string.XgramGhostDontRead), s(R.string.XgramGhostDontReadSub), checked = settings.ghostDontRead()) {
