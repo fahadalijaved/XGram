@@ -63,6 +63,9 @@ public class TGMessageRichMessage extends TGMessage {
     final PageBlock block;
     final HostView host;
     int top, height;
+    /** Inside an opened section: such blocks have no text inset of their own (Instant View's list gives it), so they
+     *  are laid out at the content width without the shift that lines the others' inset up with the bubble. */
+    boolean nested;
 
     Entry (PageBlock block, HostView host) {
       this.block = block;
@@ -306,15 +309,37 @@ public class TGMessageRichMessage extends TGMessage {
 
   // Layout
 
+  private boolean isNested (Entry entry) {
+    for (Entry other : entries) {
+      if (other == entry) {
+        return false;
+      }
+      if (other.block.getOriginalBlock() instanceof TdApi.PageBlockDetails && entry.block.isChildOf(other.block)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private int widthOf (Entry entry) {
+    return entry.nested ? blocksWidth - Screen.dp(BLOCK_INSET) * 2 : blocksWidth;
+  }
+
+  private int leftOf (Entry entry, int startX) {
+    return entry.nested ? startX : startX - Screen.dp(BLOCK_INSET);
+  }
+
   @Override
   protected void buildContent (int maxWidth) {
     blocksWidth = maxWidth + Screen.dp(BLOCK_INSET) * 2;
     int top = 0;
     for (Entry entry : entries) {
+      entry.nested = isNested(entry);
+      final int width = widthOf(entry);
       entry.top = top;
-      entry.height = entry.block.getHeight(entry.host, blocksWidth);
-      entry.host.measure(View.MeasureSpec.makeMeasureSpec(blocksWidth, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(entry.height, View.MeasureSpec.EXACTLY));
-      entry.host.layout(0, 0, blocksWidth, entry.height);
+      entry.height = entry.block.getHeight(entry.host, width);
+      entry.host.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(entry.height, View.MeasureSpec.EXACTLY));
+      entry.host.layout(0, 0, width, entry.height);
       top += entry.height;
     }
     if (hasHiddenBlocks) {
@@ -343,7 +368,6 @@ public class TGMessageRichMessage extends TGMessage {
     if (useBubble() && !bubbleClipPathRect.isEmpty()) {
       c.clipPath(getBubbleClipPath()); // photos end at the bubble's content edge and take its corners
     }
-    final int left = startX - Screen.dp(BLOCK_INSET);
     final Rect visible = c.getClipBounds();
     for (Entry entry : entries) {
       final int top = startY + entry.top;
@@ -351,7 +375,7 @@ public class TGMessageRichMessage extends TGMessage {
         continue;
       }
       final int save = Views.save(c);
-      c.translate(left, top);
+      c.translate(leftOf(entry, startX), top);
       entry.host.draw(c);
       Views.restore(c, save);
     }
@@ -404,7 +428,7 @@ public class TGMessageRichMessage extends TGMessage {
 
   private MotionEvent toBlock (MotionEvent e, Entry entry) {
     MotionEvent copy = MotionEvent.obtain(e);
-    copy.offsetLocation(-(lastStartX - Screen.dp(BLOCK_INSET)), -(lastStartY + entry.top));
+    copy.offsetLocation(-leftOf(entry, lastStartX), -(lastStartY + entry.top));
     return copy;
   }
 
