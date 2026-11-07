@@ -4250,6 +4250,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   @Override
   public void fillMenuItems (int id, HeaderView header, LinearLayout menu) {
     if (id == R.id.menu_more) {
+      xgramAddCallButtons(header, menu); // XGram: a private chat's own header (menu_more) gets Call and Video call
       header.addMoreButton(menu, this);
     } else if (id == R.id.menu_gallery) {
       header.addButton(menu, R.id.menu_btn_gallery, R.drawable.baseline_image_24, getHeaderIconColorId(), this, Screen.dp(52f));
@@ -4265,12 +4266,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
     } else if (id == R.id.menu_chat) {
       HeaderButton btn = header.addButton(menu, R.id.menu_btn_viewScheduled, R.drawable.baseline_date_range_24, getHeaderIconColorId(), this, Screen.dp(52f));
       btn.setVisibility(tdlib.chatHasScheduled(getChatId()) ? View.VISIBLE : View.GONE);
-      if (xgramShowsCallButtons()) { // XGram: Call and Video call next to ⋮, like official Telegram
-        header.addButton(menu, R.id.btn_xgramHeaderVideoCall, R.drawable.baseline_videocam_24, getHeaderIconColorId(), this, Screen.dp(48f));
-        header.addButton(menu, R.id.btn_xgramHeaderCall, R.drawable.baseline_phone_24, getHeaderIconColorId(), this, Screen.dp(48f));
-      }
+      xgramAddCallButtons(header, menu);
       header.addMoreButton(menu, this);
     } else if (id == R.id.menu_secretChat) {
+      xgramAddCallButtons(header, menu);
       StopwatchHeaderButton headerButton = header.addStopwatchButton(menu, this);
       headerButton.forceValue(tdlib.ui().getTTLShort(getChatId()), isSecretChat() && tdlib.canChangeMessageAutoDeleteTime(chat.id));
       header.addMoreButton(menu, this);
@@ -4337,6 +4336,14 @@ public class MessagesController extends ViewController<MessagesController.Argume
       return new MessageWithProperties(message, properties);
     }
     return null;
+  }
+
+  /** XGram: Call and Video call next to ⋮, like official Telegram. */
+  private void xgramAddCallButtons (HeaderView header, LinearLayout menu) {
+    if (xgramShowsCallButtons()) {
+      header.addButton(menu, R.id.btn_xgramHeaderVideoCall, R.drawable.baseline_videocam_24, getHeaderIconColorId(), this, Screen.dp(48f));
+      header.addButton(menu, R.id.btn_xgramHeaderCall, R.drawable.baseline_phone_24, getHeaderIconColorId(), this, Screen.dp(48f));
+    }
   }
 
   /** XGram: a private chat with a person (not a bot, not yourself) shows Call and Video call in its bar. */
