@@ -9000,6 +9000,12 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
           // XGram: a checklist like official Telegram's: tap a task to mark it, add tasks
           return new TGMessageChecklist(context, msg, (TdApi.MessageChecklist) content);
         }
+        case TdApi.MessagePaidMedia.CONSTRUCTOR: {
+          // XGram: paid media like official Telegram: locked with Unlock for Stars, then the photo or video
+          TdApi.MessagePaidMedia paid = (TdApi.MessagePaidMedia) content;
+          TGMessage unlocked = TGMessagePaidMedia.unlocked(context, msg, paid);
+          return unlocked != null ? unlocked : new TGMessagePaidMedia(context, msg, paid);
+        }
         // XGram: service lines, worded like official Telegram
         case TdApi.MessagePassportDataSent.CONSTRUCTOR:
           return new TGMessageService(context, msg, (TdApi.MessagePassportDataSent) content);
@@ -9044,7 +9050,6 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         // unsupported
         case TdApi.MessageInvoice.CONSTRUCTOR:
         case TdApi.MessageStory.CONSTRUCTOR:
-        case TdApi.MessagePaidMedia.CONSTRUCTOR:
         case TdApi.MessageGift.CONSTRUCTOR:
         case TdApi.MessageUpgradedGift.CONSTRUCTOR:
 

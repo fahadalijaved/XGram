@@ -35,4 +35,9 @@
   <string name="XgramChecklistDoneBy">Done by %1$s</string>
   <string name="XgramChecklistAdd">Add a task</string>
   <string name="XgramChecklistTask">Task</string>
+  <!-- XGram: paid media -->
+  <string name="XgramPaidUnlock">⭐ Unlock for %1$s</string>
+  <string name="XgramPaidUnlockConfirm">Unlock this post for %1$s Stars?</string>
+  <string name="XgramPaidNoStars">Not enough Stars. Buy Stars in the official Telegram app.</string>
+  <string name="XgramPaidOfficialApp">This post can only be bought in the official Telegram app.</string>
 </resources>
