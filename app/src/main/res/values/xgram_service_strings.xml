@@ -61,4 +61,12 @@
   <!-- XGram: Star reactions -->
   <string name="XgramPaidReactionInfo">Send Stars to support this post. Stars can\'t be taken back.</string>
   <string name="XgramPaidReactionSend">Send %1$d ⭐</string>
+  <!-- XGram: boosts -->
+  <string name="XgramBoost">Boost</string>
+  <string name="XgramBoostLevel">Level %1$d · %2$d boosts</string>
+  <string name="XgramBoostNext">%1$d more boosts reach level %2$d</string>
+  <string name="XgramBoostYours">You boost this chat</string>
+  <string name="XgramBoostPremium">Boosting needs Telegram Premium</string>
+  <string name="XgramBoostCopyLink">Copy boost link</string>
+  <string name="XgramBoosted">Boosted</string>
 </resources>

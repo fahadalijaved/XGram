@@ -4,4 +4,5 @@
   <item type="id" name="btn_xgramBotButtonIcons" />
   <item name="btn_xgramPollAddOption" type="id" />
   <item name="btn_xgramPlayEffect" type="id" />
+  <item name="btn_xgramBoost" type="id" />
 </resources>

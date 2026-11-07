@@ -754,6 +754,11 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       strings.append(R.string.Stats);
     }
 
+    if (supergroupFull != null && (mode == Mode.CHANNEL || mode == Mode.SUPERGROUP)) {
+      ids.append(R.id.btn_xgramBoost); // XGram: boost the channel or group, like official Telegram
+      strings.append(R.string.XgramBoost);
+    }
+
     if (com.fahadali.xgram.chats.XgramFolderPicker.canOffer(tdlib, chat)) {
       ids.append(R.id.btn_xgramAddToFolder); // XGram
       strings.append(R.string.AddToFolder);
@@ -900,6 +905,8 @@ public class ProfileController extends ViewController<ProfileController.Args> im
           return;
         } else if (id == R.id.more_btn_viewAdmins) {
           manageChat();
+        } else if (id == R.id.btn_xgramBoost) {
+          com.fahadali.xgram.chats.XgramBoosts.open(this, getChatId());
         } else if (id == R.id.more_btn_viewStats) {
           openStats();
         } else if (id == R.id.more_btn_editDescription) {
