@@ -85,6 +85,13 @@ fun ChatListPage() {
       }
     }
     description(R.string.XgramChatListFoldersInfo)
+
+    // Stories, like official Telegram: a ring around photos with new stories, a tap on the photo plays them
+    group {
+      switch(R.id.btn_xgramShowStories, s(R.string.XgramShowStories), s(R.string.XgramShowStoriesSub), checked = settings.showStories()) {
+        settings.setShowStories(it)
+      }
+    }
     group {
       // All chats leaves the tabs only while another folder has one (the first tab opens instead, with the archive row).
       val hideAllChatsReason = XgramSettingDeps.hideAllChatsReason(host.tdlib)

@@ -91,4 +91,6 @@
   <!-- XGram: stories -->
   <string name="XgramStories">Stories</string>
   <string name="XgramStoriesNone">No stories right now</string>
+  <string name="XgramShowStories">Show stories</string>
+  <string name="XgramShowStoriesSub">A ring around photos with new stories; tap the photo to watch them</string>
 </resources>

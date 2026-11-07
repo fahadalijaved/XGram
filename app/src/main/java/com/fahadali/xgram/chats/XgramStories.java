@@ -34,6 +34,9 @@ public final class XgramStories {
   private XgramStories () { }
 
   public static boolean hasStories (Tdlib tdlib, long chatId) {
+    if (!com.fahadali.xgram.XgramSettings.instance().showStories()) {
+      return false; // Show stories off: no ring, the photo opens the chat, no profile item
+    }
     final TdApi.ChatActiveStories stories = tdlib.chatActiveStories(chatId);
     return stories != null && stories.stories != null && stories.stories.length > 0;
   }

@@ -9,4 +9,5 @@
   <item name="btn_xgramSendGift" type="id" />
   <item name="btn_xgramShowGifts" type="id" />
   <item name="btn_xgramStories" type="id" />
+  <item name="btn_xgramShowStories" type="id" />
 </resources>

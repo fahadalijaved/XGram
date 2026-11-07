@@ -1020,6 +1020,24 @@ public final class XgramSettings {
     put(KEY_BUBBLE_TAIL, value);
   }
 
+  // Stories (official Telegram's): the ring on chat list photos, the photo tap and the profile item; on by default
+
+  public static final String KEY_SHOW_STORIES = "xgram_show_stories";
+  private int showStories = -1;
+
+  public boolean showStories () {
+    int value = showStories;
+    if (value < 0) {
+      showStories = value = pmc().getBoolean(KEY_SHOW_STORIES, true) ? 1 : 0;
+    }
+    return value == 1;
+  }
+
+  public void setShowStories (boolean value) {
+    showStories = value ? 1 : 0;
+    put(KEY_SHOW_STORIES, value);
+  }
+
   /** With bubbles, the sender's avatar sits next to the last message of a group (Telegram), not the first. Read on every message draw. */
   public boolean avatarAtLastMessage () {
     int value = avatarAtLast;
