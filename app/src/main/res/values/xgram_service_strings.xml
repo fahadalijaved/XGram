@@ -54,4 +54,7 @@
   <!-- XGram: Saved Messages tags -->
   <string name="XgramSavedTagName">Tag name</string>
   <string name="XgramSavedTagNameHint">Name this tag</string>
+  <!-- XGram: polls -->
+  <string name="XgramPollAddOption">Add an option</string>
+  <string name="XgramPollOptionHint">Option</string>
 </resources>

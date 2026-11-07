@@ -2,4 +2,5 @@
 <resources>
   <!-- XGram: Material icons on bot buttons (Appearance > Messages and avatars, Expressive design; XgramSettings.botButtonIcons) -->
   <item type="id" name="btn_xgramBotButtonIcons" />
+  <item name="btn_xgramPollAddOption" type="id" />
 </resources>

@@ -789,6 +789,11 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
               icons.append(isQuiz ? R.drawable.baseline_help_24 : R.drawable.baseline_poll_24);
               strings.append(R.string.RetractVote);
             }
+            if (((TdApi.MessagePoll) content).canAddOption) { // XGram: polls that take new options, like official Telegram
+              ids.append(R.id.btn_xgramPollAddOption);
+              icons.append(R.drawable.baseline_add_24);
+              strings.append(R.string.XgramPollAddOption);
+            }
             if (msg.lastMessageProperties().canBeEdited) {
               ids.append(R.id.btn_messagePollStop);
               icons.append(isQuiz ? R.drawable.baseline_help_24 : R.drawable.baseline_poll_24);

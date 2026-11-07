@@ -6651,6 +6651,21 @@ public class MessagesController extends ViewController<MessagesController.Argume
         c.setArguments(new com.fahadali.xgram.XgramMessageDetailsController.Args(selectedMessage.getMessage()));
         navigateTo(c);
         return true;
+      } else if (id == R.id.btn_xgramPollAddOption) { // XGram: add an option to a poll that allows it
+        final TdApi.Message message = selectedMessage.getMessage();
+        openInputAlert(Lang.getString(R.string.XgramPollAddOption), Lang.getString(R.string.XgramPollOptionHint), R.string.Done, R.string.Cancel, null, (inputView, result) -> {
+          final String text = result != null ? result.trim() : "";
+          if (text.isEmpty()) {
+            return false;
+          }
+          tdlib.send(new TdApi.AddPollOption(message.chatId, message.id, new TdApi.InputPollOption(new TdApi.FormattedText(text, new TdApi.TextEntity[0]), null)), (ok, error) -> {
+            if (error != null) {
+              UI.showError(error);
+            }
+          });
+          return true;
+        }, true);
+        return true;
       } else if (id == R.id.btn_messageRetractVote) {
         TdApi.Message message = selectedMessage.getMessage();
         tdlib.send(new TdApi.SetPollAnswer(message.chatId, message.id, null), tdlib.typedOkHandler());
