@@ -1086,6 +1086,24 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
 
       Counter bellCounter = chat.xgramLaterCounter(); // XGram Later: the bell, colored by its own set
       bellCounter.draw(c, counterRight - counterRadius, counterCenterY, Gravity.RIGHT, 1f, this, ColorId.NONE);
+      counterRight -= bellCounter.getScaledWidth(getTimePaddingLeft());
+
+      // XGram: folder tags (official Telegram's) before the badges, on the preview line
+      if (oneLine <= 0f && !chat.xgramFolderTags().isEmpty()) {
+        final android.text.TextPaint tagPaint = TGChat.xgramFolderTagPaint();
+        final float tagHeight = Screen.dp(16f), radius = Screen.dp(4f);
+        float right = counterRight - Screen.dp(2f);
+        final java.util.List<TGChat.XgramFolderTag> tags = chat.xgramFolderTags();
+        for (int i = 0; i < tags.size(); i++) {
+          final TGChat.XgramFolderTag tag = tags.get(i);
+          final android.graphics.RectF rect = Paints.getRectF();
+          rect.set(right - tag.width, counterCenterY - tagHeight / 2f, right, counterCenterY + tagHeight / 2f);
+          c.drawRoundRect(rect, radius, radius, Paints.fillingPaint(me.vkryl.core.ColorUtils.alphaColor(.16f, tag.color)));
+          tagPaint.setColor(tag.color);
+          c.drawText(tag.name, rect.left + Screen.dp(5f), counterCenterY + Screen.dp(4f), tagPaint);
+          right -= tag.width + Screen.dp(4f);
+        }
+      }
     }
 
     if (oneLine > 0f && chat.xgramIsPinnedRow()) {

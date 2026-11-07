@@ -3743,6 +3743,13 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     }
   }
 
+  /** XGram: whether chat lists show folder tags (official Telegram's setting, a Premium one). */
+  public boolean areChatFolderTagsEnabled () {
+    synchronized (dataLock) {
+      return areTagsEnabled;
+    }
+  }
+
   public TdApi.ChatFolderInfo[] chatFolders () {
     synchronized (dataLock) {
       return chatFolders;

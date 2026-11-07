@@ -1585,6 +1585,8 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
       return;
     }
     int avail = currentWidth - ChatView.getLeftPadding(listMode) - ChatView.getRightPadding() - (lastCounterAddWidth = getCounterAddWidth());
+    xgramBuildFolderTags();
+    avail -= xgramFolderTagsWidth; // XGram: the folder tags take the end of the preview line
     textLeft = ChatView.getLeftPadding(listMode);
     if ((flags & FLAG_HAS_PREFIX) != 0 && prefix != null && listMode == Settings.CHAT_MODE_2LINE) {
       int prefixWidth = prefix.getWidth();
@@ -1624,6 +1626,68 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
   }
 
   private int textIconsPadding;
+
+  // XGram: folder tags, like official Telegram: the other folders this chat is in, as small coloured names at the end
+  // of the preview line (when Telegram's "Show folder tags" is on and the folder has a colour)
+
+  public static final class XgramFolderTag {
+    public final String name;
+    public final int color;
+    public final int width;
+
+    XgramFolderTag (String name, int color, int width) {
+      this.name = name;
+      this.color = color;
+      this.width = width;
+    }
+  }
+
+  private static android.text.TextPaint xgramTagPaint;
+
+  public static android.text.TextPaint xgramFolderTagPaint () {
+    if (xgramTagPaint == null) {
+      xgramTagPaint = new android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+      xgramTagPaint.setTextSize(Screen.dp(11f));
+      xgramTagPaint.setTypeface(org.thunderdog.challegram.tool.Fonts.getRobotoMedium());
+    }
+    return xgramTagPaint;
+  }
+
+  private final java.util.ArrayList<XgramFolderTag> xgramFolderTags = new java.util.ArrayList<>();
+  private int xgramFolderTagsWidth;
+
+  public java.util.List<XgramFolderTag> xgramFolderTags () {
+    return xgramFolderTags;
+  }
+
+  private void xgramBuildFolderTags () {
+    xgramFolderTags.clear();
+    xgramFolderTagsWidth = 0;
+    if (chat == null || chat.chatLists == null || listMode == Settings.CHAT_MODE_1LINE || !tdlib.areChatFolderTagsEnabled()) {
+      return;
+    }
+    final int currentFolderId = chatList instanceof TdApi.ChatListFolder ? ((TdApi.ChatListFolder) chatList).chatFolderId : 0;
+    for (TdApi.ChatList list : chat.chatLists) {
+      if (!(list instanceof TdApi.ChatListFolder)) {
+        continue;
+      }
+      final int folderId = ((TdApi.ChatListFolder) list).chatFolderId;
+      if (folderId == currentFolderId) {
+        continue;
+      }
+      final TdApi.ChatFolderInfo info = tdlib.chatFolderInfo(folderId);
+      if (info == null || info.colorId < 0 || info.name == null || info.name.text == null || StringUtils.isEmpty(info.name.text.text)) {
+        continue;
+      }
+      final String name = info.name.text.text;
+      final int width = (int) Math.ceil(xgramFolderTagPaint().measureText(name)) + Screen.dp(10f);
+      xgramFolderTags.add(new XgramFolderTag(name, tdlib.accentColor(info.colorId).getNameColor(), width));
+      xgramFolderTagsWidth += width + Screen.dp(4f);
+      if (xgramFolderTags.size() == 2) {
+        break; // two at most, as in Telegram, the preview keeps its room
+      }
+    }
+  }
 
   private static TextStyleProvider getTextStyleProvider (int chatListMode) {
     return Paints.robotoStyleProvider(chatListMode == Settings.CHAT_MODE_3LINE ? 15 : 16); // XGram: 16 in one line (no text drawn there)
