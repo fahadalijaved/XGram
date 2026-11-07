@@ -3358,7 +3358,14 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
     return (message != null && searchManager != null && controller.inSearchMode() && (searchManager.isMessageFound(message) || controller.inSearchFilteredShowMode()));
   }
 
+  /** XGram: the Saved Messages tag the in-chat search keeps to (null: none). */
+  public void xgramSetSavedTag (@Nullable TdApi.ReactionType tag) {
+    onPrepareToSearch();
+    searchManager.xgramSetSavedTag(tag);
+  }
+
   public void onDestroySearch () {
+    searchManager.xgramSetSavedTag(null);
     searchManager.onDismiss();
     if (isEventLog()) {
       applyEventLogFilters(eventLogFilters, "", eventLogUserIds);

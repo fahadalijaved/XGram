@@ -1118,11 +1118,26 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
 
     xgramTabsItem = new CollapseListView.ViewItem(xgramTabs, com.fahadali.xgram.topics.ForumTabsView.getBarHeight());
+    // XGram: Saved Messages tags (official Telegram's), a chip row in the same bar stack
+    xgramSavedTags = new com.fahadali.xgram.chats.XgramSavedTagsBar(context);
+    xgramSavedTags.setCallback(new com.fahadali.xgram.chats.XgramSavedTagsBar.Callback() {
+      @Override
+      public void onTagClick (@NonNull TdApi.SavedMessagesTag tag) {
+        xgramSelectSavedTag(tag.tag);
+      }
+
+      @Override
+      public void onTagLongClick (@NonNull TdApi.SavedMessagesTag tag) {
+        xgramRenameSavedTag(tag);
+      }
+    });
+    xgramSavedTagsItem = new CollapseListView.ViewItem(xgramSavedTags, com.fahadali.xgram.chats.XgramSavedTagsBar.height());
     // XGram: the topic tabs on top are a card of the Material 3 Expressive group (with the pinned message and the other
     // bars), so they stand apart from the app bar instead of reading as part of it
     topBar.initWithList(new CollapseListView.Item[] {
       // TODO voice chat bar
       xgramTabsItem,
+      xgramSavedTagsItem,
       pinnedMessagesItem,
       requestsItem = new CollapseListView.ViewItem(requestsView, requestsViewHeight),
       liveLocationItem = new CollapseListView.ViewItem(liveLocationView, liveLocationHeight),
@@ -13232,6 +13247,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       xgramTopicIcon.clear();
     }
     xgramUpdateTabs();
+    xgramLoadSavedTags();
   }
 
   @Nullable private com.fahadali.xgram.topics.TopicHeaderIcon xgramTopicIcon;
@@ -13261,6 +13277,64 @@ public class MessagesController extends ViewController<MessagesController.Argume
   // XGram: topic tabs.
   private com.fahadali.xgram.topics.ForumTabsView xgramTabs, xgramSideTabs;
   private CollapseListView.Item xgramTabsItem;
+
+  // XGram: Saved Messages tags
+
+  private @Nullable com.fahadali.xgram.chats.XgramSavedTagsBar xgramSavedTags;
+  private @Nullable CollapseListView.Item xgramSavedTagsItem;
+  private @Nullable TdApi.ReactionType xgramSavedTag;
+
+  private boolean xgramSavedTagsMode () {
+    return chat != null && isSelfChat() && messageThread == null && !areScheduled && !inPreviewMode && !isInForceTouchMode() && previewMode == PREVIEW_MODE_NONE;
+  }
+
+  /** The tag chips of Saved Messages (shown when there are tags). */
+  private void xgramLoadSavedTags () {
+    if (xgramSavedTags == null || xgramSavedTagsItem == null || topBar == null) {
+      return;
+    }
+    if (!xgramSavedTagsMode()) {
+      topBar.setItemVisible(xgramSavedTagsItem, false, false);
+      return;
+    }
+    final long chatId = chat.id;
+    tdlib.send(new TdApi.GetSavedMessagesTags(0), (tags, error) -> runOnUiThreadOptional(() -> {
+      if (chat == null || chat.id != chatId || xgramSavedTags == null) {
+        return;
+      }
+      xgramSavedTags.setTags(tags != null ? tags.tags : null);
+      topBar.setItemVisible(xgramSavedTagsItem, !xgramSavedTags.isEmpty(), isFocused());
+    }));
+  }
+
+  /** A tag tapped: only its messages (through the in-chat search); tapped again: all of them. */
+  private void xgramSelectSavedTag (TdApi.ReactionType tag) {
+    xgramSavedTag = xgramSavedTag != null && tgx.td.Td.equalsTo(xgramSavedTag, tag) ? null : tag;
+    if (xgramSavedTags != null) {
+      xgramSavedTags.setSelected(xgramSavedTag);
+    }
+    manager.xgramSetSavedTag(xgramSavedTag);
+    if (xgramSavedTag != null && !inSearchMode()) {
+      openSearchMode();
+    }
+    if (inSearchMode()) {
+      final String input = getLastSearchInput();
+      searchChatMessages(input != null ? input : "");
+    }
+  }
+
+  private void xgramRenameSavedTag (TdApi.SavedMessagesTag tag) {
+    openInputAlert(Lang.getString(R.string.XgramSavedTagName), Lang.getString(R.string.XgramSavedTagNameHint), R.string.Done, R.string.Cancel, tag.label, (inputView, result) -> {
+      tdlib.send(new TdApi.SetSavedMessagesTagLabel(tag.tag, result != null ? result.trim() : ""), (ok, error) -> runOnUiThreadOptional(() -> {
+        if (error != null) {
+          UI.showError(error);
+        } else {
+          xgramLoadSavedTags();
+        }
+      }));
+      return true;
+    }, true);
+  }
   private boolean xgramTabsOnSide;
 
   private int xgramCurrentTab () {
@@ -15117,6 +15191,13 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   @Override
   protected void onLeaveSearchMode () {
+    if (xgramSavedTag != null) { // XGram: leaving the search shows all of Saved Messages again
+      xgramSavedTag = null;
+      if (xgramSavedTags != null) {
+        xgramSavedTags.setSelected(null);
+      }
+      xgramLoadSavedTags(); // counts may have changed
+    }
     if (searchFromUserMessageId != null) {
       manager.setHighlightMessageId(searchFromUserMessageId, MessagesManager.HIGHLIGHT_MODE_WITHOUT_HIGHLIGHT);
     }

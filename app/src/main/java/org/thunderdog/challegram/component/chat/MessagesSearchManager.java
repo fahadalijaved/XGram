@@ -104,11 +104,18 @@ public class MessagesSearchManager {
 
   private MessageId foundTargetMessageId;
 
+  // XGram: a Saved Messages tag the search keeps to (searchSavedMessages), or null
+  private @Nullable TdApi.ReactionType xgramSavedTag;
+
+  public void xgramSetSavedTag (@Nullable TdApi.ReactionType tag) {
+    this.xgramSavedTag = tag;
+  }
+
   // Typing the search
   public void search (final long chatId, final TdApi.MessageTopic topicId, final TdApi.MessageSender fromSender, final TdApi.SearchMessagesFilter filter, final boolean isSecret, final String input, MessageId foundMsgId) {
     final int contextId = reset(chatId, topicId, input);
 
-    if (input.length() == 0 && fromSender == null && filter == null) {
+    if (input.length() == 0 && fromSender == null && filter == null && xgramSavedTag == null) {
       delegate.showSearchResult(STATE_NO_INPUT, 0, true, true, null);
       return;
     }
@@ -178,6 +185,11 @@ public class MessagesSearchManager {
       searchManagerMiddleware.search(query, fromSender, handler);
     } else {
       final int offset = direction == SEARCH_DIRECTION_TOP ? 0 : ( direction == SEARCH_DIRECTION_BOTTOM ? -19 : -10);
+      if (xgramSavedTag != null) {
+        // XGram: the messages of Saved Messages with this tag (and the typed words)
+        tdlib.client().send(new TdApi.SearchSavedMessages(0, xgramSavedTag, input, fromMessageId, offset, SEARCH_LOAD_LIMIT), handler);
+        return;
+      }
       TdApi.SearchChatMessages function = new TdApi.SearchChatMessages(chatId, topicId, input, fromSender, fromMessageId, offset, SEARCH_LOAD_LIMIT, filter);
       searchManagerMiddleware.search(function, handler);
     }
