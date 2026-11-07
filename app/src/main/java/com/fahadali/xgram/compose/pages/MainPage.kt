@@ -103,6 +103,13 @@ fun MainPage() {
     }
 
     group {
+      // XGram: Telegram Stars (balance and transactions), like official Telegram's page
+      link(R.id.btn_xgramStarsBalance, s(R.string.XgramStars), s(R.string.XgramStarsSummary), R.drawable.baseline_star_24, IconStyle.CIRCLE) {
+        host.openPage(XgramPage.STARS)
+      }
+    }
+
+    group {
       category(host, R.id.btn_xgramSectionNetwork, R.drawable.baseline_public_24, R.string.XgramNetwork, s(R.string.XgramNetworkSummary))
       category(host, R.id.btn_xgramSectionBackup, R.drawable.baseline_import_export_24, R.string.XgramBackup, s(R.string.XgramBackupSummary))
     }

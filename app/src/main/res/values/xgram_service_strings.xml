@@ -69,4 +69,12 @@
   <string name="XgramBoostPremium">Boosting needs Telegram Premium</string>
   <string name="XgramBoostCopyLink">Copy boost link</string>
   <string name="XgramBoosted">Boosted</string>
+  <!-- XGram: Telegram Stars -->
+  <string name="XgramStars">Telegram Stars</string>
+  <string name="XgramStarsSummary">Your balance and transactions</string>
+  <string name="XgramStarsBalance">Balance</string>
+  <string name="XgramStarsHistory">Transactions</string>
+  <string name="XgramStarsNone">No transactions yet.</string>
+  <string name="XgramStarsInfo">Stars are bought and withdrawn in the official Telegram app; they work here for reactions, paid posts, gifts and boosts.</string>
+  <string name="XgramStarsRefund">Refund: %1$s</string>
 </resources>
