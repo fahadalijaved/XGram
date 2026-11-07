@@ -758,6 +758,14 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       ids.append(R.id.btn_xgramBoost); // XGram: boost the channel or group, like official Telegram
       strings.append(R.string.XgramBoost);
     }
+    if (mode == Mode.USER || mode == Mode.SECRET || mode == Mode.CHANNEL) { // XGram: gifts, like official Telegram
+      if (!tdlib.isSelfChat(getChatId())) {
+        ids.append(R.id.btn_xgramSendGift);
+        strings.append(R.string.XgramGiftsSend);
+      }
+      ids.append(R.id.btn_xgramShowGifts);
+      strings.append(R.string.XgramGiftsShow);
+    }
 
     if (com.fahadali.xgram.chats.XgramFolderPicker.canOffer(tdlib, chat)) {
       ids.append(R.id.btn_xgramAddToFolder); // XGram
@@ -905,6 +913,16 @@ public class ProfileController extends ViewController<ProfileController.Args> im
           return;
         } else if (id == R.id.more_btn_viewAdmins) {
           manageChat();
+        } else if (id == R.id.btn_xgramSendGift || id == R.id.btn_xgramShowGifts) {
+          final long giftChatId = getChatId();
+          final long giftUserId = tdlib.chatUserId(giftChatId);
+          final TdApi.MessageSender owner = giftUserId != 0 ? new TdApi.MessageSenderUser(giftUserId) : new TdApi.MessageSenderChat(giftChatId);
+          final String ownerName = tdlib.chatTitle(giftChatId);
+          if (id == R.id.btn_xgramSendGift) {
+            com.fahadali.xgram.chats.XgramGifts.send(this, owner, ownerName);
+          } else {
+            com.fahadali.xgram.chats.XgramGifts.showReceived(this, owner, ownerName);
+          }
         } else if (id == R.id.btn_xgramBoost) {
           com.fahadali.xgram.chats.XgramBoosts.open(this, getChatId());
         } else if (id == R.id.more_btn_viewStats) {

@@ -77,4 +77,15 @@
   <string name="XgramStarsNone">No transactions yet.</string>
   <string name="XgramStarsInfo">Stars are bought and withdrawn in the official Telegram app; they work here for reactions, paid posts, gifts and boosts.</string>
   <string name="XgramStarsRefund">Refund: %1$s</string>
+  <!-- XGram: sending and seeing gifts -->
+  <string name="XgramGiftsSend">Send a gift</string>
+  <string name="XgramGiftsShow">Gifts</string>
+  <string name="XgramGiftsPick">Choose a gift for %1$s</string>
+  <string name="XgramGiftsMessage">Add a message</string>
+  <string name="XgramGiftsMessageHint">Message (optional)</string>
+  <string name="XgramGiftsSendButton">Send gift</string>
+  <string name="XgramGiftsSent">Gift sent</string>
+  <string name="XgramGiftsNone">No gifts are for sale right now</string>
+  <string name="XgramGiftsNoneReceived">%1$s has no gifts yet</string>
+  <string name="XgramGiftsReceived">%1$s · %2$d gifts</string>
 </resources>
