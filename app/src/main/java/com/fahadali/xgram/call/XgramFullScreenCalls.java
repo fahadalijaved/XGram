@@ -239,9 +239,11 @@ public final class XgramFullScreenCalls {
    * Off, not asked in this version yet (or asked, and an install of the same version since turned them off again), and
    * not asked in the last 24 hours (or the clock went back since).
    */
+  private static final String KEY_NEVER_ASK = "xgram_fullscreen_calls_never_ask";
+
   private static boolean promptDue (@NonNull Context context) {
-    if (!isOff(context)) {
-      return false;
+    if (!isOff(context) || pmc().getBoolean(KEY_NEVER_ASK, false)) {
+      return false; // Don't ask again: the menu's dot and the drawer row still say it's off
     }
     final LevelDB pmc = pmc();
     if (pmc.getInt(KEY_PROMPT_CODE, 0) == BuildConfig.ORIGINAL_VERSION_CODE) {
@@ -295,13 +297,15 @@ public final class XgramFullScreenCalls {
     promptPosted = false;
     final int text = resetByUpdate() ? R.string.XgramFullScreenCallsPromptReset : R.string.XgramFullScreenCallsPrompt;
     final Object popup = c.showOptions(Lang.getString(text),
-      new int[] {R.id.btn_xgramFullScreenCallsAllow, R.id.btn_cancel},
-      new String[] {Lang.getString(R.string.XgramFullScreenCallsAllow), Lang.getString(R.string.XgramFullScreenCallsLater)},
-      new int[] {ViewController.OptionColor.BLUE, ViewController.OptionColor.NORMAL},
-      new int[] {R.drawable.baseline_call_24, R.drawable.baseline_cancel_24},
+      new int[] {R.id.btn_xgramFullScreenCallsAllow, R.id.btn_xgramFullScreenCallsNever, R.id.btn_cancel},
+      new String[] {Lang.getString(R.string.XgramFullScreenCallsAllow), Lang.getString(R.string.XgramFullScreenCallsNever), Lang.getString(R.string.XgramFullScreenCallsLater)},
+      new int[] {ViewController.OptionColor.BLUE, ViewController.OptionColor.NORMAL, ViewController.OptionColor.NORMAL},
+      new int[] {R.drawable.baseline_call_24, R.drawable.baseline_notifications_off_24, R.drawable.baseline_cancel_24},
       (itemView, id) -> {
         if (id == R.id.btn_xgramFullScreenCallsAllow) {
           openSettings(c.context());
+        } else if (id == R.id.btn_xgramFullScreenCallsNever) {
+          pmc().putBoolean(KEY_NEVER_ASK, true);
         }
         return true;
       });

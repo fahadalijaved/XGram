@@ -1022,6 +1022,24 @@ public final class XgramSettings {
 
   // Stories (official Telegram's): the ring on chat list photos, the photo tap and the profile item; on by default
 
+  // Call and Video call buttons in a private chat's bar (official Telegram has the call there); on by default
+
+  public static final String KEY_CHAT_CALL_BUTTONS = "xgram_chat_call_buttons";
+  private int chatCallButtons = -1;
+
+  public boolean chatCallButtons () {
+    int value = chatCallButtons;
+    if (value < 0) {
+      chatCallButtons = value = pmc().getBoolean(KEY_CHAT_CALL_BUTTONS, true) ? 1 : 0;
+    }
+    return value == 1;
+  }
+
+  public void setChatCallButtons (boolean value) {
+    chatCallButtons = value ? 1 : 0;
+    put(KEY_CHAT_CALL_BUTTONS, value);
+  }
+
   public static final String KEY_SHOW_STORIES = "xgram_show_stories";
   private int showStories = -1;
 

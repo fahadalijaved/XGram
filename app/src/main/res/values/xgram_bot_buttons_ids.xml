@@ -10,4 +10,8 @@
   <item name="btn_xgramShowGifts" type="id" />
   <item name="btn_xgramStories" type="id" />
   <item name="btn_xgramShowStories" type="id" />
+  <item name="btn_xgramChatCallButtons" type="id" />
+  <item name="btn_xgramHeaderCall" type="id" />
+  <item name="btn_xgramHeaderVideoCall" type="id" />
+  <item name="btn_xgramFullScreenCallsNever" type="id" />
 </resources>

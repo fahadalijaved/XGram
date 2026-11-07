@@ -91,6 +91,9 @@ fun ChatListPage() {
       switch(R.id.btn_xgramShowStories, s(R.string.XgramShowStories), s(R.string.XgramShowStoriesSub), checked = settings.showStories()) {
         settings.setShowStories(it)
       }
+      switch(R.id.btn_xgramChatCallButtons, s(R.string.XgramChatCallButtons), s(R.string.XgramChatCallButtonsSub), checked = settings.chatCallButtons()) {
+        settings.setChatCallButtons(it)
+      }
     }
     group {
       // All chats leaves the tabs only while another folder has one (the first tab opens instead, with the archive row).

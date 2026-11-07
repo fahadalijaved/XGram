@@ -93,4 +93,7 @@
   <string name="XgramStoriesNone">No stories right now</string>
   <string name="XgramShowStories">Show stories</string>
   <string name="XgramShowStoriesSub">A ring around photos with new stories; tap the photo to watch them</string>
+  <string name="XgramChatCallButtons">Call buttons in chats</string>
+  <string name="XgramChatCallButtonsSub">Call and Video call next to ⋮ in private chats (reopen a chat to see the change)</string>
+  <string name="XgramFullScreenCallsNever">Don\'t ask again</string>
 </resources>

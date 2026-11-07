@@ -4265,6 +4265,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
     } else if (id == R.id.menu_chat) {
       HeaderButton btn = header.addButton(menu, R.id.menu_btn_viewScheduled, R.drawable.baseline_date_range_24, getHeaderIconColorId(), this, Screen.dp(52f));
       btn.setVisibility(tdlib.chatHasScheduled(getChatId()) ? View.VISIBLE : View.GONE);
+      if (xgramShowsCallButtons()) { // XGram: Call and Video call next to ⋮, like official Telegram
+        header.addButton(menu, R.id.btn_xgramHeaderVideoCall, R.drawable.baseline_videocam_24, getHeaderIconColorId(), this, Screen.dp(48f));
+        header.addButton(menu, R.id.btn_xgramHeaderCall, R.drawable.baseline_phone_24, getHeaderIconColorId(), this, Screen.dp(48f));
+      }
       header.addMoreButton(menu, this);
     } else if (id == R.id.menu_secretChat) {
       StopwatchHeaderButton headerButton = header.addStopwatchButton(menu, this);
@@ -4335,8 +4339,24 @@ public class MessagesController extends ViewController<MessagesController.Argume
     return null;
   }
 
+  /** XGram: a private chat with a person (not a bot, not yourself) shows Call and Video call in its bar. */
+  private boolean xgramShowsCallButtons () {
+    if (chat == null || previewMode != PREVIEW_MODE_NONE || isInForceTouchMode() || !com.fahadali.xgram.XgramSettings.instance().chatCallButtons()) {
+      return false;
+    }
+    final long userId = tdlib.chatUserId(chat.id);
+    return userId != 0 && !tdlib.isSelfChat(chat.id) && !tdlib.isBotChat(chat.id);
+  }
+
   @Override
   public void onMenuItemPressed (int id, View view) {
+    if (id == R.id.btn_xgramHeaderCall || id == R.id.btn_xgramHeaderVideoCall) {
+      final long userId = chat != null ? tdlib.chatUserId(chat.id) : 0;
+      if (userId != 0) {
+        tdlib.context().calls().makeVideoCall(this, userId, tdlib.cache().userFull(userId), id == R.id.btn_xgramHeaderVideoCall);
+      }
+      return;
+    }
     if (id == R.id.menu_btn_more) {
       if (inPreviewMode) {
         if (previewMode == PREVIEW_MODE_FONT_SIZE) {
