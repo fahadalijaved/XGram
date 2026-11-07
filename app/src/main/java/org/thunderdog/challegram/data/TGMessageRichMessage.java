@@ -124,11 +124,31 @@ public class TGMessageRichMessage extends TGMessage {
     if (blocks == null) {
       return new TdApi.PageBlock[0];
     }
-    TdApi.PageBlock[] out = new TdApi.PageBlock[blocks.length];
-    for (int i = 0; i < blocks.length; i++) {
-      out[i] = adapt(blocks[i]);
+    final ArrayList<TdApi.PageBlock> out = new ArrayList<>(blocks.length);
+    for (TdApi.PageBlock block : blocks) {
+      final TdApi.PageBlock adapted = adapt(block);
+      if (adapted != null) {
+        out.add(adapted);
+      }
     }
-    return out;
+    return out.toArray(new TdApi.PageBlock[0]);
+  }
+
+  private static TdApi.RichText plain (String text) {
+    return new TdApi.RichTextPlain(text);
+  }
+
+  /** A button row (rich messages): its buttons as links, side by side. */
+  private static TdApi.PageBlock buttonsAsLinks (TdApi.PageBlockButtonRow row) {
+    final ArrayList<TdApi.RichText> texts = new ArrayList<>();
+    for (TdApi.InlineButton button : row.buttons) {
+      if (!texts.isEmpty()) {
+        texts.add(plain("   ·   "));
+      }
+      final String url = button.type instanceof TdApi.InlineKeyboardButtonTypeUrl ? ((TdApi.InlineKeyboardButtonTypeUrl) button.type).url : null;
+      texts.add(url != null ? new TdApi.RichTextUrl(button.text, url, false) : button.text);
+    }
+    return new TdApi.PageBlockParagraph(new TdApi.RichTexts(texts.toArray(new TdApi.RichText[0])));
   }
 
   /** A slideshow (a horizontal pager in Instant View) becomes a collage, which a bubble can draw; nested blocks too. */
@@ -160,6 +180,28 @@ public class TGMessageRichMessage extends TGMessage {
       }
       case TdApi.PageBlockCover.CONSTRUCTOR:
         return new TdApi.PageBlockCover(adapt(((TdApi.PageBlockCover) block).cover));
+      // Block types newer than Telegram X's Instant View, as the nearest ones it draws
+      case TdApi.PageBlockSectionHeading.CONSTRUCTOR: {
+        TdApi.PageBlockSectionHeading heading = (TdApi.PageBlockSectionHeading) block;
+        return heading.size <= 1 ? new TdApi.PageBlockHeader(heading.text) : new TdApi.PageBlockSubheader(heading.text);
+      }
+      case TdApi.PageBlockExpandableBlockQuote.CONSTRUCTOR: {
+        TdApi.PageBlockExpandableBlockQuote quote = (TdApi.PageBlockExpandableBlockQuote) block;
+        return new TdApi.PageBlockBlockQuote(new TdApi.PageBlock[] {new TdApi.PageBlockParagraph(quote.text)}, quote.credit);
+      }
+      case TdApi.PageBlockThinking.CONSTRUCTOR:
+        return new TdApi.PageBlockDetails(plain("💭"), new TdApi.PageBlock[] {new TdApi.PageBlockParagraph(((TdApi.PageBlockThinking) block).text)}, false);
+      case TdApi.PageBlockMathematicalExpression.CONSTRUCTOR:
+        return new TdApi.PageBlockPreformatted(plain(((TdApi.PageBlockMathematicalExpression) block).expression), "latex");
+      case TdApi.PageBlockDocument.CONSTRUCTOR: {
+        TdApi.PageBlockDocument document = (TdApi.PageBlockDocument) block;
+        final String name = document.document != null && document.document.fileName != null && !document.document.fileName.isEmpty() ? document.document.fileName : "File";
+        return new TdApi.PageBlockParagraph(plain("📄 " + name));
+      }
+      case TdApi.PageBlockButtonRow.CONSTRUCTOR:
+        return buttonsAsLinks((TdApi.PageBlockButtonRow) block);
+      case TdApi.PageBlockUnsupported.CONSTRUCTOR:
+        return null;
       default:
         return block;
     }
@@ -190,13 +232,26 @@ public class TGMessageRichMessage extends TGMessage {
     this.instantView = new TdApi.WebPageInstantView(adapt(message.blocks), 0, 2, message.isRtl, message.isFull, null);
     destroyEntries();
     hasHiddenBlocks = false;
-    final List<PageBlock> blocks;
+    List<PageBlock> blocks;
     try {
       blocks = PageBlock.parse(controller(), "", instantView, null, null, null);
     } catch (Throwable t) {
-      return;
+      android.util.Log.w("XgramRich", "whole post failed, per block now: " + blockTypes(instantView.blocks), t);
+      // One block Telegram X can't read must not cost the whole post: each block on its own, the bad ones left out
+      blocks = new ArrayList<>();
+      for (TdApi.PageBlock block : instantView.blocks) {
+        try {
+          blocks.addAll(PageBlock.parse(controller(), "", new TdApi.WebPageInstantView(new TdApi.PageBlock[] {block}, 0, 2, message.isRtl, message.isFull, null), null, null, null));
+        } catch (Throwable blockError) {
+          android.util.Log.w("XgramRich", "left out " + block.getClass().getSimpleName(), blockError);
+          hasHiddenBlocks = true;
+        }
+      }
     }
     addEntries(entries.size(), blocks);
+    if (entries.isEmpty()) {
+      android.util.Log.w("XgramRich", "nothing drawable in " + blockTypes(instantView.blocks));
+    }
     if (!message.isFull && !requestedFull) {
       requestedFull = true;
       tdlib().send(new TdApi.GetFullRichMessage(msg.chatId, msg.id), (result, error) -> {
@@ -444,5 +499,16 @@ public class TGMessageRichMessage extends TGMessage {
     InstantViewController c = new InstantViewController(controller().context(), tdlib());
     c.setArguments(new InstantViewController.Args(preview, instantView, null));
     controller().navigateTo(c);
+  }
+
+  private static String blockTypes (TdApi.PageBlock[] blocks) {
+    StringBuilder b = new StringBuilder();
+    for (TdApi.PageBlock block : blocks) {
+      if (b.length() > 0) {
+        b.append(", ");
+      }
+      b.append(block != null ? block.getClass().getSimpleName() : "null");
+    }
+    return b.toString();
   }
 }
