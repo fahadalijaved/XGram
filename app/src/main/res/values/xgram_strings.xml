@@ -169,7 +169,7 @@
   <string name="XgramShadowBannedToast">Messages from this person are hidden</string>
   <string name="XgramShadowUnbanned">Messages from this person are shown again</string>
   <string name="XgramClearShadowBans">Unhide everyone</string>
-  <string name="XgramShadowBanInfo">Messages from hidden people don\'t show in groups on this device. They are not told.</string>
+  <string name="XgramShadowBanInfo">Messages from hidden people don\'t show in any chat on this device, nor in chat previews and notifications. They aren\'t blocked or told.</string>
   <string name="XgramFilters">Filters</string>
   <string name="XgramFilterWords">Words and patterns</string>
   <string name="XgramAddFilter">Add filter</string>

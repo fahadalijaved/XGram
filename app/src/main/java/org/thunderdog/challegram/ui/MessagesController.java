@@ -4340,9 +4340,14 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   /** XGram: Call and Video call next to ⋮, like official Telegram. */
   private void xgramAddCallButtons (HeaderView header, LinearLayout menu) {
-    if (xgramShowsCallButtons()) {
+    final boolean show = xgramShowsCallButtons();
+    if (show) {
       header.addButton(menu, R.id.btn_xgramHeaderVideoCall, R.drawable.baseline_videocam_24, getHeaderIconColorId(), this, Screen.dp(48f));
       header.addButton(menu, R.id.btn_xgramHeaderCall, R.drawable.baseline_phone_24, getHeaderIconColorId(), this, Screen.dp(48f));
+    }
+    if (headerCell != null) {
+      // The title ends before the buttons: ⋮ (49dp, ChatHeaderView's default) and the two call buttons
+      headerCell.setInnerRightMargin(Screen.dp(49f) + (show ? Screen.dp(48f) * 2 : 0));
     }
   }
 
