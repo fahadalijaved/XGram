@@ -8992,8 +8992,11 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         case TdApi.MessageGiveaway.CONSTRUCTOR: {
           return new TGMessageGiveaway(context, msg, (TdApi.MessageGiveaway) content);
         }
+        case TdApi.MessageRichMessage.CONSTRUCTOR: {
+          // XGram: the post's Instant View blocks in the bubble, like official Telegram (text as a fallback)
+          return new TGMessageRichMessage(context, msg, (TdApi.MessageRichMessage) content);
+        }
         // unsupported
-        case TdApi.MessageRichMessage.CONSTRUCTOR:
         case TdApi.MessageInvoice.CONSTRUCTOR:
         case TdApi.MessagePassportDataSent.CONSTRUCTOR:
         case TdApi.MessageStory.CONSTRUCTOR:
