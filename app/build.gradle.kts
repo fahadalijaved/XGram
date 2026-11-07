@@ -21,6 +21,20 @@ plugins {
 
 val config = tgxConfig.config.get()
 val generateBaselineProfile = tgxConfig.generateBaselineProfile.get()
+val customGoogleServices = config.googleServicesFile?.let { rootDir.resolve(it) }
+val usedGoogleServices = customGoogleServices ?: file("google-services.json")
+if (customGoogleServices != null && !customGoogleServices.exists()) {
+  fatal("google_services.file: ${customGoogleServices.path} doesn't exist")
+}
+val hasFirebaseMessaging = (customGoogleServices != null || !config.isExperimentalBuild) &&
+  hasGoogleServicesClient(usedGoogleServices, config.applicationId)
+if (!hasFirebaseMessaging && customGoogleServices != null) {
+  val problem = "${customGoogleServices.path} has no client of ${config.applicationId}"
+  if (config.applicationId == "org.thunderdog.challegram") {
+    fatal("$problem: notifications in the app won't work")
+  }
+  logger.warn("$problem: pushes of Firebase are off")
+}
 val useLegacyNdk = tgxConfig.useLegacyNdk.get()
 val appliedNdkVersion = if (useLegacyNdk) {
   config.build.legacyNdkVersion
@@ -132,9 +146,7 @@ val validateApiTokens = tasks.register<ValidateApiTokensTask>("validateApiTokens
   applicationId.set(
     config.applicationId
   )
-  googleServicesJson.set(layout.projectDirectory.file(
-    "google-services.json"
-  ))
+  googleServicesJson.fileValue(usedGoogleServices)
   // XGram: a release build (CI or Stable) with the placeholder Firebase file fails; debug and qa builds only warn.
   requireRealFirebaseProject.set(
     gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }
@@ -448,6 +460,13 @@ android {
     resValue("string", "AppName", config.applicationName)
     resValue("string", "account_type", "${config.applicationId}.sync.account")
     resValue("string", "content_authority", "${config.applicationId}.sync.provider")
+
+    if (hasFirebaseMessaging && customGoogleServices != null) {
+      googleServicesValues(customGoogleServices, config.applicationId).forEach { (name, value) ->
+        resValue("string", name, value)
+      }
+    }
+    buildConfigBool("FIREBASE_MESSAGING_ENABLED", hasFirebaseMessaging)
 
     buildConfigString("PROJECT_NAME", config.applicationName)
     buildConfigString("SAFETYNET_API_KEY", config.safetyNetToken)
@@ -1335,7 +1354,9 @@ dependencies {
 }
 
 if (!config.isExperimentalBuild) {
-  apply(plugin = libs.plugins.google.services.get().pluginId)
+  if (customGoogleServices == null) {
+    apply(plugin = libs.plugins.google.services.get().pluginId)
+  }
   if (config.isHuaweiBuild) {
     apply(plugin = libs.huawei.agconnect.get().group)
   }
