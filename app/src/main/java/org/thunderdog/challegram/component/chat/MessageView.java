@@ -984,6 +984,12 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
       icons.append(R.drawable.baseline_done_all_24);
     }
 
+    // XGram: replay a message effect, like official Telegram's tap on the effect
+    if (!isMore && !msg.isSponsoredMessage() && msg.getMessage().effectId != 0) {
+      ids.append(R.id.btn_xgramPlayEffect);
+      strings.append(R.string.XgramPlayEffect);
+      icons.append(R.drawable.baseline_auto_awesome_24);
+    }
     // XGram: message details (IDs, exact dates, file info)
     if (!isMore && !msg.isSponsoredMessage() && msg.getMessage().id != 0) {
       ids.append(R.id.btn_xgramMessageDetails);

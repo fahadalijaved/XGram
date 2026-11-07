@@ -2801,6 +2801,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     if (currentViews.attachToView(view) && view != null) {
       onMessageAttachedToView(view, true);
       com.fahadali.xgram.chats.XgramAutoTranslate.onMessageShown(this); // XGram: a chat set to auto-translate
+      com.fahadali.xgram.chats.XgramMessageEffects.onMessageShown(this, view); // XGram: a fresh message's effect plays
     }
   }
 

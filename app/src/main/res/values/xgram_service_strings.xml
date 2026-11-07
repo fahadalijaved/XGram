@@ -57,4 +57,5 @@
   <!-- XGram: polls -->
   <string name="XgramPollAddOption">Add an option</string>
   <string name="XgramPollOptionHint">Option</string>
+  <string name="XgramPlayEffect">Play effect</string>
 </resources>

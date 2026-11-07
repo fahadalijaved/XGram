@@ -6651,6 +6651,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
         c.setArguments(new com.fahadali.xgram.XgramMessageDetailsController.Args(selectedMessage.getMessage()));
         navigateTo(c);
         return true;
+      } else if (id == R.id.btn_xgramPlayEffect) { // XGram: play the message effect again
+        com.fahadali.xgram.chats.XgramMessageEffects.play(selectedMessage, selectedMessage.findCurrentView());
+        return true;
       } else if (id == R.id.btn_xgramPollAddOption) { // XGram: add an option to a poll that allows it
         final TdApi.Message message = selectedMessage.getMessage();
         openInputAlert(Lang.getString(R.string.XgramPollAddOption), Lang.getString(R.string.XgramPollOptionHint), R.string.Done, R.string.Cancel, null, (inputView, result) -> {
