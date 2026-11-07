@@ -441,6 +441,54 @@ public abstract class TGMessageGiveawayBase extends TGMessage implements TGInlin
     }
   }
 
+  /** XGram: a sticker in the card (a gift's animated sticker), drawn through the message's giveaway receiver. */
+  public static class ContentSticker extends ContentPart {
+    private static final long KEY = 0x58475354L; // "XGST": far from the chat ids the avatar bubbles use
+    private final org.thunderdog.challegram.component.sticker.TGStickerObj sticker;
+    private final int size;
+    private int width;
+
+    public ContentSticker (org.thunderdog.challegram.telegram.Tdlib tdlib, TdApi.Sticker sticker, float sizeDp) {
+      this.sticker = new org.thunderdog.challegram.component.sticker.TGStickerObj(tdlib, sticker, null, sticker.fullType);
+      this.size = Screen.dp(sizeDp);
+    }
+
+    @Override
+    public void build (int width) {
+      this.width = width;
+    }
+
+    @Override public int getWidth () {
+      return size;
+    }
+
+    @Override
+    public int getHeight () {
+      return size;
+    }
+
+    @Override
+    public void requestFiles (ComplexReceiver r) {
+      r.getGifReceiver(KEY).requestFile(sticker.isAnimated() ? sticker.getFullAnimation() : null);
+      r.getImageReceiver(KEY).requestFile(sticker.isAnimated() ? sticker.getImage() : sticker.getFullImage());
+    }
+
+    @Override
+    public void draw (Canvas c, MessageView v, int x, int y) {
+      final ComplexReceiver r = v.getGiveawayAvatarsReceiver();
+      final int left = x + (width - size) / 2;
+      final org.thunderdog.challegram.loader.ImageReceiver image = r.getImageReceiver(KEY);
+      final org.thunderdog.challegram.loader.gif.GifReceiver gif = r.getGifReceiver(KEY);
+      image.setBounds(left, y, left + size, y + size);
+      gif.setBounds(left, y, left + size, y + size);
+      if (sticker.isAnimated() && !gif.needPlaceholder()) {
+        gif.draw(c);
+      } else {
+        image.draw(c);
+      }
+    }
+  }
+
   private static TextWrapper genTextWrapper (CharSequence text, TextColorSet textColorSet, ViewProvider viewProvider) {
     return new TextWrapper(null, TD.toFormattedText(text, false), getGiveawayTextStyleProvider(), textColorSet, null, null)
       .setTextFlagEnabled(Text.FLAG_ALIGN_CENTER, true).setViewProvider(viewProvider);

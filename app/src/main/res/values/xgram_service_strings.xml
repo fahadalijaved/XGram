@@ -40,4 +40,10 @@
   <string name="XgramPaidUnlockConfirm">Unlock this post for %1$s Stars?</string>
   <string name="XgramPaidNoStars">Not enough Stars. Buy Stars in the official Telegram app.</string>
   <string name="XgramPaidOfficialApp">This post can only be bought in the official Telegram app.</string>
+  <!-- XGram: Star gifts -->
+  <string name="XgramGiftSent">You sent a gift</string>
+  <string name="XgramGiftFrom">Gift from %1$s</string>
+  <string name="XgramGiftWorth">Worth %1$s Stars</string>
+  <string name="XgramGiftOpenSender">View sender</string>
+  <string name="XgramGiftView">View recipient</string>
 </resources>

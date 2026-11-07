@@ -9006,6 +9006,10 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
           TGMessage unlocked = TGMessagePaidMedia.unlocked(context, msg, paid);
           return unlocked != null ? unlocked : new TGMessagePaidMedia(context, msg, paid);
         }
+        case TdApi.MessageGift.CONSTRUCTOR:
+          return new TGMessageStarGift(context, msg, (TdApi.MessageGift) content); // XGram: gift card like official Telegram
+        case TdApi.MessageUpgradedGift.CONSTRUCTOR:
+          return new TGMessageStarGift(context, msg, (TdApi.MessageUpgradedGift) content);
         // XGram: service lines, worded like official Telegram
         case TdApi.MessagePassportDataSent.CONSTRUCTOR:
           return new TGMessageService(context, msg, (TdApi.MessagePassportDataSent) content);
@@ -9050,8 +9054,6 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         // unsupported
         case TdApi.MessageInvoice.CONSTRUCTOR:
         case TdApi.MessageStory.CONSTRUCTOR:
-        case TdApi.MessageGift.CONSTRUCTOR:
-        case TdApi.MessageUpgradedGift.CONSTRUCTOR:
 
         case TdApi.MessageGroupCall.CONSTRUCTOR: // TODO TGMessageCall
           break;
