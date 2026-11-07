@@ -1120,6 +1120,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     xgramTabsItem = new CollapseListView.ViewItem(xgramTabs, com.fahadali.xgram.topics.ForumTabsView.getBarHeight());
     // XGram: Saved Messages tags (official Telegram's), a chip row in the same bar stack
     xgramSavedTags = new com.fahadali.xgram.chats.XgramSavedTagsBar(context);
+    xgramSavedTags.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, com.fahadali.xgram.chats.XgramSavedTagsBar.height())); // as the tabs: the bar stack takes the view's own height
     xgramSavedTags.setCallback(new com.fahadali.xgram.chats.XgramSavedTagsBar.Callback() {
       @Override
       public void onTagClick (@NonNull TdApi.SavedMessagesTag tag) {
