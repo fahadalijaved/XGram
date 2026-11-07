@@ -58,4 +58,7 @@
   <string name="XgramPollAddOption">Add an option</string>
   <string name="XgramPollOptionHint">Option</string>
   <string name="XgramPlayEffect">Play effect</string>
+  <!-- XGram: Star reactions -->
+  <string name="XgramPaidReactionInfo">Send Stars to support this post. Stars can\'t be taken back.</string>
+  <string name="XgramPaidReactionSend">Send %1$d ⭐</string>
 </resources>
