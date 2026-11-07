@@ -9010,6 +9010,8 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
           return new TGMessageStarGift(context, msg, (TdApi.MessageGift) content); // XGram: gift card like official Telegram
         case TdApi.MessageUpgradedGift.CONSTRUCTOR:
           return new TGMessageStarGift(context, msg, (TdApi.MessageUpgradedGift) content);
+        case TdApi.MessageGroupCall.CONSTRUCTOR:
+          return new TGMessageGroupCall(context, msg, (TdApi.MessageGroupCall) content); // XGram: the call card
         // XGram: service lines, worded like official Telegram
         case TdApi.MessagePassportDataSent.CONSTRUCTOR:
           return new TGMessageService(context, msg, (TdApi.MessagePassportDataSent) content);
@@ -9055,7 +9057,6 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         case TdApi.MessageInvoice.CONSTRUCTOR:
         case TdApi.MessageStory.CONSTRUCTOR:
 
-        case TdApi.MessageGroupCall.CONSTRUCTOR: // TODO TGMessageCall
           break;
 
         case TdApi.MessageUnsupported.CONSTRUCTOR:

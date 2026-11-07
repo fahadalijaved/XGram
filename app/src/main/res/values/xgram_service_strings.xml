@@ -46,4 +46,5 @@
   <string name="XgramGiftWorth">Worth %1$s Stars</string>
   <string name="XgramGiftOpenSender">View sender</string>
   <string name="XgramGiftView">View recipient</string>
+  <string name="XgramGroupCallOfficialApp">Group calls can be joined in the official Telegram app</string>
 </resources>
