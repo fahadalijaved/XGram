@@ -2977,6 +2977,8 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
           context.navigation().navigateTo(c);
         } else if (chat.xgramCommunityId() != 0) {
           com.fahadali.xgram.chats.XgramCommunityController.open(this, chat.xgramCommunityId()); // XGram
+        } else if (((ChatView) v).xgramTouchedAvatar() && com.fahadali.xgram.chats.XgramStories.hasStories(tdlib, chat.getChatId())) {
+          com.fahadali.xgram.chats.XgramStories.open(this, chat.getChatId()); // XGram: the photo with a story ring opens the stories
         } else {
           onClick(chat.getChat());
         }

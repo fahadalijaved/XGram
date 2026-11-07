@@ -8817,6 +8817,13 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     storyList.notifyApproximateTotalItemCountChanged();
   }
 
+  /** XGram: the chat's active stories as TDLib last sent them (null when it has none or none were sent). */
+  public @Nullable TdApi.ChatActiveStories chatActiveStories (long chatId) {
+    synchronized (dataLock) {
+      return activeStories.get(chatId);
+    }
+  }
+
   public int getStoryListChatCount (@NonNull TdApi.StoryList list) {
     synchronized (dataLock) {
       return storyListChatCount.get(list.getConstructor());

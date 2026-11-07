@@ -1193,6 +1193,7 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
     }
     avatarReceiver.setContentCutOutColor(xgramCutOut);
     avatarReceiver.draw(c);
+    xgramDrawStoryRing(c); // XGram: active stories, like official Telegram
 
     final int cutOutColor = xgramCutOut != 0 ? xgramCutOut : Theme.fillingColor();
     // XGram: the schedule clock and the selection check at the photo's scale (3/4 with the one line photo)
@@ -1344,5 +1345,38 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
   @Override
   public int getVisibleMessageFlags () {
     return TdlibMessageViewer.Flags.NO_SENSITIVE_SCREENSHOT_NOTIFICATION | (chat != null && chat.needRefreshInteractionInfo() ? TdlibMessageViewer.Flags.REFRESH_INTERACTION_INFO : 0);
+  }
+
+  // XGram: stories (official Telegram's): a ring around the photo, a tap on the photo opens them
+
+  private float xgramDownX, xgramDownY;
+
+  @Override
+  public boolean onTouchEvent (android.view.MotionEvent e) {
+    if (e.getActionMasked() == android.view.MotionEvent.ACTION_DOWN) {
+      xgramDownX = e.getX();
+      xgramDownY = e.getY();
+    }
+    return super.onTouchEvent(e);
+  }
+
+  /** The last touch went down on the photo (its ring included). */
+  public boolean xgramTouchedAvatar () {
+    final int slop = Screen.dp(6f);
+    return xgramDownX >= avatarReceiver.getLeft() - slop && xgramDownX <= avatarReceiver.getRight() + slop &&
+      xgramDownY >= avatarReceiver.getTop() - slop && xgramDownY <= avatarReceiver.getBottom() + slop;
+  }
+
+  private void xgramDrawStoryRing (Canvas c) {
+    if (chat == null || chat.isArchive() || !com.fahadali.xgram.chats.XgramStories.hasStories(tdlib, chat.getChatId())) {
+      return;
+    }
+    final boolean unseen = com.fahadali.xgram.chats.XgramStories.hasUnseen(tdlib, chat.getChatId());
+    final int color = unseen ?
+      (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY) : Theme.getColor(ColorId.textLink)) :
+      Theme.getColor(ColorId.iconLight);
+    final float radius = (avatarReceiver.getRight() - avatarReceiver.getLeft()) / 2f + Screen.dp(3f);
+    final float cx = (avatarReceiver.getLeft() + avatarReceiver.getRight()) / 2f, cy = (avatarReceiver.getTop() + avatarReceiver.getBottom()) / 2f;
+    c.drawCircle(cx, cy, radius, Paints.getProgressPaint(color, Screen.dp(unseen ? 2f : 1.5f)));
   }
 }

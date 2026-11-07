@@ -758,6 +758,10 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       ids.append(R.id.btn_xgramBoost); // XGram: boost the channel or group, like official Telegram
       strings.append(R.string.XgramBoost);
     }
+    if (com.fahadali.xgram.chats.XgramStories.hasStories(tdlib, getChatId())) {
+      ids.append(R.id.btn_xgramStories); // XGram: the chat's active stories, like official Telegram
+      strings.append(R.string.XgramStories);
+    }
     if (mode == Mode.USER || mode == Mode.SECRET || mode == Mode.CHANNEL) { // XGram: gifts, like official Telegram
       if (!tdlib.isSelfChat(getChatId())) {
         ids.append(R.id.btn_xgramSendGift);
@@ -913,6 +917,8 @@ public class ProfileController extends ViewController<ProfileController.Args> im
           return;
         } else if (id == R.id.more_btn_viewAdmins) {
           manageChat();
+        } else if (id == R.id.btn_xgramStories) {
+          com.fahadali.xgram.chats.XgramStories.open(this, getChatId());
         } else if (id == R.id.btn_xgramSendGift || id == R.id.btn_xgramShowGifts) {
           final long giftChatId = getChatId();
           final long giftUserId = tdlib.chatUserId(giftChatId);

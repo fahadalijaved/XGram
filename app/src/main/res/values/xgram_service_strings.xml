@@ -88,4 +88,7 @@
   <string name="XgramGiftsNone">No gifts are for sale right now</string>
   <string name="XgramGiftsNoneReceived">%1$s has no gifts yet</string>
   <string name="XgramGiftsReceived">%1$s · %2$d gifts</string>
+  <!-- XGram: stories -->
+  <string name="XgramStories">Stories</string>
+  <string name="XgramStoriesNone">No stories right now</string>
 </resources>
