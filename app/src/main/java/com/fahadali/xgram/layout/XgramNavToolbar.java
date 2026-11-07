@@ -2700,6 +2700,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     String[] titles = new String[size];
     int[] colors = new int[size];
     int[] icons = new int[size];
+    final int[] unreadCounts = new int[count];
     for (int i = 0; i < count; i++) {
       TdlibAccount account = accounts.get(i);
       boolean current = account.id == account.context().preferredAccountId();
@@ -2708,12 +2709,10 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       if (!current) {
         org.thunderdog.challegram.telegram.TdlibBadgeCounter badge = account.getUnreadBadge();
         int unread = badge != null ? badge.getCount() : 0;
-        if (unread > 0) {
-          titles[i] += "  " + org.thunderdog.challegram.tool.Strings.buildCounter(unread);
-        }
+        unreadCounts[i] = unread; // a badge at the row's end, not a number after the name
       }
       colors[i] = current ? ViewController.OptionColor.BLUE : ViewController.OptionColor.NORMAL;
-      icons[i] = R.drawable.baseline_account_circle_24;
+      icons[i] = 0; // the account's photo instead (below), like official Telegram
     }
     int row = count;
     if (manage) {
@@ -2728,7 +2727,17 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     titles[row] = Lang.getString(R.string.XgramNavRailAddAccount);
     colors[row] = ViewController.OptionColor.NORMAL;
     icons[row] = R.drawable.baseline_add_24;
-    top.showOptions(null, ids, titles, colors, icons, (itemView, id) -> {
+    final ViewController.OptionItem[] items = new ViewController.OptionItem[size];
+    for (int i = 0; i < size; i++) {
+      items[i] = new ViewController.OptionItem(ids[i], titles[i], colors[i], icons[i]);
+      if (i < count) {
+        items[i].xgramLeading = com.fahadali.xgram.appearance.XgramOptionDrawables.accountAvatar(context, accounts.get(i));
+        if (unreadCounts[i] > 0) {
+          items[i].xgramTrailing = com.fahadali.xgram.appearance.XgramOptionDrawables.unreadBadge(context, unreadCounts[i]);
+        }
+      }
+    }
+    top.showOptions(new ViewController.Options(null, null, null, items, org.thunderdog.challegram.util.text.Text.LINE_COUNT_UNLIMITED), (itemView, id) -> {
       if (id == R.id.btn_addAccount) {
         tdlib.ui().addAccount(context, true, false);
       } else if (id == R.id.btn_xgramNavManageAccounts) {

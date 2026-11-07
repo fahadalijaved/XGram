@@ -688,7 +688,7 @@ public final class XgramCompactMenu {
     boolean anyIcon = false;
     if (XgramExpressive.isEnabled()) {
       for (ViewController.OptionItem item : options.items) {
-        if (item != null && item != ViewController.OptionItem.SEPARATOR && !XgramR5Sheets.isPlainCancel(item) && item.icon != 0) {
+        if (item != null && item != ViewController.OptionItem.SEPARATOR && !XgramR5Sheets.isPlainCancel(item) && (item.icon != 0 || item.xgramLeading != null)) {
           anyIcon = true;
           break;
         }
@@ -718,13 +718,14 @@ public final class XgramCompactMenu {
         continue; // a tap outside or Back cancels
       }
       final TextView row = card.addItem(item.id, item.name, item.icon, null, onClick);
+      XgramOptionDrawables.apply(row, item.xgramLeading, item.xgramTrailing); // an account's photo, an unread badge
       listenerTargets.add(row);
       for (Drawable d : row.getCompoundDrawables()) {
         if (d != null) {
           listenerTargets.add(d); // its icon's tint listener (colorRow's too: the same drawable)
         }
       }
-      if (anyIcon && item.icon == 0) {
+      if (anyIcon && item.icon == 0 && item.xgramLeading == null) {
         addIconSpace(row);
       }
       if (header) {

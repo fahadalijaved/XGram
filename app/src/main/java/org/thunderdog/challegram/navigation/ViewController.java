@@ -2726,6 +2726,8 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     public final CharSequence name;
     public final @OptionColor int textColor, iconColor;
     public final int icon;
+    /** XGram: drawn as they are next to the label (an account's photo, an unread badge); the icon stays 0 then. */
+    public @Nullable android.graphics.drawable.Drawable xgramLeading, xgramTrailing;
 
     public OptionItem (int id, CharSequence name, @OptionColor int color, int icon) {
       this(id, name, color, icon, color);
@@ -3060,6 +3062,7 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
         continue;
       }
       TextView text = OptionsLayout.genOptionView(context, item.id, item.name, item.textColor, item.icon, item.iconColor, onClickListener, getThemeListeners(), forcedTheme);
+      com.fahadali.xgram.appearance.XgramOptionDrawables.apply(text, item.xgramLeading, item.xgramTrailing); // XGram
       if (xgramTiles) {
         OptionItem next = null; // the next row shown (a dropped Cancel tile is skipped)
         for (int nextIndex = itemIndex + 1; nextIndex < options.items.length; nextIndex++) {

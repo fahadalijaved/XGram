@@ -793,6 +793,31 @@ public class ForceTouchView extends FrameLayoutFix implements
   }
 
   /**
+   * XGram: the card never starts under the status bar. Its height is guessed from the screen before this view exists
+   * (MessagesController.getForcePreviewHeight); where this view ends up shorter than that guess (some One UI builds),
+   * the centred card spilled under the status bar. It moves down by what it spills, no further than the screen's bottom
+   * leaves room for the toolbar.
+   */
+  private void xgramKeepBelowStatusBar () {
+    if (contentWrap == null || contentWrap.getHeight() == 0) {
+      return;
+    }
+    final int[] location = new int[2];
+    contentWrap.getLocationInWindow(location);
+    final int minTop = Screen.getStatusBarHeight() + Screen.dp(8f);
+    int delta = minTop - location[1];
+    if (delta <= 0) {
+      return;
+    }
+    final int barRoom = buttonsList != null && buttonsList.getParent() == this ? com.fahadali.xgram.appearance.XgramM3Preview.barSpace() : 0;
+    final int maxBottom = getMeasuredHeight() - Screen.dp(8f);
+    delta = Math.min(delta, Math.max(0, maxBottom - (contentWrap.getBottom() + barRoom)));
+    if (delta > 0) {
+      contentWrap.offsetTopAndBottom(delta);
+    }
+  }
+
+  /**
    * XGram M3E: puts the toolbar under the card (and the tooltips above it), and makes the card and the toolbar scale
    * about one point, on the long-pressed row (kept inside the card), so they open from the row as one piece.
    */
@@ -800,6 +825,7 @@ public class ForceTouchView extends FrameLayoutFix implements
     if (forceTouchContext == null) {
       return;
     }
+    xgramKeepBelowStatusBar();
     final boolean hasBar = buttonsList != null && buttonsList.getParent() == this;
     if (hasBar) {
       final int barWidth = buttonsList.getMeasuredWidth(), barHeight = buttonsList.getMeasuredHeight();
