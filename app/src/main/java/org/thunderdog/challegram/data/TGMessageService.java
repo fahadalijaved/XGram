@@ -2961,4 +2961,141 @@ public final class TGMessageService extends TGMessageServiceImpl {
       };
     }
   }
+
+  // XGram: service lines for message types Telegram X listed as unsupported, worded like official Telegram
+
+  private static String xgramTon (long nanotons) {
+    java.math.BigDecimal value = java.math.BigDecimal.valueOf(nanotons, 9).stripTrailingZeros();
+    return value.scale() < 0 ? value.setScale(0).toPlainString() : value.toPlainString();
+  }
+
+  private TdlibSender xgramUser (long userId) {
+    return new TdlibSender(tdlib, msg.chatId, new TdApi.MessageSenderUser(userId));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageChatSetBackground background) {
+    super(context, msg);
+    setTextCreator(() -> msg.isOutgoing ?
+      getText(R.string.XgramSvcBackgroundOut) :
+      getText(background.onlyForSelf ? R.string.XgramSvcBackgroundSelf : R.string.XgramSvcBackground, new SenderArgument(sender)));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageSuggestProfilePhoto suggest) {
+    super(context, msg);
+    setTextCreator(() -> msg.isOutgoing ?
+      getText(R.string.XgramSvcSuggestPhotoOut) :
+      getText(R.string.XgramSvcSuggestPhoto, new SenderArgument(sender)));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageSuggestBirthdate suggest) {
+    super(context, msg);
+    final TdApi.Birthdate date = suggest.birthdate;
+    final String when = date == null ? "" :
+      new java.text.DateFormatSymbols().getMonths()[Math.max(0, Math.min(11, date.month - 1))] + " " + date.day + (date.year > 0 ? ", " + date.year : "");
+    setTextCreator(() -> msg.isOutgoing ?
+      getText(R.string.XgramSvcSuggestBirthdayOut, new BoldArgument(when)) :
+      getText(R.string.XgramSvcSuggestBirthday, new SenderArgument(sender), new BoldArgument(when)));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageUsersShared shared) {
+    super(context, msg);
+    final TdlibSender[] users = new TdlibSender[shared.users.length];
+    for (int i = 0; i < users.length; i++) {
+      users[i] = xgramUser(shared.users[i].userId);
+    }
+    setTextCreator(() -> getText(R.string.XgramSvcSharedUsers, new SenderListArgument(users)));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageChatShared shared) {
+    super(context, msg);
+    setTextCreator(() -> {
+      String title = shared.chat != null && !StringUtils.isEmpty(shared.chat.title) ? shared.chat.title : shared.chat != null ? tdlib.chatTitle(shared.chat.chatId) : "";
+      return getText(R.string.XgramSvcSharedChat, new BoldArgument(title));
+    });
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageGiveawayPrizeStars prize) {
+    super(context, msg);
+    setTextCreator(() -> prize.isUnclaimed ?
+      getText(R.string.XgramSvcPrizeStarsUnclaimed, new BoldArgument(Strings.buildCounter(prize.starCount))) :
+      getText(R.string.XgramSvcPrizeStars, new BoldArgument(Strings.buildCounter(prize.starCount)), new BoldArgument(tdlib.chatTitle(prize.boostedChatId))));
+  }
+
+  private static String xgramGiftName (@Nullable TdApi.UpgradedGift gift) {
+    return gift == null ? "" : gift.title + (gift.number > 0 ? " #" + gift.number : "");
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageUpgradedGiftPurchaseOffer offer) {
+    super(context, msg);
+    setTextCreator(() -> getText(R.string.XgramSvcGiftOffer, new SenderArgument(sender), new BoldArgument(xgramGiftName(offer.gift))));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageUpgradedGiftPurchaseOfferRejected rejected) {
+    super(context, msg);
+    setTextCreator(() -> getText(rejected.wasExpired ? R.string.XgramSvcGiftOfferExpired : R.string.XgramSvcGiftOfferDeclined, new BoldArgument(xgramGiftName(rejected.gift))));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageRefundedUpgradedGift refunded) {
+    super(context, msg);
+    setTextCreator(() -> getText(R.string.XgramSvcGiftRefunded));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageStakeDice dice) {
+    super(context, msg);
+    setTextCreator(() -> getText(R.string.XgramSvcStakeDice, new SenderArgument(sender), new BoldArgument("🎲 " + dice.value)));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageSuggestedPostApproved approved) {
+    super(context, msg);
+    setTextCreator(() -> getText(R.string.XgramSvcPostApproved));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageSuggestedPostApprovalFailed failed) {
+    super(context, msg);
+    setTextCreator(() -> getText(R.string.XgramSvcPostApprovalFailed));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageSuggestedPostDeclined declined) {
+    super(context, msg);
+    setTextCreator(() -> StringUtils.isEmpty(declined.comment) ?
+      getText(R.string.XgramSvcPostDeclined) :
+      getText(R.string.XgramSvcPostDeclinedWhy, new PlainArgument(declined.comment)));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageSuggestedPostPaid paid) {
+    super(context, msg);
+    final String amount = paid.gramAmount > 0 ? xgramTon(paid.gramAmount) + " TON" :
+      paid.starAmount != null ? Strings.buildCounter(paid.starAmount.starCount) + " ⭐" : "";
+    setTextCreator(() -> getText(R.string.XgramSvcPostPaid, new BoldArgument(amount)));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageSuggestedPostRefunded refunded) {
+    super(context, msg);
+    setTextCreator(() -> getText(R.string.XgramSvcPostRefunded));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageGiftedGrams gifted) {
+    super(context, msg);
+    setTextCreator(() -> getText(R.string.XgramSvcGiftedTon, new SenderArgument(gifted.gifterUserId != 0 ? xgramUser(gifted.gifterUserId) : sender), new BoldArgument(xgramTon(gifted.gramAmount))));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessagePaymentSuccessfulBot payment) {
+    super(context, msg);
+    setTextCreator(() -> getText(R.string.XgramSvcPaymentBot, new BoldArgument(CurrencyUtils.buildAmount(payment.currency, payment.totalAmount))));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageTonConnectRequest request) {
+    super(context, msg);
+    setTextCreator(() -> getText(R.string.XgramSvcTonConnect, new BoldArgument(StringUtils.isEmpty(request.dappName) ? "TON Connect" : request.dappName)));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageTonWalletTransfer transfer) {
+    super(context, msg);
+    setTextCreator(() -> getText(R.string.XgramSvcTonTransfer, new SenderArgument(transfer.senderUserId != 0 ? xgramUser(transfer.senderUserId) : sender), new BoldArgument(xgramTon(transfer.amount))));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessagePassportDataSent passport) {
+    super(context, msg);
+    setTextCreator(() -> getText(R.string.XgramSvcPassport));
+  }
 }

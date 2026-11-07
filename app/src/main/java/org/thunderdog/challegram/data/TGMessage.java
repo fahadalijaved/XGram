@@ -8996,39 +8996,63 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
           // XGram: the post's Instant View blocks in the bubble, like official Telegram (text as a fallback)
           return new TGMessageRichMessage(context, msg, (TdApi.MessageRichMessage) content);
         }
+        case TdApi.MessageChecklist.CONSTRUCTOR: {
+          // XGram: a checklist like official Telegram's: tap a task to mark it, add tasks
+          return new TGMessageChecklist(context, msg, (TdApi.MessageChecklist) content);
+        }
+        // XGram: service lines, worded like official Telegram
+        case TdApi.MessagePassportDataSent.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessagePassportDataSent) content);
+        case TdApi.MessageChatSetBackground.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageChatSetBackground) content);
+        case TdApi.MessageSuggestProfilePhoto.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageSuggestProfilePhoto) content);
+        case TdApi.MessageSuggestBirthdate.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageSuggestBirthdate) content);
+        case TdApi.MessageUsersShared.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageUsersShared) content);
+        case TdApi.MessageChatShared.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageChatShared) content);
+        case TdApi.MessageGiveawayPrizeStars.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageGiveawayPrizeStars) content);
+        case TdApi.MessageUpgradedGiftPurchaseOffer.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageUpgradedGiftPurchaseOffer) content);
+        case TdApi.MessageUpgradedGiftPurchaseOfferRejected.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageUpgradedGiftPurchaseOfferRejected) content);
+        case TdApi.MessageRefundedUpgradedGift.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageRefundedUpgradedGift) content);
+        case TdApi.MessageStakeDice.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageStakeDice) content);
+        case TdApi.MessageSuggestedPostApprovalFailed.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageSuggestedPostApprovalFailed) content);
+        case TdApi.MessageSuggestedPostApproved.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageSuggestedPostApproved) content);
+        case TdApi.MessageSuggestedPostDeclined.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageSuggestedPostDeclined) content);
+        case TdApi.MessageSuggestedPostPaid.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageSuggestedPostPaid) content);
+        case TdApi.MessageSuggestedPostRefunded.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageSuggestedPostRefunded) content);
+        case TdApi.MessageGiftedGrams.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageGiftedGrams) content);
+        case TdApi.MessagePaymentSuccessfulBot.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessagePaymentSuccessfulBot) content);
+        case TdApi.MessageTonConnectRequest.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageTonConnectRequest) content);
+        case TdApi.MessageTonWalletTransfer.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageTonWalletTransfer) content);
         // unsupported
         case TdApi.MessageInvoice.CONSTRUCTOR:
-        case TdApi.MessagePassportDataSent.CONSTRUCTOR:
         case TdApi.MessageStory.CONSTRUCTOR:
-        case TdApi.MessageChatSetBackground.CONSTRUCTOR:
-        case TdApi.MessageSuggestProfilePhoto.CONSTRUCTOR:
-        case TdApi.MessageSuggestBirthdate.CONSTRUCTOR:
-        case TdApi.MessageUsersShared.CONSTRUCTOR:
-        case TdApi.MessageChatShared.CONSTRUCTOR:
         case TdApi.MessagePaidMedia.CONSTRUCTOR:
-        case TdApi.MessageGiveawayPrizeStars.CONSTRUCTOR:
         case TdApi.MessageGift.CONSTRUCTOR:
         case TdApi.MessageUpgradedGift.CONSTRUCTOR:
-        case TdApi.MessageUpgradedGiftPurchaseOffer.CONSTRUCTOR:
-        case TdApi.MessageUpgradedGiftPurchaseOfferRejected.CONSTRUCTOR:
-        case TdApi.MessageRefundedUpgradedGift.CONSTRUCTOR:
-        case TdApi.MessageStakeDice.CONSTRUCTOR:
 
         case TdApi.MessageGroupCall.CONSTRUCTOR: // TODO TGMessageCall
-        case TdApi.MessageChecklist.CONSTRUCTOR: // TODO TGMessagePoll
-        case TdApi.MessageSuggestedPostApprovalFailed.CONSTRUCTOR:
-        case TdApi.MessageSuggestedPostApproved.CONSTRUCTOR:
-        case TdApi.MessageSuggestedPostDeclined.CONSTRUCTOR:
-        case TdApi.MessageSuggestedPostPaid.CONSTRUCTOR:
-        case TdApi.MessageSuggestedPostRefunded.CONSTRUCTOR:
-        case TdApi.MessageGiftedGrams.CONSTRUCTOR:
-        case TdApi.MessagePaymentSuccessfulBot.CONSTRUCTOR:
-        case TdApi.MessageTonConnectRequest.CONSTRUCTOR:
-        case TdApi.MessageTonWalletTransfer.CONSTRUCTOR:
           break;
 
         case TdApi.MessageUnsupported.CONSTRUCTOR:
-          unsupportedStringRes = R.string.UnsupportedMessageType;
+          unsupportedStringRes = R.string.XgramNeedsNewerVersion; // XGram: content newer than this TDLib
           break;
         // bots only
         case TdApi.MessagePassportDataReceived.CONSTRUCTOR:

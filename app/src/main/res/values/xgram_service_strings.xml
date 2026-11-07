@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: service lines for message types Telegram X showed as "Unsupported message" -->
+  <string name="XgramSvcBackground">%1$s set a new chat background</string>
+  <string name="XgramSvcBackgroundOut">You set a new chat background</string>
+  <string name="XgramSvcBackgroundSelf">%1$s set a new background for themselves</string>
+  <string name="XgramSvcSuggestPhoto">%1$s suggests a new profile photo</string>
+  <string name="XgramSvcSuggestPhotoOut">You suggested a new profile photo</string>
+  <string name="XgramSvcSuggestBirthday">%1$s suggests a birthday: %2$s</string>
+  <string name="XgramSvcSuggestBirthdayOut">You suggested a birthday: %1$s</string>
+  <string name="XgramSvcSharedUsers">You shared %1$s</string>
+  <string name="XgramSvcSharedChat">You shared %1$s</string>
+  <string name="XgramSvcPrizeStars">You won %1$s Stars in a giveaway from %2$s</string>
+  <string name="XgramSvcPrizeStarsUnclaimed">%1$s Stars from a giveaway are unclaimed</string>
+  <string name="XgramSvcGiftOffer">%1$s made an offer for %2$s</string>
+  <string name="XgramSvcGiftOfferDeclined">The offer for %1$s was declined</string>
+  <string name="XgramSvcGiftOfferExpired">The offer for %1$s expired</string>
+  <string name="XgramSvcGiftRefunded">A gift was refunded</string>
+  <string name="XgramSvcStakeDice">%1$s rolled %2$s</string>
+  <string name="XgramSvcPostApproved">The suggested post was approved</string>
+  <string name="XgramSvcPostApprovalFailed">The suggested post couldn\'t be published: not enough funds</string>
+  <string name="XgramSvcPostDeclined">The suggested post was declined</string>
+  <string name="XgramSvcPostDeclinedWhy">The suggested post was declined: %1$s</string>
+  <string name="XgramSvcPostPaid">The suggested post was paid: %1$s</string>
+  <string name="XgramSvcPostRefunded">The suggested post payment was refunded</string>
+  <string name="XgramSvcGiftedTon">%1$s gifted %2$s TON</string>
+  <string name="XgramSvcPaymentBot">Payment received: %1$s</string>
+  <string name="XgramSvcTonConnect">Connection request from %1$s</string>
+  <string name="XgramSvcTonTransfer">%1$s sent %2$s TON</string>
+  <string name="XgramSvcPassport">You sent your Telegram Passport data</string>
+  <string name="XgramNeedsNewerVersion">This message needs a newer version of XGram</string>
+  <!-- XGram: checklists -->
+  <string name="XgramChecklistGroup">Group checklist</string>
+  <string name="XgramChecklistDone">%1$d of %2$d done</string>
+  <string name="XgramChecklistDoneBy">Done by %1$s</string>
+  <string name="XgramChecklistAdd">Add a task</string>
+  <string name="XgramChecklistTask">Task</string>
+</resources>
