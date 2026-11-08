@@ -2336,6 +2336,111 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     swipeSectionAccountId = TdlibAccount.NO_ID;
   }
 
+  /**
+   * An account switch (MainActivity, a swipe on the photo or a row of the accounts' menu) is about to show {@code next},
+   * the new account's chat list. As Google's apps do, the new account opens on the section on screen, in the switch's
+   * one fade: a tab screen (Contacts, Settings, Activity, the profile, the call list) is made for it and the stack
+   * becomes [{@code next}, that screen]; Calls on the chat list's page opens {@code next} on Calls. Chats never shows
+   * in between. False: the switch shows {@code next} as usual (Chats on screen, another screen on top, the toolbar
+   * away, the navigation busy); a section that can't be made now (the profile's chat not loaded) opens once the toolbar
+   * settles on it (reopenSwipeSection).
+   */
+  public boolean switchAccountKeepingSection (@NonNull MainController next) {
+    if (destroyed || preview || !shown || navigation == null || navigation.isAnimating() || next.isDestroyed() || root == null) {
+      return false;
+    }
+    final Tdlib tdlib = next.tdlib();
+    final NavigationStack stack = navigation.getStack();
+    final ViewController<?> top = navigation.getCurrentStackItem();
+    if (tdlib == null || top == null || stack.get(0) != root || !isTabRoot(top)) {
+      return false;
+    }
+    // In the switch's fade the new chat list counts as a tab root (the toolbar stays), from a menu row as from a swipe
+    swipeSwitchAccountId = tdlib.id();
+    final int dest = computeSelected(top);
+    if (top == root) {
+      if (stack.size() != 1 || dest != DEST_CALLS) {
+        return false; // Chats: where a switch lands anyway
+      }
+      next.getValue(); // its pages, before the page is set
+      if (!next.xgramHasCallsPage()) {
+        keepSwipeSection(tdlib.id()); // folders there: Calls is a tab screen, opened once the switch lands
+        return false;
+      }
+      clearSwipeSection();
+      next.xgramSetPageSilently(true);
+      navigation.setControllerAnimated(next, false, false);
+      return true;
+    }
+    if (stack.size() != 2 || dest == DEST_CHATS || dest == DEST_SAVED || !(hasTab(dest) || (dest == DEST_PROFILE && buttonMode))) {
+      return false;
+    }
+    next.getValue(); // made as the usual switch makes it, before anything asks it for its pages or room
+    if (dest == DEST_CALLS && next.xgramHasCallsPage()) {
+      // No folders there: Calls is the new chat list's page, not a screen
+      clearSwipeSection();
+      next.xgramSetPageSilently(true);
+      navigation.setControllerAnimated(next, false, false);
+      return true;
+    }
+    final ViewController<?> screen = sectionScreen(dest, tdlib);
+    if (screen == null) {
+      keepSwipeSection(tdlib.id()); // opened once the switch lands on the chat list
+      return false;
+    }
+    clearSwipeSection();
+    screen.xgramSetBarTab(dest); // before its view is made: a tab screen
+    // The new chat list goes under the screen on top (the toolbar binds it now: its photo, badges and tabs), the old
+    // one is destroyed once the new screen has faded in. Then the one fade-through of a tab switch: [next, screen]
+    final ViewController<?> oldRoot = stack.xgramReplaceKeeping(0, next);
+    final NavigationController nav = navigation;
+    final Runnable destroyOld = () -> {
+      if (!nav.isDestroyed()) {
+        nav.xgramDestroyDetached(oldRoot); // skips it if destroyed meanwhile or back in the stack
+      } else if (!oldRoot.isDestroyed()) {
+        oldRoot.destroy();
+      }
+    };
+    screen.addOneShotFocusListener(destroyOld);
+    UI.post(destroyOld, 3000L); // the fade never ended (another navigation took over)
+    keepWarm(dest, screen);
+    if (dest == DEST_CALLS && badges != null) {
+      badges.markCallsSeen();
+    }
+    navigation.setControllerAnimated(screen, false, true);
+    return true;
+  }
+
+  /** A new screen of {@code dest} for {@code tdlib}'s account (an account switch keeps the section); null: not now. */
+  @Nullable
+  private ViewController<?> sectionScreen (int dest, Tdlib tdlib) {
+    switch (dest) {
+      case DEST_CONTACTS: {
+        PeopleController people = new PeopleController(context, tdlib);
+        people.setNeedSearch();
+        tdlib.contacts().startSyncIfNeeded(context, false, null); // as the tab does, without an alert on a switch
+        return people;
+      }
+      case DEST_SETTINGS:
+        return new SettingsController(context, tdlib);
+      case DEST_ACTIVITY:
+        return new com.fahadali.xgram.activity.XgramActivityController(context, tdlib);
+      case DEST_CALLS:
+        return new CallListController(context, tdlib);
+      case DEST_PROFILE: {
+        final long userId = tdlib.myUserId();
+        final TdApi.Chat chat = userId != 0 ? tdlib.chat(ChatId.fromUserId(userId)) : null;
+        if (chat == null) {
+          return null;
+        }
+        ProfileController profile = new ProfileController(context, tdlib);
+        profile.setArguments(new ProfileController.Args(chat, null, false));
+        return profile;
+      }
+    }
+    return null;
+  }
+
   /** The toolbar settled on the account a swipe switched to: its section again, if the new chat list is on top. */
   private void reopenSwipeSection (@Nullable ViewController<?> top) {
     final int dest = swipeSectionDest;

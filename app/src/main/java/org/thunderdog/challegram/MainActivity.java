@@ -388,7 +388,12 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
           if (navigation.isEmpty()) {
             navigation.setController(c);
           } else {
-            navigation.setControllerAnimated(c, false, false);
+            // XGram M3E: switched from the toolbar's photo or accounts' menu, the new account opens on the section on
+            // screen (Contacts, Settings, Calls…) in the same fade, never on Chats first
+            com.fahadali.xgram.layout.XgramNavToolbar toolbar = reason == TdlibManager.SWITCH_REASON_USER_CLICK ? com.fahadali.xgram.layout.XgramNavToolbar.of(MainActivity.this) : null;
+            if (toolbar == null || !toolbar.switchAccountKeepingSection(c)) {
+              navigation.setControllerAnimated(c, false, false);
+            }
           }
         }
       }

@@ -184,6 +184,22 @@ public class NavigationStack {
     stack.set(index, c);
   }
 
+  /**
+   * XGram: {@code c} takes the place of the screen at {@code index}, below the current one, in one step (the listeners
+   * never see a stack without it). The screen it replaced is returned, not destroyed: the caller destroys it.
+   */
+  public ViewController<?> xgramReplaceKeeping (int index, ViewController<?> c) {
+    if (c == null) {
+      throw new IllegalArgumentException();
+    }
+    if (index < 0 || index >= currentIndex) {
+      throw new IndexOutOfBoundsException();
+    }
+    ViewController<?> replaced = stack.set(index, c);
+    notifyStackChanged();
+    return replaced;
+  }
+
   public ViewController<?> removeById (int id) {
     int i = 0;
     for (ViewController<?> c : stack) {

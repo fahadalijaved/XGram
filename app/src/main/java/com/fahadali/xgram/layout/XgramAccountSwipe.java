@@ -155,10 +155,20 @@ final class XgramAccountSwipe {
     this.commitDp = commitDp;
     this.enabled = enabled;
     this.size = Screen.dpf(photoDp);
-    this.above = new AvatarReceiver(drawView);
-    this.below = new AvatarReceiver(drawView);
-    this.pos = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> drawView.invalidate()).setThreshold(.002f);
+    this.above = newReceiver(drawView);
+    this.below = newReceiver(drawView);
+    this.pos =new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> drawView.invalidate()).setThreshold(.002f);
     this.pos.setEndListener(this::onSettled);
+  }
+
+  /**
+   * A photo the swipe squares while it moves (full screen): only its shape changes, an account without a photo keeps
+   * its letters (full screen alone shows the profile header's person icon until the photos are round again).
+   */
+  private static AvatarReceiver newReceiver (View drawView) {
+    AvatarReceiver receiver = new AvatarReceiver(drawView);
+    receiver.xgramSetShapeOnlyFullScreen(true);
+    return receiver;
   }
 
   // Lifecycle, with the view that draws the photos
@@ -605,8 +615,9 @@ final class XgramAccountSwipe {
     AvatarReceiver incoming = fromBelow ? below : above;
     AvatarReceiver previous = host.replaceAvatar(incoming);
     if (previous == null) {
-      previous = new AvatarReceiver(drawView);
+      previous = newReceiver(drawView);
     }
+    previous.xgramSetShapeOnlyFullScreen(true); // the host's own until now
     previous.clear();
     if (fromBelow) {
       below = previous;
@@ -723,6 +734,7 @@ final class XgramAccountSwipe {
     if (sizePx > 0) {
       this.size = sizePx;
     }
+    avatar.xgramSetShapeOnlyFullScreen(true); // the host's photo goes square too: its letters stay
     final int right = left + sizePx, bottom = top + sizePx;
     avatar.setBounds(left, top, right, bottom);
     if (!square && sizePx > 0) {

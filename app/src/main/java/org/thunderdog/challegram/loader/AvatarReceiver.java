@@ -176,6 +176,19 @@ public class AvatarReceiver implements Receiver, ChatListener, TdlibCache.UserDa
     this.isFullScreen.forceValue(isFullScreen, floatValue);
   }
 
+  /**
+   * XGram: full screen only squares the photo (the account swipe, XgramAccountSwipe): a photo-less account keeps its
+   * letters and colour, never the person icon and big colour of the profile header.
+   */
+  private boolean xgramShapeOnlyFullScreen;
+
+  public void xgramSetShapeOnlyFullScreen (boolean shapeOnly) {
+    if (this.xgramShapeOnlyFullScreen != shapeOnly) {
+      this.xgramShapeOnlyFullScreen = shapeOnly;
+      invalidate();
+    }
+  }
+
   public void setAllowOnline (boolean allowOnline, boolean animated) {
     this.allowOnline.setValue(allowOnline, animated);
   }
@@ -1200,14 +1213,15 @@ public class AvatarReceiver implements Receiver, ChatListener, TdlibCache.UserDa
         }
       }
     } else if (requestedPlaceholder != null) {
+      final float placeholderFullScreen = xgramShapeOnlyFullScreen ? 0f : isFullScreen.getFloatValue(); // XGram
       int placeholderColor = ColorUtils.fromToArgb(
         requestedPlaceholder.accentColor.getPrimaryColor(),
         requestedPlaceholder.accentColor.getPrimaryBigColor(),
-        isFullScreen.getFloatValue()
+        placeholderFullScreen
       );
       drawPlaceholderRounded(c, displayRadius, ColorUtils.alphaColor(alpha, placeholderColor));
       int avatarContentColorId = com.fahadali.xgram.appearance.XgramM3Colors.avatarIconColorId(requestedPlaceholder.accentColor.getId(), ColorId.avatar_content); // XGram M3E: tonal special avatars
-      float primaryContentAlpha = requestedPlaceholder.extraDrawableRes != 0 ? 1f - isFullScreen.getFloatValue() : 1f;
+      float primaryContentAlpha = requestedPlaceholder.extraDrawableRes != 0 ? 1f - placeholderFullScreen : 1f;
       if (primaryContentAlpha > 0f) {
         if (requestedPlaceholder.drawableRes != 0) {
           drawPlaceholderDrawable(c, requestedPlaceholder.drawableRes, avatarContentColorId, alpha * primaryContentAlpha, false);
