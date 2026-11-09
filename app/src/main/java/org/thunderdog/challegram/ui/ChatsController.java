@@ -1222,6 +1222,9 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
       }
     } else {
       stopChatFolderNewChatsPolling();
+      if (dragTooltip != null) {
+        dragTooltip.hideNow(); // XGram: "Drag chat to reorder" never stays over another screen
+      }
     }
   }
 
@@ -4120,6 +4123,10 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
         if (dragTooltip != null)
           dragTooltip.hide(true);
         dragTooltip = context.tooltipManager().builder(v).controller(getParentOrSelf()).locate((targetView, outRect) -> ((ChatView) targetView).getAvatarReceiver().toRect(outRect)).show(tdlib, R.string.DragChatsHint);
+        if (dragTooltip != null) {
+          // XGram: it goes by itself (a long press whose drag never started never reaches clearView, so it stayed)
+          dragTooltip.hideDelayed(true, 3000, java.util.concurrent.TimeUnit.MILLISECONDS);
+        }
         return true;
       }
     }

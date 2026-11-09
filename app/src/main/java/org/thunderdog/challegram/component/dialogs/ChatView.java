@@ -1057,6 +1057,12 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
     final float counterCenterY = xgramMetrics.counterCenterY;
     final float oneLineRight = trailingX - Screen.dp(8f);
     final int reactionColorId = chat.notificationsEnabled() ? ColorId.badgeText : ColorId.badgeMutedText;
+    // XGram: a pinned chat shows a pin where there is no badge (official Telegram), at the end of the second line, or in
+    // one line before the ticks; it gives way as a badge comes in, and slides between the two while the view changes
+    final float xgramBadges = Math.max(Math.max(counter.getVisibility(), chat.xgramLaterCounter().getVisibility()), Math.max(mentionCounter.getVisibility(), reactionCounter.getVisibility())); // XGram Later: the bell too
+    final float xgramPinMulti = chat.xgramIsPinnedRow() ? (1f - xgramBadges) * (1f - clamp01(oneLine)) : 0f;
+    final Drawable xgramPin = xgramPinMulti > 0f ? getSparseDrawable(R.drawable.deproko_baseline_pin_14, ColorId.NONE) : null;
+    final Paint xgramPinPaint = xgramPin == null ? null : xgramM3 ? xgramIconPaint(XGRAM_PAINT_PIN, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT)) : PorterDuffPaint.get(ColorId.iconLight);
     if (rtl) {
       // Mirrored in one line: from the start edge of the slot towards the title. Each badge slides between its place
       // at the end of the second line and its one line place (both as Gravity.RIGHT anchors), so none jumps mid-change.
@@ -1072,6 +1078,10 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
       counterLeft += reactionCounter.getScaledWidth(getTimePaddingLeft());
       Counter bellCounter = chat.xgramLaterCounter(); // XGram Later: the bell, colored by its own set
       bellCounter.draw(c, xgramRtlCounterX(bellCounter, multiLineRight, counterLeft, counterRadius, oneLine), counterCenterY, Gravity.RIGHT, 1f, this, ColorId.NONE);
+      multiLineRight -= bellCounter.getScaledWidth(getTimePaddingLeft());
+      if (xgramPin != null) {
+        com.fahadali.xgram.appearance.XgramIconCrossfade.drawSingle(c, xgramPin, xgramPinPaint, multiLineRight - xgramPin.getMinimumWidth() / 2f, counterCenterY, xgramPinMulti);
+      }
     } else {
       final float multiLineRight = viewWidth - getRightPadding();
       float counterRight = oneLine <= 0f ? multiLineRight : multiLineRight + (oneLineRight - multiLineRight) * oneLine;
@@ -1087,6 +1097,11 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
       Counter bellCounter = chat.xgramLaterCounter(); // XGram Later: the bell, colored by its own set
       bellCounter.draw(c, counterRight - counterRadius, counterCenterY, Gravity.RIGHT, 1f, this, ColorId.NONE);
       counterRight -= bellCounter.getScaledWidth(getTimePaddingLeft());
+
+      if (xgramPin != null) {
+        com.fahadali.xgram.appearance.XgramIconCrossfade.drawSingle(c, xgramPin, xgramPinPaint, counterRight - xgramPin.getMinimumWidth() / 2f, counterCenterY, xgramPinMulti);
+        counterRight -= (xgramPin.getMinimumWidth() + Screen.dp(4f)) * xgramPinMulti; // the folder tags start before it
+      }
 
       // XGram: folder tags (official Telegram's) before the badges, on the preview line
       if (oneLine <= 0f && !chat.xgramFolderTags().isEmpty()) {
@@ -1108,8 +1123,7 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
 
     if (oneLine > 0f && chat.xgramIsPinnedRow()) {
       // XGram: one line shows a pin where there is no badge (official Telegram); it gives way as a badge comes in
-      final float badges = Math.max(Math.max(counter.getVisibility(), chat.xgramLaterCounter().getVisibility()), Math.max(mentionCounter.getVisibility(), reactionCounter.getVisibility())); // XGram Later: the bell too
-      final float pinAlpha = (1f - badges) * oneLine;
+      final float pinAlpha = (1f - xgramBadges) * oneLine;
       Drawable d = pinAlpha > 0f ? getSparseDrawable(R.drawable.deproko_baseline_pin_14, ColorId.NONE) : null;
       if (d != null) {
         final float iconLeft = oneLineRight - d.getMinimumWidth();
