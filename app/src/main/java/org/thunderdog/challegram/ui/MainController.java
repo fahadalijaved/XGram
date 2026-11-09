@@ -226,10 +226,24 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       }
 
       @Override
-      public void xgramOnSwipePastEnd () {
+      public boolean xgramBeginPastEnd () {
+        com.fahadali.xgram.layout.XgramNavToolbar toolbar = xgramToolbar();
+        return toolbar != null && toolbar.beginTabDrag(1);
+      }
+
+      @Override
+      public void xgramDragPastEnd (float dx) {
         com.fahadali.xgram.layout.XgramNavToolbar toolbar = xgramToolbar();
         if (toolbar != null) {
-          toolbar.swipeToTab(1);
+          toolbar.dragTab(dx);
+        }
+      }
+
+      @Override
+      public void xgramEndPastEnd (float dx, float velocityX, boolean cancel) {
+        com.fahadali.xgram.layout.XgramNavToolbar toolbar = com.fahadali.xgram.layout.XgramNavToolbar.of(context());
+        if (toolbar != null) {
+          toolbar.endTabDrag(dx, velocityX, cancel); // as it began (the toolbar may already show the next tab's screen)
         }
       }
     });

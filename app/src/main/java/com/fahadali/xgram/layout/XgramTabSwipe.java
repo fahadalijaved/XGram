@@ -27,25 +27,24 @@ import me.vkryl.android.AnimatorUtils;
 /**
  * Sideways on a tab screen of the floating navigation toolbar (Contacts, Settings, Activity, the profile, the call
  * list): to the left the next tab, to the right the previous one (Chats back to the chat list), as official Telegram's
- * tabs. The screen follows the finger with resistance (less towards a side with no tab); past {@link #COMMIT_DP}, or
- * thrown, the toolbar switches tabs with its usual fade-through, else the screen springs back.
+ * tabs, as seamless as the chat list's Chats and Calls pages: the two screens side by side under the finger
+ * (XgramNavToolbar#beginTabDrag), settling on either one when released. Towards a side with no tab (or one that can't
+ * be shown now) the screen only follows with resistance and springs back.
  * <p>
  * Fed every touch by NavigationGestureController before Telegram X's own gestures (a tab screen has no swipe back: it
  * fades). Lists keep their own scrolling: a vertical move first, or a horizontal list that claims the drag, ends it.
  * The chat list's own pager keeps its swipes; past its last page the pager asks the toolbar itself.
  */
 public final class XgramTabSwipe {
-  /** Dragged this far (dp), it switches. */
-  private static final float COMMIT_DP = 72f;
-  /** Thrown this fast (dp/s) the way it was dragged, it switches whatever the distance. */
-  private static final float FLING_DP = 900f;
-  /** The screen moves at most this part of its width (towards a side with no tab: a third of it). */
-  private static final float MAX_SHIFT = .18f;
+  /** With no tab that way, the screen moves at most this part of its width. */
+  private static final float MAX_SHIFT = .06f;
 
   private final BaseActivity context;
   @Nullable private View view;
   @Nullable private VelocityTracker velocity;
   private boolean listening, swiping;
+  /** The drag moves the two screens (the toolbar's tab pager); else the screen alone, rubber banded. */
+  private boolean paging;
   private float startX, startY;
   @Nullable private ViewController<?> screen;
 
@@ -57,6 +56,7 @@ public final class XgramTabSwipe {
   public boolean onTouchEvent (NavigationController navigation, MotionEvent e) {
     switch (e.getActionMasked()) {
       case MotionEvent.ACTION_DOWN: {
+        endPaging(0f, true); // the last gesture's end never came here: its drag goes back
         end(false);
         final XgramNavToolbar toolbar = XgramNavToolbar.of(context);
         final ViewController<?> top = navigation.isAnimating() ? null : navigation.getCurrentStackItem();
@@ -76,7 +76,14 @@ public final class XgramTabSwipe {
           velocity.addMovement(e);
         }
         if (swiping) {
-          follow(e.getX() - startX);
+          if (paging) {
+            final XgramNavToolbar toolbar = XgramNavToolbar.of(context);
+            if (toolbar != null) {
+              toolbar.dragTab(e.getX() - startX);
+            }
+          } else {
+            follow(e.getX() - startX);
+          }
           return true;
         }
         if (!listening) {
@@ -98,15 +105,21 @@ public final class XgramTabSwipe {
         }
         listening = false;
         swiping = true;
-        this.view = view;
-        view.animate().cancel();
-        startX = e.getX(); // the screen starts moving where the slop ends: no jump
-        follow(0f);
+        startX = e.getX(); // the screens start moving where the slop ends: no jump
+        final XgramNavToolbar toolbar = XgramNavToolbar.of(context);
+        paging = toolbar != null && toolbar.beginTabDrag(dx < 0f ? 1 : -1);
+        if (!paging) {
+          this.view = view; // no tab that way: the screen alone, rubber banded
+          view.animate().cancel();
+          follow(0f);
+        }
         return true;
       }
       case MotionEvent.ACTION_POINTER_DOWN: {
         if (swiping) {
+          endPaging(e.getX() - startX, true);
           end(true); // a second finger: the screen goes back, the rest of this gesture is nobody's
+          listening = false;
           return true;
         }
         listening = false;
@@ -117,24 +130,24 @@ public final class XgramTabSwipe {
           end(false);
           return false;
         }
-        final float dx = e.getX() - startX;
         float vx = 0f;
         if (velocity != null) {
           velocity.computeCurrentVelocity(1000);
           vx = velocity.getXVelocity();
         }
-        final int step = dx < 0f ? 1 : -1;
-        final boolean far = Math.abs(dx) >= Screen.dpf(COMMIT_DP);
-        final boolean thrown = dx != 0f && Math.abs(vx) >= Screen.dpf(FLING_DP) && (vx < 0f) == (dx < 0f);
-        final XgramNavToolbar toolbar = XgramNavToolbar.of(context);
-        if ((far || thrown) && toolbar != null) {
-          toolbar.swipeToTab(step); // its fade-through takes the screen away as it settles back
+        if (paging) {
+          final XgramNavToolbar toolbar = XgramNavToolbar.of(context);
+          if (toolbar != null) {
+            toolbar.endTabDrag(e.getX() - startX, vx, false); // on to the tab, or back
+          }
+          paging = false;
         }
         end(true);
         return true;
       }
       case MotionEvent.ACTION_CANCEL: {
         final boolean was = swiping;
+        endPaging(e.getX() - startX, true);
         end(true);
         return was;
       }
@@ -142,15 +155,30 @@ public final class XgramTabSwipe {
     return swiping;
   }
 
-  /** The finger moved {@code dx} since the screen started moving: the screen follows it, rubber banded. */
+  /** The gesture was taken away (NavigationGestureController#onCancel): a drag goes back. */
+  public void cancel () {
+    endPaging(0f, true);
+    end(true);
+  }
+
+  /** The pager's drag ends where it is ({@code cancel}: back to the screen it started on). */
+  private void endPaging (float dx, boolean cancel) {
+    if (paging) {
+      paging = false;
+      final XgramNavToolbar toolbar = XgramNavToolbar.of(context);
+      if (toolbar != null) {
+        toolbar.endTabDrag(dx, 0f, cancel);
+      }
+    }
+  }
+
+  /** The finger moved {@code dx} since the screen started moving (no tab that way): it follows, rubber banded. */
   private void follow (float dx) {
     final View view = this.view;
     if (view == null) {
       return;
     }
-    final XgramNavToolbar toolbar = XgramNavToolbar.of(context);
-    final boolean open = dx != 0f && toolbar != null && toolbar.hasSwipeTarget(dx < 0f ? 1 : -1);
-    final float max = Math.max(1f, view.getWidth() * (open ? MAX_SHIFT : MAX_SHIFT / 3f));
+    final float max = Math.max(1f, view.getWidth() * MAX_SHIFT);
     view.setTranslationX(Math.signum(dx) * max * Math.abs(dx) / (Math.abs(dx) + max));
   }
 
@@ -162,7 +190,7 @@ public final class XgramTabSwipe {
     }
     this.view = null;
     this.screen = null;
-    listening = swiping = false;
+    listening = swiping = paging = false;
     if (velocity != null) {
       velocity.recycle();
       velocity = null;

@@ -1146,6 +1146,10 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
       }
     }
 
+    if (xgramPager) {
+      forceRtl = xgramPagerMirror; // XGram M3E: the tab pager's target comes in from the side its tab is on
+    }
+
     if (forceRtlAnimation != forceRtl) {
       forceRtlAnimation = forceRtl;
       checkShadowDirection();
@@ -1898,6 +1902,160 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
     xgramCheckFloatingButton();
   }
 
+  // XGram M3E: the floating navigation toolbar's tab pager (XgramNavToolbar#beginTabDrag): a finger drags from one tab's
+  // screen to the next one's, the two side by side as the chat list's pages, the app bar following (Telegram X's
+  // horizontal header transition, no Expressive card or shared axis); released, it settles on either one as the pager
+  // does. To a tab screen it is a push, rebased as a tab switch's (the stack becomes [chat list, tab screen]); back to the
+  // chat list below the tab screen it is a pop. The target comes in from the side its tab is on.
+
+  private boolean xgramPager, xgramPagerForward, xgramPagerMirror;
+  private float xgramPagerProgress;
+  @Nullable private ViewController<?> xgramPagerTarget;
+  @Nullable private ValueAnimator xgramPagerAnimator;
+
+  /**
+   * Starts a tab drag to {@code target}: a tab screen to push, or the chat list right below the screen on top (a pop).
+   * {@code toRight}: its tab is right of the current one. False: not now (nothing changed).
+   */
+  public boolean xgramBeginTabDrag (@NonNull ViewController<?> target, boolean toRight) {
+    xgramFlushPendingDestroys(); // popped screens waiting for their destroy go first
+    if (isAnimating || isDestroyed || xgramPager || target.isDestroyed() || rootView.getMeasuredWidth() <= 0) {
+      return false;
+    }
+    final NavigationStack stack = getStack();
+    final ViewController<?> current = stack.getCurrent();
+    if (current == null || current == target || current.usePopupMode() || target.usePopupMode()) {
+      return false;
+    }
+    final boolean back = stack.getPrevious() == target;
+    if (!back && stack.indexOf(target) != -1) {
+      return false;
+    }
+    hideContextualPopups();
+    clearStackLock();
+    setIsAnimating(true);
+    xgramPager = true;
+    xgramPagerForward = !back;
+    xgramPagerMirror = back ? toRight : !toRight; // a push comes in from the right, a pop from the left: mirrored to the tab's side
+    xgramPagerTarget = target;
+    xgramPagerProgress = 0f;
+    xgramRequestedMode = XgramNavMotion.MODE_NONE;
+    target.getValue();
+    if (back) {
+      prepareFactorAnimation(target, current, false, TRANSLATION_HORIZONTAL, PredictiveGesture.NONE);
+    } else {
+      stack.push(target, true); // as a tab switch pushes it: rebased with the chat list kept once it lands
+      prepareFactorAnimation(current, target, true, TRANSLATION_HORIZONTAL, PredictiveGesture.NONE);
+    }
+    translationFactor = -1f; // the pager's own places now (the preparation put a back preview's offset on the screen below)
+    xgramPagerApply(0f);
+    return true;
+  }
+
+  /** The finger moved: {@code progress} of the way to the target (0 as it was, 1 the target on screen). */
+  public void xgramSetTabDragProgress (float progress) {
+    if (xgramPager && xgramPagerAnimator == null) {
+      xgramPagerApply(progress);
+    }
+  }
+
+  /** How far the tab drag is (0 none, or not dragging), for the toolbar's pill. */
+  public float xgramTabDragProgress () {
+    return xgramPager ? xgramPagerProgress : 0f;
+  }
+
+  /** Released: settles on the target ({@code commit}) or back, {@code velocity} (px/s) shortening the settle. */
+  public void xgramEndTabDrag (boolean commit, float velocity) {
+    if (!xgramPager || xgramPagerAnimator != null) {
+      return;
+    }
+    final float from = xgramPagerProgress, to = commit ? 1f : 0f;
+    if (from == to || !isAttachedToWindow) {
+      xgramPagerApply(to);
+      xgramFinishTabDrag(commit);
+      return;
+    }
+    final ValueAnimator animator = AnimatorUtils.simpleValueAnimator();
+    animator.addUpdateListener(animation -> xgramPagerApply(from + (to - from) * AnimatorUtils.getFraction(animation)));
+    animator.setInterpolator(AnimatorUtils.DECELERATE_INTERPOLATOR);
+    animator.setDuration(calculateDropDuration(Math.abs(to - from) * currentWidth, Math.abs(velocity), MAXIMUM_DROP_DURATION + 80, MINIMUM_DROP_DURATION + 60));
+    animator.addListener(new AnimatorListenerAdapter() {
+      @Override
+      public void onAnimationEnd (Animator animation) {
+        xgramFinishTabDrag(commit);
+      }
+    });
+    xgramPagerAnimator = animator;
+    animator.start();
+  }
+
+  private void xgramPagerApply (float progress) {
+    xgramPagerProgress = MathUtils.clamp(progress);
+    setFactor(xgramPagerForward ? 1f - xgramPagerProgress : xgramPagerProgress);
+  }
+
+  private void xgramFinishTabDrag (boolean commit) {
+    xgramPagerAnimator = null;
+    if (!xgramPager) {
+      return;
+    }
+    final ViewController<?> target = xgramPagerTarget;
+    final boolean forward = xgramPagerForward;
+    xgramPagerTarget = null;
+    if (!forward) {
+      // A pop: Telegram X's swipe back's ends (the screen on top leaves, or the chat list goes back under it)
+      final ViewController<?> top = currentRight;
+      finishTransaction(commit ? FINISH_NAVIGATION : FINISH_PREVIEW);
+      if (!commit && top != null && !top.isDestroyed()) {
+        top.getValue().setTranslationX(0f);
+      }
+    } else if (commit) {
+      // As a tab switch lands: rebased, the chat list kept below the new tab screen
+      xgramEnd(FINISH_NAVIGATION);
+      removeFadeView();
+      headerView.applyPreview(target);
+      processor.rebaseStack(target, true);
+      completeNextLayout();
+      if (Views.HARDWARE_LAYER_ENABLED) {
+        setLayerType(View.LAYER_TYPE_NONE, currentLeft, currentRight);
+      }
+      updateHackyViews();
+      xgramCheckFloatingButton();
+    } else {
+      // Back where it started: the target leaves the stack and the screen, the screen on top as it was
+      final ViewController<?> from = currentLeft;
+      xgramEnd(FINISH_PREVIEW);
+      completeNextLayout();
+      removeFadeView();
+      if (Views.HARDWARE_LAYER_ENABLED) {
+        setLayerType(View.LAYER_TYPE_NONE, currentLeft, currentRight);
+      }
+      // Off the stack first: the app bar restores itself from the screen on top (the one that stays)
+      if (target != null && getStack().getCurrent() == target) {
+        getStack().removeLast();
+      }
+      headerView.clearPreview();
+      if (target != null) {
+        removeChildWrapper(target);
+        if (!target.isDestroyed() && !target.xgramKeepsWarm()) {
+          xgramDestroyAfterFrame(target);
+        }
+      }
+      if (from != null && !from.isDestroyed()) {
+        from.getValue().setTranslationX(0f);
+        from.onFocus();
+      }
+      currentLeft = null;
+      currentRight = null;
+      leftWrap = null;
+      rightWrap = null;
+      processor.clearAnimationDelayed();
+      updateHackyViews();
+      xgramCheckFloatingButton();
+    }
+    xgramPager = false;
+  }
+
   void applyPreview (float velocity) {
     if (isAnimating && getStack().getCurrentIndex() > 0) {
       if (translationMode == TRANSLATION_VERTICAL) {
@@ -1974,6 +2132,22 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
       }
       case TRANSLATION_HORIZONTAL: {
         headerView.setTranslation(factor);
+        if (xgramPager) {
+          // XGram M3E: the tab pager: the two screens side by side, as the chat list's pages (no parallax, no dim)
+          final float leftTx = px - currentWidth;
+          final boolean mirror = needRtl();
+          rightWrap.setTranslationX(mirror ? -px : px);
+          currentRight.onTranslationChanged(mirror ? -px : px);
+          leftWrap.setTranslationX(mirror ? -leftTx : leftTx);
+          currentLeft.onTranslationChanged(mirror ? -leftTx : leftTx);
+          if (USE_PREVIEW_FADE) {
+            fadeView.setAlpha(0f);
+          }
+          if (DROP_SHADOW_ENABLED) {
+            shadowView.setAlpha(0f);
+          }
+          break;
+        }
         factor = 1f - factor;
 
         float px2 = factor * currentPrevWidth;

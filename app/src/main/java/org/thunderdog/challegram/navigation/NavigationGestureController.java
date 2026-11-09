@@ -237,6 +237,9 @@ public class NavigationGestureController implements GestureDetector.OnGestureLis
   }
 
   public void onCancel () {
+    if (xgramTabSwipe != null) {
+      xgramTabSwipe.cancel(); // XGram M3E: a tab drag goes back too
+    }
     abortUp = false;
     final NavigationController navigation = target();
     if (slidingBack) {

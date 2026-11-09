@@ -767,6 +767,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       lastSettledTop = null;
       readMenuBadge(); // set while it was hidden (or before it was made)
     } else {
+      cancelTabDrag(); // XGram: a tab drag can't outlive the toolbar on screen
       UI.cancel(settleRunnable);
       endTransition();
       attachScrollSource(null);
@@ -1012,6 +1013,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     if (destroyed) {
       return;
     }
+    cancelTabDrag(); // XGram: a tab drag can't outlive the toolbar
     boolean wasShown = shown;
     destroyed = true;
     shown = false;
@@ -1180,11 +1182,18 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
   public void onXgramNavigationFrame () {
     if (transitionActive) {
       applyTransitionFrame();
+      applyTabDrag(); // the tab pager's pill follows the drag (and its settle)
     }
   }
 
   @Override
   public void onXgramTransitionEnd (boolean navigated) {
+    tabDragFrom = tabDragTo = -1; // a tab drag is over: the springs settle the pill on what is on top
+    if (navigated) {
+      tabDragRootPage = -1;
+    } else {
+      restoreTabDragRootPage(); // a drag back to the chat list that went back: its page as it was (it is off screen now)
+    }
     if (!transitionActive) {
       return;
     }
@@ -2460,6 +2469,190 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     com.fahadali.xgram.XgramHaptics.segmentTick(host);
     onTabClick(dest, null);
     return true;
+  }
+
+  // The tab pager: a finger drags from the tab on screen to the next or previous one's screen, the two side by side as
+  // the chat list's pages (NavigationController#xgramBeginTabDrag), the pill following as it follows Chats and Calls
+
+  private int tabDragFrom = -1, tabDragTo = -1;
+  private boolean tabDragToRight;
+  /** The chat list's page before a drag back to it set another one (-1: unchanged; 1 Calls, 0 Chats): put back if it doesn't land. */
+  private int tabDragRootPage = -1;
+
+  /**
+   * A drag towards the tab {@code step} places away begins (its screen made or the warm one, beside the one on screen).
+   * False: there is none, it can't be shown now (the profile's chat not loaded), or the navigation is busy.
+   */
+  public boolean beginTabDrag (int step) {
+    if (tabDragTo != -1 || !canSwipeTabs() || navigation == null) {
+      return false;
+    }
+    final ViewController<?> top = navigation.getCurrentStackItem();
+    final int from = computeSelected(top);
+    final int dest = swipeTarget(step);
+    if (dest == -1) {
+      return false;
+    }
+    final ViewController<?> target = tabDragScreen(dest, top);
+    if (target == null || !navigation.xgramBeginTabDrag(target, step > 0)) {
+      restoreTabDragRootPage();
+      return false;
+    }
+    tabDragFrom = from;
+    tabDragTo = dest;
+    tabDragToRight = step > 0;
+    applyTabDrag(); // the pill from the first frame, after the transition's own start
+    return true;
+  }
+
+  /** The finger moved {@code dx} (px, from where the drag began): the screens follow it. */
+  public void dragTab (float dx) {
+    if (tabDragTo == -1 || navigation == null) {
+      return;
+    }
+    final float width = Math.max(1, navigation.getValue().getWidth());
+    navigation.xgramSetTabDragProgress((tabDragToRight ? -dx : dx) / width);
+  }
+
+  /** Released ({@code cancel}: taken away): on to the target past half way or thrown towards it, else back. */
+  public void endTabDrag (float dx, float velocityX, boolean cancel) {
+    if (navigation == null) {
+      return;
+    }
+    if (tabDragTo == -1) {
+      navigation.xgramEndTabDrag(false, 0f); // a drag this toolbar didn't begin (it was made again meanwhile): back
+      return;
+    }
+    dragTab(dx);
+    final float progress = navigation.xgramTabDragProgress();
+    final float towards = tabDragToRight ? -velocityX : velocityX; // px/s towards the target
+    final float fling = Screen.dpf(TAB_DRAG_FLING_DP);
+    final boolean commit = !cancel && (towards >= fling ? progress > .02f : towards > -fling && progress >= .5f);
+    final int dest = tabDragTo;
+    navigation.xgramEndTabDrag(commit, Math.abs(velocityX));
+    if (commit) {
+      com.fahadali.xgram.XgramHaptics.segmentTick(host);
+      if (dest == DEST_CALLS && badges != null) {
+        badges.markCallsSeen();
+      }
+      if (dest == DEST_CONTACTS && tdlib != null) {
+        tdlib.contacts().startSyncIfNeeded(context, false, null); // as the tab does, without an alert after a swipe
+      }
+    }
+  }
+
+  /** Thrown this fast (dp/s) towards the target, any distance switches; away from it, none does. */
+  private static final float TAB_DRAG_FLING_DP = 500f;
+
+  /** A drag back to the chat list that didn't land: its page as it was. */
+  private void restoreTabDragRootPage () {
+    final int page = tabDragRootPage;
+    tabDragRootPage = -1;
+    if (page != -1 && root != null && !root.isDestroyed()) {
+      root.xgramSetPageSilently(page == 1);
+    }
+  }
+
+  /** The toolbar goes or hides mid-drag: the screens go back where the drag began (nothing else would end it). */
+  private void cancelTabDrag () {
+    if (tabDragTo != -1 && navigation != null) {
+      navigation.xgramEndTabDrag(false, 0f);
+    }
+  }
+
+  /** The pill between the two tabs as far as the drag is (every frame of the drag and of its settle). */
+  private void applyTabDrag () {
+    if (tabDragTo == -1 || navigation == null) {
+      return;
+    }
+    final Tab from = tabOf(tabDragFrom), to = tabOf(tabDragTo);
+    if (from == null || to == null) {
+      return;
+    }
+    final float p = navigation.xgramTabDragProgress();
+    for (Tab tab : tabs) {
+      final float value = tab == from ? 1f - p : tab == to ? p : 0f;
+      tab.e.setValue(value);
+      tab.t.setValue(value);
+      tab.c.setValue(value);
+    }
+    onTabsMoved();
+  }
+
+  /**
+   * The screen of {@code dest} a drag brings in: the chat list below the tab screen (Chats, or Calls when it is the chat
+   * list's page, set on it now), else the warm tab screen or a new one. Null: none now.
+   */
+  @Nullable
+  private ViewController<?> tabDragScreen (int dest, @Nullable ViewController<?> top) {
+    final MainController root = this.root;
+    final Tdlib tdlib = this.tdlib;
+    if (root == null || tdlib == null || top == null) {
+      return null;
+    }
+    ViewController<?> c;
+    switch (dest) {
+      case DEST_CHATS:
+      case DEST_CALLS: {
+        if (dest == DEST_CHATS || root.xgramHasCallsPage()) {
+          if (top == root) {
+            return null; // the chat list's own pages: its pager
+          }
+          if (root.xgramOnCallsPage() != (dest == DEST_CALLS)) {
+            tabDragRootPage = root.xgramOnCallsPage() ? 1 : 0;
+            root.xgramSetPageSilently(dest == DEST_CALLS);
+          }
+          return root;
+        }
+        c = warmScreen(DEST_CALLS);
+        if (c == null) {
+          c = new CallListController(context, tdlib);
+        }
+        break;
+      }
+      case DEST_CONTACTS: {
+        c = warmScreen(DEST_CONTACTS);
+        if (c == null) {
+          PeopleController people = new PeopleController(context, tdlib);
+          people.setNeedSearch();
+          c = people;
+        }
+        break;
+      }
+      case DEST_SETTINGS: {
+        c = warmScreen(DEST_SETTINGS);
+        if (c == null) {
+          c = new SettingsController(context, tdlib);
+        }
+        break;
+      }
+      case DEST_ACTIVITY: {
+        c = warmScreen(DEST_ACTIVITY);
+        if (c == null) {
+          c = new com.fahadali.xgram.activity.XgramActivityController(context, tdlib);
+        }
+        break;
+      }
+      case DEST_PROFILE: {
+        final long userId = tdlib.myUserId();
+        final TdApi.Chat chat = userId != 0 ? tdlib.chat(ChatId.fromUserId(userId)) : null;
+        if (chat == null) {
+          return null;
+        }
+        c = warmScreen(DEST_PROFILE);
+        if (c == null || c.getChatId() != chat.id) {
+          ProfileController profile = new ProfileController(context, tdlib);
+          profile.setArguments(new ProfileController.Args(chat, null, false));
+          c = profile;
+        }
+        break;
+      }
+      default:
+        return null;
+    }
+    c.xgramSetBarTab(dest); // before its view is made: a tab screen
+    keepWarm(dest, c); // kept whichever way the drag ends, shown again next time
+    return c;
   }
 
   /** The point (on screen) is on the toolbar's band: a swipe there is the toolbar's own. */

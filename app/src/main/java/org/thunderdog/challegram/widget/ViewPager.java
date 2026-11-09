@@ -66,74 +66,165 @@ public class ViewPager extends androidx.viewpager.widget.ViewPager {
 
   @Override
   public boolean dispatchTouchEvent (MotionEvent ev) {
+    if (xgramPastEnd != null && xgramTrackPastEnd(ev)) {
+      return true; // XGram M3E: the drag went on past the last page: the toolbar's tab pager has it
+    }
     if (xgramScroller != null) {
       xgramTrackVelocity(ev);
-    }
-    if (xgramPastEnd != null) {
-      xgramTrackPastEnd(ev);
     }
     return super.dispatchTouchEvent(ev);
   }
 
-  // XGram M3E: a drag on past the last page (the chat list's last folder, or Calls without folders): the floating
-  // navigation toolbar's next tab, as official Telegram's tabs. Its own pages always come first (no fight between the
-  // two swipes): only from the last page, leftwards, far enough or thrown. Left to right languages only.
+  // XGram M3E: a drag on past the last page (the chat list's last folder, or Calls without folders) goes on to the
+  // floating navigation toolbar's next tab, as seamless as the pages: past the touch slop the pager lets go (its own
+  // drag is cancelled) and the toolbar's tab pager moves the chat list and the next tab's screen with the finger. The
+  // pages always come first: only from the last page at rest, leftwards. Left to right languages only.
 
   public interface XgramPastEndListener {
-    /** A drag past the last page may switch now (the toolbar on screen with a tab after this one). */
+    /** A drag past the last page may begin now (the toolbar on screen with a tab after this one). */
     boolean xgramCanSwipePastEnd ();
 
-    void xgramOnSwipePastEnd ();
+    /** The drag goes on past the last page: true once the next tab's screen moves with it. */
+    boolean xgramBeginPastEnd ();
+
+    /** The finger moved {@code dx} (px, negative: on, leftwards) since the drag began. */
+    void xgramDragPastEnd (float dx);
+
+    /** Released ({@code cancel}: taken away), {@code velocityX} in px/s. */
+    void xgramEndPastEnd (float dx, float velocityX, boolean cancel);
   }
 
-  private static final float XGRAM_PAST_END_DP = 96f, XGRAM_PAST_END_FLING_DP = 900f, XGRAM_PAST_END_MIN_DP = 32f;
   private @Nullable XgramPastEndListener xgramPastEnd;
-  private boolean xgramPastEndTracking;
+  /** A press that may go on past the last page; past the slop the toolbar's drag (xgramPastEndActive). */
+  private boolean xgramPastEndTracking, xgramPastEndActive;
+  /** In screen coordinates: the chat list moves with the drag, its own coordinates with it. */
   private float xgramPastEndX, xgramPastEndY;
-  private long xgramPastEndTime;
+  private @Nullable VelocityTracker xgramPastEndVelocity;
+  /** The pager's own drag runs (its scroll state): only then is the gesture the pager's, not a child's (a list's row). */
+  private boolean xgramDragging;
+  private boolean xgramStateListened;
 
   public void xgramSetPastEndListener (@Nullable XgramPastEndListener listener) {
     this.xgramPastEnd = listener;
+    if (listener != null && !xgramStateListened) {
+      xgramStateListened = true;
+      super.addOnPageChangeListener(new SimpleOnPageChangeListener() {
+        @Override
+        public void onPageScrollStateChanged (int state) {
+          xgramDragging = state == SCROLL_STATE_DRAGGING;
+        }
+      });
+    }
   }
 
+  private void xgramAddPastEndMovement (MotionEvent ev) {
+    if (xgramPastEndVelocity == null) {
+      return;
+    }
+    final MotionEvent raw = MotionEvent.obtain(ev);
+    raw.offsetLocation(ev.getRawX() - ev.getX(), ev.getRawY() - ev.getY());
+    xgramPastEndVelocity.addMovement(raw);
+    raw.recycle();
+  }
+
+  /** On the last page, at rest (not between two pages). */
   private boolean xgramOnLastPage () {
     androidx.viewpager.widget.PagerAdapter adapter = getAdapter();
-    return adapter != null && adapter.getCount() > 0 && getCurrentItem() == adapter.getCount() - 1;
+    return adapter != null && adapter.getCount() > 0 && getCurrentItem() == adapter.getCount() - 1 && getWidth() > 0 && getScrollX() == getCurrentItem() * (getWidth() + getPageMargin());
   }
 
-  private void xgramTrackPastEnd (MotionEvent ev) {
+  /** True: the event is the toolbar drag's (the pager doesn't see it). */
+  private boolean xgramTrackPastEnd (MotionEvent ev) {
+    final XgramPastEndListener listener = xgramPastEnd;
     switch (ev.getActionMasked()) {
       case MotionEvent.ACTION_DOWN: {
-        xgramPastEndTracking = pagingEnabled && !org.thunderdog.challegram.core.Lang.rtl() && xgramOnLastPage() && xgramPastEnd.xgramCanSwipePastEnd();
-        xgramPastEndX = ev.getX();
-        xgramPastEndY = ev.getY();
-        xgramPastEndTime = ev.getEventTime();
-        break;
+        if (xgramPastEndActive) {
+          listener.xgramEndPastEnd(0f, 0f, true); // the last gesture's end never came: back to the chat list
+        }
+        xgramPastEndActive = false;
+        xgramPastEndTracking = pagingEnabled && !org.thunderdog.challegram.core.Lang.rtl() && xgramOnLastPage() && listener.xgramCanSwipePastEnd();
+        xgramPastEndX = ev.getRawX();
+        xgramPastEndY = ev.getRawY();
+        if (xgramPastEndVelocity != null) {
+          xgramPastEndVelocity.clear();
+        }
+        if (xgramPastEndTracking) {
+          if (xgramPastEndVelocity == null) {
+            xgramPastEndVelocity = VelocityTracker.obtain();
+          }
+          xgramAddPastEndMovement(ev);
+        }
+        return false;
       }
-      case MotionEvent.ACTION_POINTER_DOWN:
+      case MotionEvent.ACTION_MOVE: {
+        if (xgramPastEndTracking || xgramPastEndActive) {
+          xgramAddPastEndMovement(ev);
+        }
+        if (xgramPastEndActive) {
+          listener.xgramDragPastEnd(ev.getRawX() - xgramPastEndX);
+          return true;
+        }
+        if (!xgramPastEndTracking) {
+          return false;
+        }
+        final float dx = ev.getRawX() - xgramPastEndX, dy = ev.getRawY() - xgramPastEndY;
+        final int slop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
+        if (Math.abs(dy) > slop && Math.abs(dy) > Math.abs(dx)) {
+          xgramPastEndTracking = false; // a list scroll
+          return false;
+        }
+        if (dx > slop) {
+          xgramPastEndTracking = false; // back to the pages before: the pager's
+          return false;
+        }
+        if (-dx <= slop || Math.abs(dy) > -dx / 2f || !xgramDragging) {
+          return false; // not yet the pager's own drag (a child's, such as a sideways list, keeps it)
+        }
+        xgramPastEndTracking = false;
+        if (!xgramOnLastPage() || !listener.xgramBeginPastEnd()) {
+          return false;
+        }
+        xgramPastEndActive = true;
+        xgramPastEndX = ev.getRawX(); // the screens start moving where the slop ends: no jump
+        if (getParent() != null) {
+          // The navigation intercepts every touch while a transition runs: the rest of this gesture stays here
+          getParent().requestDisallowInterceptTouchEvent(true);
+        }
+        // The pager lets go: its own drag (and its edge effect) end here
+        final MotionEvent cancel = MotionEvent.obtain(ev);
+        cancel.setAction(MotionEvent.ACTION_CANCEL);
+        super.dispatchTouchEvent(cancel);
+        cancel.recycle();
+        return true;
+      }
+      case MotionEvent.ACTION_POINTER_DOWN: {
+        xgramPastEndTracking = false;
+        if (xgramPastEndActive) {
+          xgramPastEndActive = false;
+          listener.xgramEndPastEnd(ev.getRawX() - xgramPastEndX, 0f, true); // a second finger: back to the chat list
+          return true;
+        }
+        return false;
+      }
+      case MotionEvent.ACTION_UP:
       case MotionEvent.ACTION_CANCEL: {
         xgramPastEndTracking = false;
-        break;
-      }
-      case MotionEvent.ACTION_UP: {
-        if (xgramPastEndTracking) {
-          xgramPastEndTracking = false;
-          final float dx = ev.getX() - xgramPastEndX, dy = ev.getY() - xgramPastEndY;
-          final long dt = Math.max(1L, ev.getEventTime() - xgramPastEndTime);
-          final boolean far = -dx >= org.thunderdog.challegram.tool.Screen.dp(XGRAM_PAST_END_DP);
-          final boolean thrown = -dx >= org.thunderdog.challegram.tool.Screen.dp(XGRAM_PAST_END_MIN_DP) && -dx * 1000f / dt >= org.thunderdog.challegram.tool.Screen.dp(XGRAM_PAST_END_FLING_DP);
-          if ((far || thrown) && Math.abs(dy) < -dx / 2f && xgramOnLastPage()) {
-            final XgramPastEndListener listener = xgramPastEnd;
-            post(() -> {
-              if (listener == xgramPastEnd && listener.xgramCanSwipePastEnd()) {
-                listener.xgramOnSwipePastEnd(); // after the pager's own end of the gesture (its edge springs back)
-              }
-            });
-          }
+        if (!xgramPastEndActive) {
+          return false;
         }
-        break;
+        xgramPastEndActive = false;
+        float vx = 0f;
+        if (xgramPastEndVelocity != null) {
+          xgramAddPastEndMovement(ev);
+          xgramPastEndVelocity.computeCurrentVelocity(1000);
+          vx = xgramPastEndVelocity.getXVelocity();
+          xgramPastEndVelocity.clear();
+        }
+        listener.xgramEndPastEnd(ev.getRawX() - xgramPastEndX, vx, ev.getActionMasked() == MotionEvent.ACTION_CANCEL);
+        return true;
       }
     }
+    return xgramPastEndActive;
   }
 
   private void xgramTrackVelocity (MotionEvent ev) {
@@ -163,6 +254,10 @@ public class ViewPager extends androidx.viewpager.widget.ViewPager {
     if (xgramVelocityTracker != null) {
       xgramVelocityTracker.recycle();
       xgramVelocityTracker = null;
+    }
+    if (xgramPastEndVelocity != null) {
+      xgramPastEndVelocity.recycle();
+      xgramPastEndVelocity = null;
     }
   }
 
