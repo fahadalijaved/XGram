@@ -1509,6 +1509,7 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
     MessagesController m = (MessagesController) c;
     if (msg.canBeSelected()) {
       selectMessage(m, msg, touchX, touchY);
+      m.xgramStartMessageDragSelect(this, msg); // XGram: the same finger may go on to select more (swipe to select)
       return true;
     }
     return false;

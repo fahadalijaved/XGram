@@ -27,6 +27,8 @@ import androidx.annotation.Nullable;
 
 import com.fahadali.xgram.appearance.XgramExpressive;
 import com.fahadali.xgram.appearance.XgramM3Colors;
+import com.fahadali.xgram.appearance.XgramM3Content;
+import com.fahadali.xgram.appearance.XgramWavyProgress;
 import com.fahadali.xgram.appearance.XgramMotion;
 
 import org.thunderdog.challegram.R;
@@ -53,6 +55,11 @@ import me.vkryl.core.ColorUtils;
  * <p>
  * One per chat list that can hide its archive (ChatsController, which decides when it is pulled, shown or gone);
  * the archive row's ChatView draws it over itself ({@link #draw}). Main thread only.
+ * <p>
+ * With Expressive design it looks like the pull to the next channel (XgramPullToNext) instead: on the list's surface,
+ * a 40dp disk with the wavy progress ring and an arrow next to a tonal pill with the hint, centred in what shows of the
+ * row. Past the threshold the disk and the pill turn primaryContainer, the arrow spins into the archive icon and the
+ * hint reads "Release for archive"; let go past it and the disk glides into the archive's photo as the cover fades.
  */
 public final class XgramArchivePull {
   /** Telegram's snap height: the share of the archive row in sight that keeps it once the finger lets go. */
@@ -132,6 +139,7 @@ public final class XgramArchivePull {
     if (!active || shown) {
       return;
     }
+    lastFraction = fraction;
     final boolean ready = fraction >= THRESHOLD;
     if (this.ready != ready) {
       this.ready = ready;
@@ -239,6 +247,13 @@ public final class XgramArchivePull {
     final boolean expressive = XgramExpressive.isEnabled();
     final boolean reduceMotion = XgramMotion.reduce();
     final float readyF = XgramMotion.clamp01(readyFactor.getValue());
+    if (expressive) {
+      final int save = c.save();
+      c.clipRect(0, visibleTop, width, height);
+      drawExpressive(view, c, width, avatarLeft, avatarTop, avatarRight, avatarBottom, avatarRadius, rtl, badgeScale, visibleTop, height, settling, settle, readyF, reduceMotion);
+      c.restoreToCount(save);
+      return;
+    }
 
     // Colors: the archive's photo (its color and glyph, both looks map them), on a neutral color until it is ready.
     // Expressive design's tonal archive photo is as light as the neutral color, so its pull is in the primary color
@@ -321,6 +336,136 @@ public final class XgramArchivePull {
       drawText(c, releaseText, releaseTextWidth, textStart, baseline + shift * (1f - readyF), width, rtl, textColor, releaseAlpha * textAlpha);
     }
     c.restoreToCount(saveCount);
+  }
+
+  // Expressive design: the pull to the next channel's look
+
+  private static final float DISK_RADIUS = 20f, PILL_HEIGHT = 40f, GROUP_GAP = 8f, PILL_PAD = 16f;
+  /** How much of the row the last pull showed (its progress ring fills up to the threshold). */
+  private float lastFraction;
+  private final TextPaint pillPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+  @Nullable private CharSequence pillPull, pillRelease;
+  private float pillPullWidth, pillReleaseWidth;
+  private int pillCacheWidth = -1;
+  @Nullable private String pillCacheSource;
+
+  private void drawExpressive (View view, Canvas c, int width, float avatarLeft, float avatarTop, float avatarRight, float avatarBottom, float avatarRadius,
+                               boolean rtl, float badgeScale, float visibleTop, int height, boolean settling, float settle, float readyF, boolean reduceMotion) {
+    final float visible = height - visibleTop;
+    final float fullRadius = Math.max(1f, (avatarRight - avatarLeft) / 2f);
+    final float avatarCx = (avatarLeft + avatarRight) / 2f, avatarCy = (avatarTop + avatarBottom) / 2f;
+
+    // The cover: the list's surface over the row (the row only shows once it stays), fading as it comes out
+    final float coverAlpha = settling ? XgramMotion.clamp01(1f - settle / .6f) : 1f;
+    fillPaint.setColor(ColorUtils.alphaColor(coverAlpha, XgramExpressive.color(XgramExpressive.SURFACE)));
+    c.drawRect(0, visibleTop, width, height, fillPaint);
+
+    // The disk, alone in the middle until the pill fits beside it, then the two centred together
+    final float diskR = Screen.dpf(DISK_RADIUS), gap = Screen.dpf(GROUP_GAP), pad = Screen.dpf(PILL_PAD), pillH = Screen.dpf(PILL_HEIGHT);
+    preparePillTexts(Math.round(width - Screen.dpf(32f) - diskR * 2f - gap - pad * 2f));
+    final float textWidth = XgramMotion.lerp(pillPullWidth, pillReleaseWidth, readyF);
+    final float pillWidth = textWidth + pad * 2f;
+    final float groupWidth = diskR * 2f + gap + pillWidth;
+    final float groupLeft = (width - groupWidth) / 2f;
+    final float centerY = visibleTop + visible / 2f;
+    final float pillShown = XgramMotion.clamp01((visible - pillH - Screen.dpf(4f)) / Screen.dpf(12f));
+    final float scale = XgramMotion.clamp01(visible / (diskR * 2f + Screen.dpf(8f))); // it grows with the room, as the next channel's
+    final float groupDiskCx = rtl ? groupLeft + groupWidth - diskR : groupLeft + diskR;
+    float cx = XgramMotion.lerp(width / 2f, groupDiskCx, pillShown);
+    float cy = centerY;
+    float r = diskR * scale;
+    float corner = r;
+    if (settling) {
+      cx = XgramMotion.lerp(cx, avatarCx, settle);
+      cy = XgramMotion.lerp(cy, avatarCy, settle);
+      r = XgramMotion.lerp(r, fullRadius, settle);
+      corner = XgramMotion.lerp(r, avatarRadius, settle);
+    }
+
+    // Colors: secondaryContainer at rest, primaryContainer past the threshold (as the next channel's), the archive's
+    // photo once it glides into it
+    final int rest = XgramExpressive.color(XgramExpressive.SECONDARY_CONTAINER), restContent = XgramExpressive.color(XgramExpressive.ON_SECONDARY_CONTAINER);
+    final int armed = XgramExpressive.color(XgramExpressive.PRIMARY_CONTAINER), armedContent = XgramExpressive.color(XgramExpressive.ON_PRIMARY_CONTAINER);
+    int diskColor = ColorUtils.fromToArgb(rest, armed, readyF);
+    int glyphColor = ColorUtils.fromToArgb(restContent, armedContent, readyF);
+    if (settling) {
+      diskColor = ColorUtils.fromToArgb(diskColor, Theme.getColor(ColorId.avatarArchive), settle);
+      glyphColor = ColorUtils.fromToArgb(glyphColor, Theme.getColor(XgramM3Colors.avatarIconColorId(TdlibAccentColor.InternalId.ARCHIVE, ColorId.avatar_content)), settle);
+    }
+    final float diskAlpha = settling && settle > .7f ? 1f - (settle - .7f) / .3f : 1f;
+    if (r > 0f) {
+      rect.set(cx - r, cy - r, cx + r, cy + r);
+      fillPaint.setColor(ColorUtils.alphaColor(diskAlpha, diskColor));
+      c.drawRoundRect(rect, corner, corner, fillPaint);
+    }
+
+    // The pull's progress as the wavy ring, the wave travelling while it is held; gone once let go past the threshold
+    if (!settling && r > Screen.dpf(8f)) {
+      final float progress = XgramMotion.clamp01(lastFraction / THRESHOLD);
+      final float stroke = Screen.dpf(XgramM3Content.WAVY_STROKE_DP) * scale;
+      final float amplitude = Screen.dpf(XgramM3Content.WAVY_AMPLITUDE_DP) * scale;
+      final float ringRadius = r - stroke / 2f - amplitude - Screen.dpf(.5f);
+      final int primary = XgramExpressive.color(XgramExpressive.PRIMARY);
+      XgramWavyProgress.drawCircular(c, cx, cy, ringRadius, stroke, progress, primary, ColorUtils.alphaColor(.24f, primary), amplitude);
+      if (!shown && XgramM3Content.needsWaveFrame(progress, 1f)) {
+        view.postInvalidateOnAnimation();
+      }
+    }
+
+    // The arrow spins out and the archive icon spins in (at once with Reduce motion)
+    loadGlyphs(view);
+    final float glyphScale = scale * (settling ? XgramMotion.lerp(1f, badgeScale * fullRadius / diskR, settle) : 1f);
+    final float arrowAlpha = XgramMotion.clamp01(1f - readyF * 2f);
+    final float archiveAlpha = XgramMotion.clamp01(readyF * 2f - 1f);
+    if (settling || reduceMotion) {
+      drawGlyph(c, arrow, cx, cy, glyphScale, 0f, glyphColor, arrowAlpha * diskAlpha);
+      drawGlyph(c, archive, cx, cy, glyphScale, 0f, glyphColor, archiveAlpha * diskAlpha);
+    } else {
+      drawGlyph(c, arrow, cx, cy, glyphScale * (1f - .4f * Math.min(1f, readyF * 2f)), 90f * Math.min(1f, readyF * 2f), glyphColor, arrowAlpha);
+      drawGlyph(c, archive, cx, cy, glyphScale * (.6f + .4f * archiveAlpha), -90f * (1f - archiveAlpha), glyphColor, archiveAlpha);
+    }
+
+    // The pill with the hint, beside the disk once it fits (a fade through between the two hints)
+    final float pillAlpha = pillShown * (settling ? XgramMotion.clamp01(1f - settle * 3f) : 1f);
+    if (pillAlpha > 0f) {
+      final float pillLeft = rtl ? groupLeft : groupLeft + diskR * 2f + gap;
+      final float pillTop = centerY - pillH / 2f;
+      XgramM3Content.drawPill(c, pillLeft, pillTop, pillLeft + pillWidth, pillTop + pillH, ColorUtils.alphaColor(pillAlpha, ColorUtils.fromToArgb(rest, armed, readyF)));
+      final Paint.FontMetrics fm = pillPaint.getFontMetrics();
+      final float baseline = pillTop + pillH / 2f - (fm.ascent + fm.descent) / 2f;
+      final int textColor = ColorUtils.fromToArgb(restContent, armedContent, readyF);
+      drawPillText(c, pillPull, pillLeft + (pillWidth - pillPullWidth) / 2f, baseline, textColor, pillAlpha * (reduceMotion ? 1f - readyF : XgramMotion.clamp01(1f - readyF * 2f)));
+      drawPillText(c, pillRelease, pillLeft + (pillWidth - pillReleaseWidth) / 2f, baseline, textColor, pillAlpha * (reduceMotion ? readyF : XgramMotion.clamp01(readyF * 2f - 1f)));
+    }
+  }
+
+  private void preparePillTexts (int maxWidth) {
+    final String pull = Lang.getString(R.string.XgramArchivePullDown);
+    final String release = Lang.getString(R.string.XgramArchivePullRelease);
+    final String source = pull + '\n' + release;
+    if (maxWidth == pillCacheWidth && source.equals(pillCacheSource)) {
+      return;
+    }
+    pillCacheWidth = maxWidth;
+    pillCacheSource = source;
+    pillPaint.setTextSize(Screen.dp(XgramExpressive.textSizeSp(XgramExpressive.TS_LABEL_L)));
+    pillPaint.setTypeface(XgramExpressive.typeface(XgramExpressive.TS_LABEL_L, false));
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+      pillPaint.setLetterSpacing(XgramExpressive.trackingSp(XgramExpressive.TS_LABEL_L) / XgramExpressive.textSizeSp(XgramExpressive.TS_LABEL_L));
+    }
+    final int width = Math.max(0, maxWidth);
+    pillPull = TextUtils.ellipsize(pull, pillPaint, width, TextUtils.TruncateAt.END);
+    pillRelease = TextUtils.ellipsize(release, pillPaint, width, TextUtils.TruncateAt.END);
+    pillPullWidth = pillPaint.measureText(pillPull, 0, pillPull.length());
+    pillReleaseWidth = pillPaint.measureText(pillRelease, 0, pillRelease.length());
+  }
+
+  private void drawPillText (Canvas c, @Nullable CharSequence text, float x, float baseline, int color, float alpha) {
+    if (text == null || text.length() == 0 || alpha <= 0f) {
+      return;
+    }
+    pillPaint.setColor(ColorUtils.alphaColor(XgramMotion.clamp01(alpha), color));
+    c.drawText(text, 0, text.length(), x, baseline, pillPaint);
   }
 
   private static float farthestCorner (float cx, float cy, float width, float top, float bottom) {

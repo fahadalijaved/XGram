@@ -61,6 +61,8 @@ public class QuoteBackground {
   /** XGram: an expandable quote (TextEntityTypeExpandableBlockQuote), its place among the text's expandable quotes. */
   public boolean xgramExpandable;
   public int xgramOrdinal = -1;
+  private final android.graphics.Path xgramPath = new android.graphics.Path();
+  private final float[] xgramRadii = new float[8];
   private static Drawable xgramChevron;
 
   public QuoteBackground (Text text, TextEntity entity) {
@@ -131,6 +133,13 @@ public class QuoteBackground {
     final int textColorId = parent.getQuoteTextColorId();
     final int lineColorId = parent.getQuoteLineColorId();
     final int lineColor = Theme.getColor(lineColorId);
+
+    // XGram: a tinted background in the quote's color, as official Telegram draws quotes (the bar's corners at the start)
+    xgramRadii[0] = xgramRadii[1] = xgramRadii[6] = xgramRadii[7] = Screen.dp(1.5f);
+    xgramRadii[2] = xgramRadii[3] = xgramRadii[4] = xgramRadii[5] = Screen.dp(8f);
+    xgramPath.rewind();
+    xgramPath.addRoundRect(bounds, xgramRadii, android.graphics.Path.Direction.CW);
+    c.drawPath(xgramPath, Paints.fillingPaint(me.vkryl.core.ColorUtils.alphaColor(.12f, lineColor)));
 
     ripple.setBounds((int) bounds.left, (int) bounds.top, (int) bounds.right, (int) bounds.bottom);
     ripple.setRadius(Screen.dp(1.5f), Screen.dp(8f), Screen.dp(8f), Screen.dp(1.5f));

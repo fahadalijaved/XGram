@@ -828,6 +828,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
     messagesView.setHasFixedSize(true);
     messagesView.setLayoutManager(messagesManager);
+    xgramSetupMessageDragSelect(); // XGram: swipe to select
     messagesView.setLayoutParams(params);
     Views.setScrollBarPosition(messagesView);
     if (Config.HARDWARE_MESSAGES_LIST) {
@@ -2170,6 +2171,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     xgramInvalidateAppBarColor(); // XGram
     if (xgramSelectionToolbar != null) {
       xgramSelectionToolbar.setShown(false, true); // XGram
+      xgramSelectionLift.setValue(false, true);
     }
     if (exitOnTransformFinish)
       tdlib.ui().post(this::navigateBack);
@@ -8783,7 +8785,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     float offset = -getAttachedFilesOffset();
     final float keyboardOffset = -getKeyboardOffset();
     final float xgramUndoOffset = -xgramUndoBarOffset(); // XGram: the Undo send bar
-    messagesView.setTranslationY(y + offset + keyboardOffset + xgramUndoOffset);
+    messagesView.setTranslationY(y + offset + keyboardOffset + xgramUndoOffset - xgramSelectionLiftOffset());
     bottomShadowView.setTranslationY(y + offset + keyboardOffset + xgramUndoOffset);
     if (replyBarView != null) {
       replyBarView.setTranslationY(y + keyboardOffset);
@@ -13494,6 +13496,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (!open && xgramSelectionToolbar != null && inSelectMode()) {
       // XGram M3E: the selection toolbar leaves as the selection closes, not after the app bar's fade (onLeaveSelectMode)
       xgramSelectionToolbar.setShown(false, true);
+      xgramSelectionLift.setValue(false, true); // the messages come back down with it
     }
     super.startHeaderTransformAnimator(animator, mode, open);
   }
@@ -13542,6 +13545,86 @@ public class MessagesController extends ViewController<MessagesController.Argume
       }
     }
     xgramSelectionToolbar.setShown(show, animated);
+    xgramSelectionLift.setValue(show, animated && isFocused());
+  }
+
+  // XGram: while the selection toolbar is out the messages move up by its height and margin (as for the reply bar),
+  // so it never covers the last messages; they come back down as it leaves
+  private final BoolAnimator xgramSelectionLift = new BoolAnimator(0, (id, factor, fraction, callee) -> updateReplyView(), AnimatorUtils.DECELERATE_INTERPOLATOR, 220L);
+
+  private float xgramSelectionLiftOffset () {
+    return xgramSelectionToolbar != null ? xgramSelectionLift.getFloatValue() * Screen.dp(64f + 16f) : 0f;
+  }
+
+  // XGram: swipe to select, as official Telegram: the long press that selects a message (or toggles it while
+  // selecting), then the same finger moved up or down gives every message it passes that message's new state
+  // (XgramDragSelect: the list's ends scroll it, a light tick per message, a message the range leaves gets its state back)
+  private @Nullable com.fahadali.xgram.layout.XgramDragSelect xgramMessageDragSelect;
+
+  private void xgramSetupMessageDragSelect () {
+    if (messagesView == null || isInForceTouchMode() || xgramMessageDragSelect != null) {
+      return;
+    }
+    xgramMessageDragSelect = new com.fahadali.xgram.layout.XgramDragSelect(messagesView, new com.fahadali.xgram.layout.XgramDragSelect.Host() {
+      @Override
+      public boolean isDragSelectable (int position) {
+        final TGMessage msg = manager != null ? manager.getAdapter().getMessage(position) : null;
+        return msg != null && msg.canBeSelected();
+      }
+
+      @Override
+      public boolean isDragSelected (int position) {
+        final TGMessage msg = manager != null ? manager.getAdapter().getMessage(position) : null;
+        return msg != null && msg.isCompletelySelected();
+      }
+
+      @Override
+      public boolean setDragSelected (int position, boolean isSelected) {
+        final TGMessage msg = manager != null ? manager.getAdapter().getMessage(position) : null;
+        return msg != null && xgramSetMessageSelected(msg, isSelected);
+      }
+    });
+  }
+
+  /** Every message of {@code msg} (an album's too) selected or not; false when the forward limit stops it. */
+  private boolean xgramSetMessageSelected (TGMessage msg, boolean selected) {
+    if (!inSelectMode()) {
+      return false;
+    }
+    final LongSet ids = new LongSet(msg.getMessageCount());
+    msg.getIds(ids);
+    boolean changed = false, limited = false;
+    for (long messageId : ids) {
+      final boolean isSelected = selectedMessageIds != null && selectedMessageIds.get(messageId) != null;
+      if (isSelected == selected) {
+        continue;
+      }
+      if (selected && getSelectedMessageCount() >= tdlib.forwardMaxCount()) {
+        limited = true;
+        break;
+      }
+      selectMessage(messageId, msg, -1, -1, false, -1);
+      changed = true;
+      if (!inSelectMode()) {
+        return true; // the last one went: the selection closed
+      }
+    }
+    if (changed) {
+      setSelectedCount(getSelectedMessageCount());
+      updateSelectButtons();
+    }
+    return !limited;
+  }
+
+  /** The long press of {@code view} just selected (or unselected) its message: the same finger may drag on over others. */
+  public void xgramStartMessageDragSelect (View view, TGMessage msg) {
+    if (xgramMessageDragSelect == null || messagesView == null || !inSelectMode()) {
+      return;
+    }
+    final int position = messagesView.getChildAdapterPosition(view);
+    if (position != RecyclerView.NO_POSITION) {
+      xgramMessageDragSelect.start(position, msg.isCompletelySelected());
+    }
   }
 
   /**
