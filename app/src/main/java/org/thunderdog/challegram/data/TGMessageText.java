@@ -285,6 +285,8 @@ public class TGMessageText extends TGMessage {
           .setHighlightText(getHighlightedText(Highlight.Pool.KEY_TEXT, text.text))
           .setClickCallback(clickCallback());
       }
+      // XGram: expandable quotes collapse (a tap expands one), as official Telegram
+      wrapper.xgramSetCollapsibleQuotes(tdlib, translatedText != null ? translatedText : text, openParameters(), xgramQuoteState);
       wrapper.addTextFlags(Text.FLAG_BIG_EMOJI);
       if (useBubbles()) {
         wrapper.addTextFlags(Text.FLAG_ADJUST_TO_CURRENT_WIDTH);
@@ -320,6 +322,26 @@ public class TGMessageText extends TGMessage {
   }
 
   private TextWrapper effectiveWrapper;
+
+  // XGram: expandable quotes the user expanded (their ordinals in the text); the rest are collapsed
+  private final java.util.HashSet<Integer> xgramExpandedQuotes = new java.util.HashSet<>();
+  private final Text.XgramQuoteState xgramQuoteState = new Text.XgramQuoteState() {
+    @Override
+    public boolean isExpanded (int ordinal) {
+      return xgramExpandedQuotes.contains(ordinal);
+    }
+
+    @Override
+    public void toggle (int ordinal) {
+      if (!xgramExpandedQuotes.remove(ordinal)) {
+        xgramExpandedQuotes.add(ordinal);
+      }
+      for (ListAnimator.Entry<TextWrapper> entry : visibleText) {
+        entry.item.xgramInvalidateLayouts();
+      }
+      rebuildAndUpdateContent();
+    }
+  };
 
   private static final int MAX_WEB_PAGE_MEDIA_COUNT = Integer.MAX_VALUE / 4;
   private long textMediaKeyOffset;

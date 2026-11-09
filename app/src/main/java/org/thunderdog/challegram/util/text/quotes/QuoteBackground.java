@@ -58,6 +58,11 @@ public class QuoteBackground {
   public final RectF bounds = new RectF();
   private final RippleDrawable ripple;
 
+  /** XGram: an expandable quote (TextEntityTypeExpandableBlockQuote), its place among the text's expandable quotes. */
+  public boolean xgramExpandable;
+  public int xgramOrdinal = -1;
+  private static Drawable xgramChevron;
+
   public QuoteBackground (Text text, TextEntity entity) {
     this.parent = text;
     this.entity = entity;
@@ -133,6 +138,22 @@ public class QuoteBackground {
     ripple.draw(c);
 
     Drawables.draw(c, quoteDrawable, bounds.right - Screen.dp(19), bounds.top + Screen.dp(3.5f), PorterDuffPaint.get(lineColorId));
+
+    // XGram: an expandable quote that can collapse: a chevron at its bottom end, down while collapsed, up while expanded
+    if (xgramExpandable && parent.xgramIsCollapsible(xgramOrdinal)) {
+      if (xgramChevron == null) {
+        xgramChevron = Drawables.get(R.drawable.baseline_keyboard_arrow_down_20);
+      }
+      if (xgramChevron != null) {
+        final float cx = bounds.right - Screen.dp(13f), cy = bounds.bottom - Screen.dp(12f);
+        final int save = c.save();
+        if (parent.xgramIsQuoteExpanded(xgramOrdinal)) {
+          c.rotate(180f, cx, cy);
+        }
+        Drawables.draw(c, xgramChevron, cx - xgramChevron.getMinimumWidth() / 2f, cy - xgramChevron.getMinimumHeight() / 2f, PorterDuffPaint.get(lineColorId));
+        c.restoreToCount(save);
+      }
+    }
 
     tmpRect.set(bounds);
     tmpRect.right = bounds.left + Screen.dp(3);

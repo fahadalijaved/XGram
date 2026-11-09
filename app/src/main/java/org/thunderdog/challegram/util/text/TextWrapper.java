@@ -81,6 +81,61 @@ public class TextWrapper implements ListAnimator.Measurable, Destroyable, Text.T
     setEntities(Text.makeEntities(text, linkFlags, null, tdlib, openParameters), textMediaListener);
   }
 
+  // XGram: expandable quotes (Text.XgramQuoteState): a collapsed one is laid out cut at its first hidden line
+  // (com.fahadali.xgram.chats.XgramQuoteCollapse), from the formatted text this wrapper shows
+
+  @Nullable private TdApi.FormattedText xgramQuoteSource;
+  @Nullable private Tdlib xgramQuoteTdlib;
+  @Nullable private TdlibUi.UrlOpenParameters xgramQuoteOpenParameters;
+  @Nullable private Text.XgramQuoteState xgramQuoteState;
+
+  /** {@code source} is what this wrapper shows (its text and entities): its expandable quotes collapse by {@code state}. */
+  public TextWrapper xgramSetCollapsibleQuotes (Tdlib tdlib, TdApi.FormattedText source, @Nullable TdlibUi.UrlOpenParameters openParameters, Text.XgramQuoteState state) {
+    if (com.fahadali.xgram.chats.XgramQuoteCollapse.hasExpandable(source) && source.text.equals(this.text)) {
+      this.xgramQuoteTdlib = tdlib;
+      this.xgramQuoteSource = source;
+      this.xgramQuoteOpenParameters = openParameters;
+      this.xgramQuoteState = state;
+    }
+    return this;
+  }
+
+  /** A quote was expanded or collapsed: the next prepare lays the text out again. */
+  public void xgramInvalidateLayouts () {
+    java.util.Arrays.fill(sizes, -1);
+  }
+
+  /** {@code full} with its collapsed quotes cut (a new layout), or {@code full} when none is collapsed. */
+  private Text xgramCollapseQuotes (Text full, int maxWidth, Text.TextMediaListener listener, @Nullable ViewProvider viewProvider, int flags) {
+    final int[] cuts = full.xgramQuoteCuts(com.fahadali.xgram.chats.XgramQuoteCollapse.LINES);
+    if (cuts == null || xgramQuoteSource == null || xgramQuoteState == null) {
+      return full;
+    }
+    final boolean[] collapsible = new boolean[cuts.length];
+    final int[] collapsedCuts = new int[cuts.length];
+    boolean anyCollapsed = false;
+    for (int i = 0; i < cuts.length; i++) {
+      collapsible[i] = cuts[i] != -1;
+      collapsedCuts[i] = collapsible[i] && !xgramQuoteState.isExpanded(i) ? cuts[i] : -1;
+      anyCollapsed |= collapsedCuts[i] != -1;
+    }
+    if (!anyCollapsed) {
+      full.xgramSetQuoteState(xgramQuoteState, collapsible);
+      return full;
+    }
+    final TdApi.FormattedText collapsedText = com.fahadali.xgram.chats.XgramQuoteCollapse.cut(xgramQuoteSource, collapsedCuts);
+    final Text collapsed = new Text.Builder(collapsedText.text, maxWidth, textStyleProvider, colorTheme)
+      .maxLineCount(maxLines)
+      .entities(TextEntity.valueOf(xgramQuoteTdlib, collapsedText, xgramQuoteOpenParameters), listener)
+      .viewProvider(viewProvider)
+      .lineWidthProvider(lineWidthProvider)
+      .textFlags(flags)
+      .build();
+    full.performDestroy();
+    collapsed.xgramSetQuoteState(xgramQuoteState, collapsible);
+    return collapsed;
+  }
+
   private TextWrapper setTextFlags (int textFlags) {
     if (this.textFlags != textFlags) {
       this.textFlags = textFlags;
@@ -287,7 +342,7 @@ public class TextWrapper implements ListAnimator.Measurable, Destroyable, Text.T
       boolean needBigEmoji = BitwiseUtils.hasFlag(textFlags, Text.FLAG_BIG_EMOJI) && Settings.instance().useBigEmoji();
       final Text oldText = texts[index];
       Text text = oldText;
-      if (text != null && !sizeChanged && !needBigEmoji) {
+      if (text != null && !sizeChanged && !needBigEmoji && xgramQuoteSource == null) { // XGram: collapsible quotes: laid out anew
         text.set(maxWidth, this.text);
       } else {
         text = buildText(maxWidth, this, viewProvider, needBigEmoji);
@@ -319,6 +374,12 @@ public class TextWrapper implements ListAnimator.Measurable, Destroyable, Text.T
       .lineWidthProvider(lineWidthProvider)
       .textFlags(BitwiseUtils.setFlag(textFlags, Text.FLAG_BIG_EMOJI, false));
     Text text = b.build();
+    if (xgramQuoteSource != null && maxLines == -1) {
+      text = xgramCollapseQuotes(text, maxWidth, listener, viewProvider, BitwiseUtils.setFlag(textFlags, Text.FLAG_BIG_EMOJI, false));
+      if (text.getText() != null && !text.getText().equals(this.text)) {
+        return text; // cut: no big emoji (a quote is never emoji only)
+      }
+    }
     if (needBigEmoji) {
       // TODO move inside Text class
       int emojiCount = text.getEmojiOnlyCount();

@@ -3483,7 +3483,12 @@ public class Text implements Runnable, Emoji.CountLimiter, CounterTextPart, List
       case MotionEvent.ACTION_UP: {
         clearTouch();
         if (pressedQuote != null) {
+          final QuoteBackground quote = pressedQuote;
           cancelTouch();
+          if (quote.xgramExpandable && xgramIsCollapsible(quote.xgramOrdinal) && xgramQuoteState != null) {
+            ViewUtils.onClick(view);
+            xgramQuoteState.toggle(quote.xgramOrdinal); // XGram: a tap expands or collapses an expandable quote
+          }
           return true;
         } else if (pressHighlight != null) {
           TextPart part = parts.get(pressHighlight.causePartIndex);
@@ -3916,6 +3921,69 @@ public class Text implements Runnable, Emoji.CountLimiter, CounterTextPart, List
 
   private final ArrayList<QuoteBackground> quotes = new ArrayList<>();
 
+  // XGram: expandable quotes (TextEntityTypeExpandableBlockQuote), as official Telegram: longer than a few lines they
+  // show collapsed with a chevron, a tap on the quote (not on a link in it) expands or collapses it. The state is the
+  // caller's (the message's), TextWrapper lays a collapsed quote out cut at its first hidden line
+  // (XgramQuoteCollapse); the ordinal is the quote's place among the text's expandable quotes.
+
+  public interface XgramQuoteState {
+    boolean isExpanded (int ordinal);
+
+    void toggle (int ordinal);
+  }
+
+  @Nullable private XgramQuoteState xgramQuoteState;
+  @Nullable private boolean[] xgramCollapsible;
+
+  /** The state, and which expandable quotes are long enough to collapse (by ordinal). */
+  public void xgramSetQuoteState (@Nullable XgramQuoteState state, @Nullable boolean[] collapsible) {
+    this.xgramQuoteState = state;
+    this.xgramCollapsible = collapsible;
+  }
+
+  /** The expandable quote {@code ordinal} can collapse (it has a chevron, a tap toggles it). */
+  public boolean xgramIsCollapsible (int ordinal) {
+    return xgramQuoteState != null && xgramCollapsible != null && ordinal >= 0 && ordinal < xgramCollapsible.length && xgramCollapsible[ordinal];
+  }
+
+  public boolean xgramIsQuoteExpanded (int ordinal) {
+    return xgramQuoteState != null && xgramQuoteState.isExpanded(ordinal);
+  }
+
+  /**
+   * For each expandable quote (by ordinal): where its line {@code maxLines + 1} starts in the text (the first character
+   * a collapsed quote hides), or -1 when it has no more lines than that. Null: no expandable quote.
+   */
+  @Nullable
+  public int[] xgramQuoteCuts (int maxLines) {
+    int count = 0;
+    for (QuoteBackground quote : quotes) {
+      if (quote.xgramExpandable) {
+        count = Math.max(count, quote.xgramOrdinal + 1);
+      }
+    }
+    if (count == 0) {
+      return null;
+    }
+    final int[] cuts = new int[count];
+    java.util.Arrays.fill(cuts, -1);
+    for (QuoteBackground quote : quotes) {
+      if (!quote.xgramExpandable || quote.partStart >= quote.partEnd) {
+        continue;
+      }
+      final int firstLine = parts.get(quote.partStart).getLineIndex();
+      int cut = -1;
+      for (int a = quote.partStart; a < quote.partEnd; a++) {
+        final TextPart part = parts.get(a);
+        if (part.getLineIndex() >= firstLine + maxLines && (cut == -1 || part.getStart() < cut)) {
+          cut = part.getStart(); // the smallest offset on the hidden lines (right to left runs are reordered)
+        }
+      }
+      cuts[quote.xgramOrdinal] = cut;
+    }
+    return cuts;
+  }
+
   private void addQuote(QuoteBackground quoteBackground) {
     quoteBackground.calcHeightAddition();
     quotes.add(quoteBackground);
@@ -3928,6 +3996,7 @@ public class Text implements Runnable, Emoji.CountLimiter, CounterTextPart, List
 
     QuoteBackground quote = null;
     int lastQuoteId = -1;
+    int xgramExpandableCount = 0;
 
     for (int a = 0; a < parts.size(); a++) {
       final TextPart part = parts.get(a);
@@ -3943,6 +4012,11 @@ public class Text implements Runnable, Emoji.CountLimiter, CounterTextPart, List
           quote = new QuoteBackground(this, entity);
           quote.setViewProvider(viewProvider);
           quote.partStart = a;
+          final TdApi.TextEntity quoteEntity = entity.getQuote();
+          if (quoteEntity != null && quoteEntity.type.getConstructor() == TdApi.TextEntityTypeExpandableBlockQuote.CONSTRUCTOR) {
+            quote.xgramExpandable = true; // XGram: expandable quotes, numbered in order
+            quote.xgramOrdinal = xgramExpandableCount++;
+          }
         }
         quote.partEnd = a + 1;
 
