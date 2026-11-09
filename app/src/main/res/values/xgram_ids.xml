@@ -144,6 +144,7 @@
   <item type="id" name="btn_xgramRenameLocally" />
   <item type="id" name="btn_xgramSaveLastSeen" />
   <item type="id" name="btn_xgramShowSeconds" />
+  <item type="id" name="btn_xgramPlainTimeBottom" />
   <item type="id" name="btn_xgramGoToFirstMessage" />
   <item type="id" name="btn_xgramSaveToSaved" />
   <item type="id" name="btn_xgramRepeat" />

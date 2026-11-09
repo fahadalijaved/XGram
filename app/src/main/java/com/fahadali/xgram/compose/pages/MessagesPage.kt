@@ -281,6 +281,9 @@ fun MessagesPage() {
       switch(R.id.btn_xgramShowSeconds, s(R.string.XgramShowSeconds), s(R.string.XgramShowSecondsSub), checked = settings.showSeconds()) {
         settings.setShowSeconds(it)
       }
+      switch(R.id.btn_xgramPlainTimeBottom, s(R.string.XgramPlainTimeBottom), s(R.string.XgramPlainTimeBottomSub), checked = settings.plainTimeAtBottom()) {
+        settings.setPlainTimeAtBottom(it)
+      }
       switch(R.id.btn_xgramTapTimeDetails, s(R.string.XgramTapTimeDetails), s(R.string.XgramTapTimeDetailsSub), checked = settings.tapTimeForDetails()) {
         settings.setTapTimeForDetails(it)
       }

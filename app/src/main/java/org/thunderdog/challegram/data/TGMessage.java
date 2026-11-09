@@ -1020,7 +1020,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       if (useForward() && !msg.isChannelPost && msg.forwardInfo != null && msg.forwardInfo.origin.getConstructor() == TdApi.MessageOriginChannel.CONSTRUCTOR) {
         return VIEW_COUNT_FORWARD;
       }
-      if (useBubbles() || BitwiseUtils.hasFlag(flags, FLAG_HEADER_ENABLED)) {
+      if (useBubbles() || BitwiseUtils.hasFlag(flags, FLAG_HEADER_ENABLED) || xgramPlainTimeAtBottom()) {
         return VIEW_COUNT_MAIN;
       }
     }
@@ -1455,7 +1455,52 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   }
 
   protected final int getPaddingBottom () {
-    return useBubbles() ? getBubbleViewPaddingBottom() : xPaddingBottom;
+    return useBubbles() ? getBubbleViewPaddingBottom() : xPaddingBottom + xgramPlainTimeRow;
+  }
+
+  // XGram: Time at the bottom (XgramSettings#plainTimeAtBottom). Without bubbles every message shows its time, views
+  // and the other counters at its bottom right, as official Telegram, instead of only the first of a sender's messages
+  // by the name: on the last line when it leaves room, else on a row of its own below the message (xgramPlainTimeRow).
+
+  /** The time and its counters, as the plain header lays them out (layoutInfo). */
+  private int xgramPlainInfoWidth;
+  /** The row below the message the time takes (0: it is on the last line), set with the height (computeHeight). */
+  private int xgramPlainTimeRow;
+
+  protected final boolean xgramPlainTimeAtBottom () {
+    return !useBubbles() && !headerDisabled() && !isSponsoredMessage() && !isEventLog() && com.fahadali.xgram.XgramSettings.instance().plainTimeAtBottom();
+  }
+
+  /** The last line's height, the time centred on it: a line of message text unless the content knows its own. */
+  protected int xgramLastLineHeight () {
+    return Screen.dp(20f);
+  }
+
+  /** The content's last line leaves room for the time and its counters on its right. */
+  private boolean xgramPlainTimeFitsLastLine () {
+    if (hasFooter() || Lang.rtl()) {
+      return false; // a forward's footer ends the message; right to left, the last line ends where the time is
+    }
+    final int lastLine = getBottomLineContentWidth();
+    if (lastLine < 0) {
+      return false; // nothing to share the line with (media, a link preview's picture), or it animates
+    }
+    final int stripLeft = pTimeLeft + pTimeWidth - xgramPlainInfoWidth;
+    return getContentX() + lastLine + Screen.dp(12f) <= stripLeft;
+  }
+
+  private void xgramUpdatePlainTimeRow () {
+    xgramPlainTimeRow = xgramPlainTimeAtBottom() && !xgramPlainTimeFitsLastLine() ? Screen.dp(18f) : 0;
+  }
+
+  /** Where the time's strip is centred: on the content's last line, or in the row below it. */
+  private int xgramPlainTimeCenterY () {
+    final int contentBottom = pContentY + getContentHeight();
+    if (xgramPlainTimeRow > 0) {
+      final int footer = hasFooter() ? getFooterPaddingTop() + getFooterHeight() + getFooterPaddingBottom() : 0;
+      return contentBottom + footer + Screen.dp(2f) + xgramPlainTimeRow / 2;
+    }
+    return contentBottom - xgramLastLineHeight() / 2;
   }
 
   public final int getExtraPadding () {
@@ -1486,6 +1531,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       }
       return MathUtils.fromTo(height, Screen.dp(HIDDEN_BY_MESSAGE_FILTER_HEIGHT) + extraPadding + headerPadding, isHiddenByFilter.getFloatValue());
     } else {
+      xgramUpdatePlainTimeRow(); // XGram: Time at the bottom, before getPaddingBottom() counts its row
       int height = pContentY + getContentHeight() + getPaddingBottom() + extraPadding;
       if (inlineKeyboard != null && !inlineKeyboard.isEmpty()) {
         height += inlineKeyboard.getHeight() + xPaddingBottom;
@@ -2294,17 +2340,22 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     if (!useBubbles) {
       // Plain mode time part
 
-      boolean needMetadata = BitwiseUtils.hasFlag(flags, FLAG_HEADER_ENABLED);
-      int top = getHeaderPadding() + xViewsOffset + Screen.dp(7f);
+      // XGram: Time at the bottom: the strip the header draws by the name, on every message at its bottom right
+      // (moved down as one piece: the clock and ticks below shadow their fields with the moved positions)
+      final boolean xgramBottom = xgramPlainTimeAtBottom();
+      final int xgramDy = xgramBottom ? xgramPlainTimeCenterY() - (getHeaderPadding() + xViewsOffset + Screen.dp(7f)) : 0;
+      final int pClockTop = this.pClockTop + xgramDy, pTicksTop = this.pTicksTop + xgramDy;
+      boolean needMetadata = xgramBottom || BitwiseUtils.hasFlag(flags, FLAG_HEADER_ENABLED);
+      int top = getHeaderPadding() + xViewsOffset + Screen.dp(7f) + xgramDy;
 
       // Time
       if (needMetadata) {
-        c.drawText(time, pTimeLeft, xTimeTop + getHeaderPadding(), mTime(true));
-        xgramTimeLastDrawRect.set(pTimeLeft, getHeaderPadding() + xTimeTop - Screen.dp(13f), pTimeLeft + pTimeWidth, getHeaderPadding() + xTimeTop + Screen.dp(4f)); // XGram: tap the time for details
+        c.drawText(time, pTimeLeft, xTimeTop + getHeaderPadding() + xgramDy, mTime(true));
+        xgramTimeLastDrawRect.set(pTimeLeft, getHeaderPadding() + xTimeTop - Screen.dp(13f) + xgramDy, pTimeLeft + pTimeWidth, getHeaderPadding() + xTimeTop + Screen.dp(4f) + xgramDy); // XGram: tap the time for details
       }
 
       int clockX = pClockLeft - Icons.getClockIconWidth() - Screen.dp(Icons.CLOCK_SHIFT_X);
-      int viewsX = pTicksLeft - Icons.getSingleTickWidth() + ((flags & FLAG_HEADER_ENABLED) != 0 ? 0 : Screen.dp(1f)) - Screen.dp(Icons.TICKS_SHIFT_X);
+      int viewsX = pTicksLeft - Icons.getSingleTickWidth() + (needMetadata ? 0 : Screen.dp(1f)) - Screen.dp(Icons.TICKS_SHIFT_X);
 
       if (needDrawChannelIconInHeader() && hAuthorNameT != null) {
         isChannelHeaderCounter.draw(c, ((isSending() ? clockX : viewsX) + Screen.dp(7)), (pTicksTop + Screen.dp(5)), Gravity.LEFT, 1f, view, ColorId.iconLight, isChannelHeaderCounterLastDrawRect);
@@ -3265,7 +3316,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
   public void updateDate () {
     setDate(genDate());
-    if (useBubbles() || (flags & FLAG_HEADER_ENABLED) != 0) {
+    if (useBubbles() || (flags & FLAG_HEADER_ENABLED) != 0 || xgramPlainTimeAtBottom()) {
       layoutInfo();
     }
   }
@@ -3289,6 +3340,8 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     if ((flags & FLAG_HEADER_ENABLED) != 0 || useBubbles()) {
       layoutAvatar();
       layoutInfo();
+    } else if (xgramPlainTimeAtBottom()) {
+      layoutInfo(); // XGram: no header, the time and views at the bottom all the same
     }
 
     if ((flags & FLAG_SHOW_BADGE) != 0) {
@@ -3308,7 +3361,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     pClockTop = getHeaderPadding() + Screen.dp(3.5f);
     pTicksTop = getHeaderPadding() + Screen.dp(3f);
 
-    if ((flags & FLAG_HEADER_ENABLED) != 0) {
+    if ((flags & FLAG_HEADER_ENABLED) != 0 || xgramPlainTimeAtBottom()) { // XGram: at the bottom, as by the name
       pClockLeft = pTimeLeft - Screen.dp(6f);
       pTicksLeft = pTimeLeft - Screen.dp(3f);
     } else {
@@ -3674,6 +3727,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     if (translationStyleMode() == Settings.TRANSLATE_MODE_INLINE) {
       max -= isTranslatedCounter.getScaledWidth(Screen.dp(COUNTER_ICON_MARGIN + COUNTER_ADD_MARGIN));
     }
+    xgramPlainInfoWidth = totalMaxWidth - timePaddingRight - max; // XGram: the time and its counters, for Time at the bottom
     int nameMaxWidth;
     if (isPsa) {
       nameMaxWidth = totalMaxWidth;
@@ -5966,7 +6020,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
   private void buildTime () {
     this.time = genTime();
-    if ((flags & FLAG_LAYOUT_BUILT) != 0 && (useBubbles() || (flags & FLAG_HEADER_ENABLED) != 0)) {
+    if ((flags & FLAG_LAYOUT_BUILT) != 0 && (useBubbles() || (flags & FLAG_HEADER_ENABLED) != 0 || xgramPlainTimeAtBottom())) {
       layoutInfo();
     }
   }
@@ -6413,7 +6467,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       }
     }
     if (affectsGroup || markupChanged) {
-      if (affectsGroup && !wasEdited && (useBubbles() || (flags & FLAG_HEADER_ENABLED) != 0)) {
+      if (affectsGroup && !wasEdited && (useBubbles() || (flags & FLAG_HEADER_ENABLED) != 0 || xgramPlainTimeAtBottom())) {
         layoutInfo();
       }
       if (markupChanged) {
@@ -7096,13 +7150,13 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
             buildForward();
             break;
           case VIEW_COUNT_MAIN:
-            if (useBubbles() || (flags & FLAG_HEADER_ENABLED) != 0) {
+            if (useBubbles() || (flags & FLAG_HEADER_ENABLED) != 0 || xgramPlainTimeAtBottom()) {
               layoutInfo();
             }
             break;
         }
       } else if (counter == replyCounter || counter == shareCounter || counter == shrinkedReactionsCounter || counter == isPinned || counter == xgramDeletedIcon || counter == isTranslatedCounter) {
-        if (useBubbles() || (flags & FLAG_HEADER_ENABLED) != 0) {
+        if (useBubbles() || (flags & FLAG_HEADER_ENABLED) != 0 || xgramPlainTimeAtBottom()) {
           layoutInfo();
         }
       } else if (counter == reactionsCounter) {

@@ -1040,6 +1040,25 @@ public final class XgramSettings {
     put(KEY_CHAT_CALL_BUTTONS, value);
   }
 
+  // Without bubbles (channels by default), every message's time and views at its bottom right, as official Telegram
+  // shows them; off: Telegram X's, by the name at the top (only the first of a sender's messages)
+
+  public static final String KEY_PLAIN_TIME_BOTTOM = "xgram_plain_time_bottom";
+  private int plainTimeAtBottom = -1;
+
+  public boolean plainTimeAtBottom () {
+    int value = plainTimeAtBottom;
+    if (value < 0) {
+      plainTimeAtBottom = value = pmc().getBoolean(KEY_PLAIN_TIME_BOTTOM, true) ? 1 : 0;
+    }
+    return value == 1;
+  }
+
+  public void setPlainTimeAtBottom (boolean value) {
+    plainTimeAtBottom = value ? 1 : 0;
+    put(KEY_PLAIN_TIME_BOTTOM, value);
+  }
+
   public static final String KEY_SHOW_STORIES = "xgram_show_stories";
   private int showStories = -1;
 

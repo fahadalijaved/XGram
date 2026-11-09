@@ -639,6 +639,8 @@
   <string name="XgramMaterialYouSub">Colors from your wallpaper</string>
   <string name="XgramChatLookSub">Text size, stickers, bubbles</string>
   <string name="XgramShowSecondsSub">In message times</string>
+  <string name="XgramPlainTimeBottom">Time at the bottom</string>
+  <string name="XgramPlainTimeBottomSub">Without bubbles (channels): every post shows its time and views at the bottom right. Off: by the name, at the top</string>
   <string name="XgramShowPeerIdsSub">In profiles and Settings</string>
   <string name="XgramTwoPaneSub">Tablets and unfolded phones</string>
   <string name="XgramLimitMessageWidthSub">On wide screens</string>

@@ -576,6 +576,18 @@ public class TGMessageText extends TGMessage {
     return Td.isEmpty(text) ? -Screen.dp(3f) : Screen.dp(7f);
   }
 
+  @Override
+  protected int xgramLastLineHeight () {
+    // XGram: Time at the bottom, on the text's last line (a link preview below it has its own lines)
+    if (effectiveWrapper != null && (linkPreview == null || linkPreviewAboveText.getFloatValue() == 1f)) {
+      int lineHeight = effectiveWrapper.getLineHeight();
+      if (lineHeight > 0) {
+        return lineHeight;
+      }
+    }
+    return super.xgramLastLineHeight();
+  }
+
   private int calculateTextLastLineWidth () {
     if (effectiveWrapper != null && Lang.rtl() == effectiveWrapper.getLastLineIsRtl()) {
       // TODO: support for rtl <-> non-rtl transition
