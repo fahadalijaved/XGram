@@ -217,6 +217,22 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   @Override
   protected void onCreateView (Context context, FrameLayoutFix contentView, ViewPager pager) {
     com.fahadali.xgram.XgramSettings.instance().addListener(xgramSettingsListener); // XGram
+    // XGram M3E: on past the last folder (or Calls), the floating navigation toolbar's next tab, as official Telegram
+    pager.xgramSetPastEndListener(new ViewPager.XgramPastEndListener() {
+      @Override
+      public boolean xgramCanSwipePastEnd () {
+        com.fahadali.xgram.layout.XgramNavToolbar toolbar = xgramToolbar();
+        return toolbar != null && !inSearchMode() && !inSelectMode() && toolbar.hasSwipeTarget(1);
+      }
+
+      @Override
+      public void xgramOnSwipePastEnd () {
+        com.fahadali.xgram.layout.XgramNavToolbar toolbar = xgramToolbar();
+        if (toolbar != null) {
+          toolbar.swipeToTab(1);
+        }
+      }
+    });
     com.fahadali.xgram.activity.XgramActivityBadge.instance().addListener(xgramActivityBadgeListener); // XGram: the bell's dot
     com.fahadali.xgram.chats.XgramFolderIcons.addListener(xgramFolderIconListener); // XGram: folder icons known later
     if (BuildConfig.DEBUG) {

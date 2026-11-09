@@ -73,8 +73,12 @@ public class NavigationGestureController implements GestureDetector.OnGestureLis
     this.gestureDetector = new GestureDetector(context, this);
     this.navigation = navigation;
     this.drawer = drawer;
+    this.xgramTabSwipe = context instanceof BaseActivity ? new com.fahadali.xgram.layout.XgramTabSwipe((BaseActivity) context) : null;
     clear(false);
   }
+
+  // XGram M3E: sideways on a tab screen of the floating navigation toolbar: the next or previous tab (XgramTabSwipe)
+  @Nullable private final com.fahadali.xgram.layout.XgramTabSwipe xgramTabSwipe;
 
   public void onScrollStateChanged (int state) {
     /*boolean isScrolling = state == AbsListView.OnScrollListener.SCROLL_STATE_TOUCH_SCROLL;
@@ -84,6 +88,9 @@ public class NavigationGestureController implements GestureDetector.OnGestureLis
   }
 
   public boolean onTouchEvent (MotionEvent event) {
+    if (xgramTabSwipe != null && xgramTabSwipe.onTouchEvent(navigation, event)) {
+      return true; // XGram M3E: the tab swipe's gesture
+    }
     switch (event.getAction()) {
       case MotionEvent.ACTION_UP: {
         gestureDetector.onTouchEvent(event);

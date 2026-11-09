@@ -2411,6 +2411,67 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     return true;
   }
 
+  // Swiping between tabs, as official Telegram's: sideways on a tab screen (XgramTabSwipe), or on past the chat list's
+  // last page (its last folder, or Calls) through the pager (ViewPager#xgramSetPastEndListener)
+
+  /** A swipe may switch tabs now: the toolbar on screen over a tab screen or the chat list, nothing moving. */
+  public boolean canSwipeTabs () {
+    return !Lang.rtl() && canNavigate(false);
+  }
+
+  /** The tab {@code step} places from the one on screen (1: the next, to the right; -1: the previous), Saved skipped (an action); -1: none. */
+  private int swipeTarget (int step) {
+    if (navigation == null || dests.length == 0) {
+      return -1;
+    }
+    final ViewController<?> top = navigation.getCurrentStackItem();
+    if (!isTabRoot(top)) {
+      return -1;
+    }
+    final int current = computeSelected(top);
+    int index = -1;
+    for (int i = 0; i < dests.length; i++) {
+      if (dests[i] == current) {
+        index = i;
+        break;
+      }
+    }
+    if (index == -1) {
+      return -1;
+    }
+    for (int i = index + step; i >= 0 && i < dests.length; i += step) {
+      if (dests[i] != DEST_SAVED) {
+        return dests[i];
+      }
+    }
+    return -1;
+  }
+
+  public boolean hasSwipeTarget (int step) {
+    return canSwipeTabs() && swipeTarget(step) != -1;
+  }
+
+  /** Switches to the tab {@code step} places away, as a tap on it does. False: there is none, or not now. */
+  public boolean swipeToTab (int step) {
+    final int dest = canSwipeTabs() ? swipeTarget(step) : -1;
+    if (dest == -1) {
+      return false;
+    }
+    com.fahadali.xgram.XgramHaptics.segmentTick(host);
+    onTabClick(dest, null);
+    return true;
+  }
+
+  /** The point (on screen) is on the toolbar's band: a swipe there is the toolbar's own. */
+  public boolean isOnBar (float rawX, float rawY) {
+    if (!shown || destroyed || host.getParent() == null) {
+      return false;
+    }
+    int[] location = new int[2];
+    host.getLocationOnScreen(location);
+    return rawY >= location[1] && rawY < location[1] + host.getHeight() && rawX >= location[0] && rawX < location[0] + host.getWidth();
+  }
+
   /** A new screen of {@code dest} for {@code tdlib}'s account (an account switch keeps the section); null: not now. */
   @Nullable
   private ViewController<?> sectionScreen (int dest, Tdlib tdlib) {
