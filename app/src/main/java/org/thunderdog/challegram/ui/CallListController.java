@@ -288,7 +288,7 @@ public class CallListController extends RecyclerViewController<Void> implements
   }
 
   private boolean xgramWantsFsiBanner () {
-    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && com.fahadali.xgram.call.XgramFullScreenCalls.isOff(context);
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && com.fahadali.xgram.call.XgramFullScreenCalls.nags(context);
   }
 
   private static ListItem xgramFsiBannerItem () {

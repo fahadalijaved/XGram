@@ -23,5 +23,6 @@
   <string name="XgramFullScreenCallsBannerText">Calls that come while XGram is closed or the screen is locked only show a small notification.</string>
   <string name="XgramFullScreenCallsBannerTextReset">Android turned off full-screen notifications for XGram after the update, so calls that come while it is closed or the screen is locked only show a small notification.</string>
   <string name="XgramFullScreenCallsBannerAction">Allow</string>
+  <string name="XgramFullScreenCallsBannerHide">Don\'t show again</string>
   <string name="XgramFullScreenCallsBadgeDescription">%1$s, calls can\'t ring full screen</string>
 </resources>

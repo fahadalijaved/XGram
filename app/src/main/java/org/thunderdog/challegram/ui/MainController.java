@@ -3333,7 +3333,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     }
     final com.fahadali.xgram.layout.XgramNavToolbar toolbar = xgramToolbar();
     final int colorId;
-    if (xgramHidesDrawer() && com.fahadali.xgram.call.XgramFullScreenCalls.isOff(context)) {
+    if (xgramHidesDrawer() && com.fahadali.xgram.call.XgramFullScreenCalls.nags(context)) {
       colorId = ColorId.headerBadgeFailed; // XGram: calls can't ring full screen: the ⋮'s first item allows them
     } else {
       colorId = toolbar != null && !toolbar.hasProfile() && xgramHidesDrawer() && context instanceof MainActivity ?
@@ -3553,7 +3553,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     final IntList ids = new IntList(16);
     final IntList kinds = new IntList(16);
     final StringList titles = new StringList(16);
-    final boolean fsiOff = com.fahadali.xgram.call.XgramFullScreenCalls.isOff(context);
+    final boolean fsiOff = com.fahadali.xgram.call.XgramFullScreenCalls.nags(context);
     if (fsiOff) {
       // XGram: calls can't ring full screen (Android 14+): first, in the error colour (where the ⋮'s dot leads), as
       // the side menu's warning row

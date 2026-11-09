@@ -22,6 +22,7 @@ import android.os.Build;
 import android.text.StaticLayout;
 import android.text.TextPaint;
 import android.text.TextUtils;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.accessibility.AccessibilityNodeInfo;
@@ -48,6 +49,8 @@ import org.thunderdog.challegram.tool.Screen;
  * update turned it off), all onErrorContainer and wrapping freely; under them, at the end, an "Allow" button: a 40dp
  * full-corner error pill with labelLarge in onError. The whole card is the one touch target (its state layer is
  * onErrorContainer at 10%) and opens Android's page; screen readers hear the title, the text and an "Allow" action.
+ * At the start of the pill's band a text button, "Don't show again" (labelLarge, onErrorContainer), silences every
+ * reminder ({@link XgramFullScreenCalls#silence}); it is its own touch target and a second screen reader action.
  * Colours are read when drawn.
  */
 public final class XgramFullScreenCallsBanner extends View {
@@ -58,10 +61,16 @@ public final class XgramFullScreenCallsBanner extends View {
   private static final float PADDING = 16f, ICON = 24f, ICON_GAP = 16f, TEXT_GAP = 4f;
   /** The 40dp pill centred in a 48dp band: 12dp under the text, 16dp above the card's bottom edge. */
   private static final float BUTTON_HEIGHT = 40f, BUTTON_BAND = 48f, BUTTON_PADDING = 16f;
+  /** The text button's sides (M3: 12dp), its 40dp height as the pill's. */
+  private static final float HIDE_PADDING = 12f;
 
   private final TextPaint titlePaint, bodyPaint, actionPaint;
   private final Drawable icon;
-  private final RectF card = new RectF(), button = new RectF();
+  private final RectF card = new RectF(), button = new RectF(), hideButton = new RectF();
+  @Nullable private CharSequence hideText;
+  private float hideWidth;
+  /** A press that began on "Don't show again": its own, not the card's. */
+  private boolean hidePressed;
   private final GradientDrawable mask;
   private final RippleDrawable ripple;
   private int rippleColor;
@@ -114,6 +123,11 @@ public final class XgramFullScreenCallsBanner extends View {
       final float maxLabel = Math.max(0, width - Screen.dp(2 * MARGIN_SIDE + 2 * PADDING + 2 * BUTTON_PADDING));
       actionText = TextUtils.ellipsize(action, actionPaint, maxLabel, TextUtils.TruncateAt.END);
       actionWidth = actionPaint.measureText(actionText, 0, actionText.length());
+      // "Don't show again" in what is left of the band before the pill (8dp apart), or not at all
+      final float hideRoom = width - Screen.dp(2 * MARGIN_SIDE + 2 * PADDING + 2 * BUTTON_PADDING + 8) - actionWidth - Screen.dpf(2 * HIDE_PADDING);
+      final String hide = Lang.getString(R.string.XgramFullScreenCallsBannerHide);
+      hideText = hideRoom >= Screen.dp(48f) ? TextUtils.ellipsize(hide, actionPaint, hideRoom, TextUtils.TruncateAt.END) : null;
+      hideWidth = hideText != null ? actionPaint.measureText(hideText, 0, hideText.length()) : 0f;
       setContentDescription(title + ". " + body);
       return true;
     }
@@ -204,7 +218,66 @@ public final class XgramFullScreenCallsBanner extends View {
       final android.graphics.Paint.FontMetrics metrics = actionPaint.getFontMetrics();
       final float baseline = button.centerY() - (metrics.ascent + metrics.descent) / 2f;
       c.drawText(actionText, 0, actionText.length(), button.left + Screen.dpf(BUTTON_PADDING), baseline, actionPaint);
+
+      // "Don't show again" at the band's start (the text button's state layer only while it is pressed)
+      if (hideText != null) {
+        final float hideButtonWidth = hideWidth + Screen.dpf(2 * HIDE_PADDING);
+        final float hideLeft = rtl ? card.right - padding + Screen.dpf(HIDE_PADDING) - hideButtonWidth : card.left + padding - Screen.dpf(HIDE_PADDING);
+        hideButton.set(hideLeft, button.top, hideLeft + hideButtonWidth, button.bottom);
+        if (hidePressed) {
+          c.drawRoundRect(hideButton, hideButton.height() / 2f, hideButton.height() / 2f, Paints.fillingPaint(XgramExpressive.withAlpha(content, XgramExpressive.STATE_PRESSED)));
+        }
+        actionPaint.setColor(content);
+        c.drawText(hideText, 0, hideText.length(), hideButton.left + Screen.dpf(HIDE_PADDING), baseline, actionPaint);
+      } else {
+        hideButton.setEmpty();
+      }
     }
+  }
+
+  // "Don't show again": a press that begins on it is its own (the card's ripple and click stay out of it)
+
+  @Override
+  public boolean onTouchEvent (MotionEvent e) {
+    switch (e.getActionMasked()) {
+      case MotionEvent.ACTION_DOWN: {
+        hidePressed = !hideButton.isEmpty() && hideButton.contains(e.getX(), e.getY());
+        if (hidePressed) {
+          invalidate();
+          return true;
+        }
+        break;
+      }
+      case MotionEvent.ACTION_MOVE: {
+        if (hidePressed && !hideButton.contains(e.getX(), e.getY())) {
+          hidePressed = false;
+          invalidate();
+          return true;
+        }
+        break;
+      }
+      case MotionEvent.ACTION_UP: {
+        if (hidePressed) {
+          hidePressed = false;
+          invalidate();
+          if (hideButton.contains(e.getX(), e.getY())) {
+            playSoundEffect(android.view.SoundEffectConstants.CLICK);
+            XgramFullScreenCalls.silence(); // the banner (this view) goes with the other reminders
+          }
+          return true;
+        }
+        break;
+      }
+      case MotionEvent.ACTION_CANCEL: {
+        if (hidePressed) {
+          hidePressed = false;
+          invalidate();
+          return true;
+        }
+        break;
+      }
+    }
+    return hidePressed || super.onTouchEvent(e);
   }
 
   // Screen readers: the title and text, then "Allow" as the action of the one button
@@ -214,6 +287,16 @@ public final class XgramFullScreenCallsBanner extends View {
     super.onInitializeAccessibilityNodeInfo(info);
     info.setClassName(android.widget.Button.class.getName());
     info.addAction(new AccessibilityNodeInfo.AccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, Lang.getString(R.string.XgramFullScreenCallsBannerAction)));
+    info.addAction(new AccessibilityNodeInfo.AccessibilityAction(R.id.btn_xgramFullScreenCallsNever, Lang.getString(R.string.XgramFullScreenCallsBannerHide)));
+  }
+
+  @Override
+  public boolean performAccessibilityAction (int action, @Nullable android.os.Bundle arguments) {
+    if (action == R.id.btn_xgramFullScreenCallsNever) {
+      XgramFullScreenCalls.silence();
+      return true;
+    }
+    return super.performAccessibilityAction(action, arguments);
   }
 
   @Override

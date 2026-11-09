@@ -621,7 +621,7 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
     if (adapter == null || isDestroyed()) {
       return;
     }
-    final boolean off = com.fahadali.xgram.call.XgramFullScreenCalls.isOff(context);
+    final boolean off = com.fahadali.xgram.call.XgramFullScreenCalls.nags(context);
     final int index = adapter.indexOfViewById(R.id.btn_xgramFullScreenCalls);
     if (off && index == -1) {
       final int start = xgramMenuStart(); // right before the menu's first item, under the accounts when they are open
@@ -877,7 +877,7 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
   private void addMenuItems (List<ListItem> items) {
     // XGram: side menu items can be hidden and reordered (Settings → XGram → Side menu).
     com.fahadali.xgram.XgramSettings xgram = com.fahadali.xgram.XgramSettings.instance();
-    if (com.fahadali.xgram.call.XgramFullScreenCalls.isOff(context)) {
+    if (com.fahadali.xgram.call.XgramFullScreenCalls.nags(context)) {
       // XGram: calls can't ring full screen (Android 14+): a warning first, never sorted with the items below
       items.add(xgramFullScreenCallsItem());
     }

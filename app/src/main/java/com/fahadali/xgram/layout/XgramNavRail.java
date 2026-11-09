@@ -428,7 +428,7 @@ public final class XgramNavRail {
       rail.menu.invalidate();
     }
     // While full-screen calls are off the badge leads to the expanded rail's warning row: screen readers say so
-    final boolean fsiOff = colorId != ColorId.NONE && com.fahadali.xgram.call.XgramFullScreenCalls.isOff(context);
+    final boolean fsiOff = colorId != ColorId.NONE && com.fahadali.xgram.call.XgramFullScreenCalls.nags(context);
     final String label = Lang.getString(R.string.XgramNavRailOpenMenu);
     setLabel(rail.menu, fsiOff ? Lang.getString(R.string.XgramFullScreenCallsBadgeDescription, label) : label);
   }
@@ -1506,7 +1506,7 @@ public final class XgramNavRail {
 
       // Full-screen calls are off (Android 14+): the side menu's warning, under the destinations (they stay over the
       // collapsed rail's), where the menu button's badge leads
-      if (com.fahadali.xgram.call.XgramFullScreenCalls.isOff(context)) {
+      if (com.fahadali.xgram.call.XgramFullScreenCalls.nags(context)) {
         com.fahadali.xgram.call.XgramFullScreenCallsRow warning = com.fahadali.xgram.call.XgramFullScreenCallsRow.forRail(context);
         warning.setOnClickListener(v -> {
           markShown();

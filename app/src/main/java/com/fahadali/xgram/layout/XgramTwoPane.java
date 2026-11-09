@@ -247,7 +247,7 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     } else {
       button.hideMenuBadge(animated);
     }
-    button.xgramSetMenuDescription(com.fahadali.xgram.call.XgramFullScreenCalls.isOff(context) ?
+    button.xgramSetMenuDescription(com.fahadali.xgram.call.XgramFullScreenCalls.nags(context) ?
       Lang.getString(R.string.XgramFullScreenCallsBadgeDescription, Lang.getString(R.string.XgramNavRailOpenMenu)) : null);
   }
 

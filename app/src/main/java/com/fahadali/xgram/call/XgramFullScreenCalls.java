@@ -99,6 +99,36 @@ public final class XgramFullScreenCalls {
     return off;
   }
 
+  /**
+   * Off, and the reminders not silenced (Don't ask again in the prompt, Don't show again on the banner): the ☰'s dot,
+   * the side menu's and the rail's rows, the Calls page's banner. Settings → Notifications still has its row.
+   */
+  public static boolean nags (@NonNull Context context) {
+    return isOff(context) && !silenced();
+  }
+
+  @Nullable private static Boolean cachedSilenced;
+
+  /** The user doesn't want to hear about it again (an update turning it off again included). */
+  public static boolean silenced () {
+    Boolean silenced = cachedSilenced;
+    if (silenced == null) {
+      silenced = pmc().getBoolean(KEY_NEVER_ASK, false);
+      cachedSilenced = silenced;
+    }
+    return silenced;
+  }
+
+  /** No more reminders: the prompt, the dot, the rows and the banner go at once. Main thread. */
+  public static void silence () {
+    pmc().putBoolean(KEY_NEVER_ASK, true);
+    cachedSilenced = true;
+    final Boolean off = cachedOff;
+    for (Listener listener : listeners) {
+      listener.onFullScreenCallsChanged(off != null && off);
+    }
+  }
+
   /** Calls may ring full screen (always below Android 14). */
   public static boolean allowed (@NonNull Context context) {
     return !isOff(context);
@@ -242,8 +272,8 @@ public final class XgramFullScreenCalls {
   private static final String KEY_NEVER_ASK = "xgram_fullscreen_calls_never_ask";
 
   private static boolean promptDue (@NonNull Context context) {
-    if (!isOff(context) || pmc().getBoolean(KEY_NEVER_ASK, false)) {
-      return false; // Don't ask again: the menu's dot and the drawer row still say it's off
+    if (!isOff(context) || silenced()) {
+      return false; // Don't ask again: nothing reminds (Settings → Notifications still has the row)
     }
     final LevelDB pmc = pmc();
     if (pmc.getInt(KEY_PROMPT_CODE, 0) == BuildConfig.ORIGINAL_VERSION_CODE) {
@@ -305,7 +335,7 @@ public final class XgramFullScreenCalls {
         if (id == R.id.btn_xgramFullScreenCallsAllow) {
           openSettings(c.context());
         } else if (id == R.id.btn_xgramFullScreenCallsNever) {
-          pmc().putBoolean(KEY_NEVER_ASK, true);
+          silence(); // the dot, the rows and the banner too
         }
         return true;
       });

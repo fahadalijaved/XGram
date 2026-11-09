@@ -298,7 +298,7 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
       }
     }
     // XGram: calls can't ring full screen (Android 14+): the error dot, over another account's unread chats
-    final boolean fsiOff = com.fahadali.xgram.call.XgramFullScreenCalls.isOff(this);
+    final boolean fsiOff = com.fahadali.xgram.call.XgramFullScreenCalls.nags(this);
     @ColorId final int withFsi = fsiOff ? ColorId.headerBadgeFailed : colorId;
     if (withFsi != ColorId.NONE) {
       backButton.setMenuBadge(withFsi, animated);
