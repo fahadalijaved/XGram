@@ -1797,17 +1797,18 @@ public class MessagesController extends ViewController<MessagesController.Argume
     contentView.addView(mentionButtonWrap);
     contentView.addView(scrollToBottomButtonWrap);
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && (previewMode == PREVIEW_MODE_NONE || previewMode == PREVIEW_MODE_SEARCH) && !isInForceTouchMode()) {
-      // XGram: Material 3 Expressive docked toolbar for selected messages (reply, copy, share, delete), also in found
-      // messages: it takes the composer row's place (or the Join / Mute bar's) while messages are selected, so nothing
-      // covers the messages and nothing moves
+      // XGram: Material 3 Expressive actions for selected messages (reply, copy, share, delete), also in found
+      // messages: the composer row turns into an action pill of its own size (or the Join / Mute bar does) while
+      // messages are selected, so nothing covers the messages and nothing moves
       xgramSelectionToolbar = new com.fahadali.xgram.appearance.XgramDockedToolbar(context);
       View.OnClickListener toolbarClick = v -> onMenuItemPressed(v.getId(), v);
       xgramSelectionToolbar.addButton(R.id.menu_btn_reply, R.drawable.baseline_reply_24, Lang.getString(R.string.Reply), toolbarClick, false);
       xgramSelectionToolbar.addButton(R.id.menu_btn_copy, R.drawable.baseline_content_copy_24, Lang.getString(R.string.Copy), toolbarClick, false);
       xgramSelectionToolbar.addButton(R.id.menu_btn_forward, R.drawable.baseline_forward_24, Lang.getString(R.string.Share), toolbarClick, false);
       xgramSelectionToolbar.addButton(R.id.menu_btn_delete, R.drawable.baseline_delete_24, Lang.getString(R.string.Delete), toolbarClick, true); // XGram M3E r6: in error
-      RelativeLayout.LayoutParams toolbarParams = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-      toolbarParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+      // Placed by translation where the composer row is (xgramUpdateDockedCover), its height the row's
+      RelativeLayout.LayoutParams toolbarParams = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(49f));
+      toolbarParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
       xgramSelectionToolbar.setLayoutParams(toolbarParams);
       addThemeInvalidateListener(xgramSelectionToolbar);
       contentView.addView(xgramSelectionToolbar);
@@ -2150,6 +2151,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
       pagerContentView.setPagingEnabled(false);
     }
     xgramInvalidateAppBarColor(); // XGram: corners, card backing and top tabs in the selection app bar color (the fade itself: startHeaderTransformAnimator)
+    if (xgramSelectionToolbar != null && getKeyboardState()) {
+      hideSoftwareKeyboard(); // XGram: as official Telegram, the keyboard goes while messages are selected
+    }
     xgramUpdateSelectionToolbar(true); // XGram
   }
 
@@ -9683,6 +9687,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     attachButtons.setTranslationY(y);
     xgramTypingAttach.setTranslationY(y);
     messageSenderButton.setTranslationY(y);
+    xgramUpdateDockedCover(); // XGram: the selection's action pill stays on the composer row
 
     if (prevButtonsY != y) {
       prevButtonsY = y;
@@ -13535,24 +13540,29 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   /**
-   * XGram: the docked toolbar covers what is at the bottom now, from the composer row's top (or the Join / Mute bar's)
-   * to the screen's bottom, its items above the bottom inset.
+   * XGram: the selection's action pill goes where the composer row is drawn now (the same formula as its buttons,
+   * updateButtonsY: the keyboard's offset, the gap, more lines), or the Join / Mute bar, or (no composer: found
+   * messages) the row's place above the bottom inset. Read from the views on every change, never from insets alone.
    */
   private void xgramUpdateDockedCover () {
     if (xgramSelectionToolbar == null || !(xgramSelectionToolbar.getParent() instanceof View)) {
       return;
     }
     final View parent = (View) xgramSelectionToolbar.getParent();
-    final int height = parent.getHeight();
-    int top = height;
+    final int row = Screen.dp(49f);
+    int top, bottom;
     if (bottomWrap != null && bottomWrap.getVisibility() == View.VISIBLE) {
-      top = Math.min(top, Math.round(bottomWrap.getTop() + bottomWrap.getTranslationY()));
+      final float base = bottomWrap.getTop() + bottomWrap.getTranslationY() - getKeyboardOffset();
+      top = Math.round(base + (inputView != null ? inputView.getTop() : 0));
+      bottom = Math.round(base + (inputView != null ? inputView.getBottom() : row));
+    } else if (bottomBar != null && bottomBar.getVisibility() == View.VISIBLE) {
+      top = Math.round(bottomBar.getTop() + bottomBar.getTranslationY() + bottomBar.getPaddingTop());
+      bottom = top + row;
+    } else {
+      bottom = parent.getHeight() - xgramBarInset();
+      top = bottom - row;
     }
-    if (bottomBar != null && bottomBar.getVisibility() == View.VISIBLE) {
-      top = Math.min(top, Math.round(bottomBar.getTop() + bottomBar.getTranslationY()));
-    }
-    xgramSelectionToolbar.setBottomInset(xgramBarInset());
-    xgramSelectionToolbar.setMinCoverHeight(height > 0 && top < height ? height - Math.max(0, top) : 0);
+    xgramSelectionToolbar.setCover(top, bottom - top);
   }
 
   // XGram: swipe to select, as official Telegram: the long press that selects a message (or toggles it while
