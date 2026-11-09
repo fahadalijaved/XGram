@@ -6846,6 +6846,20 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   }
 
   private void drawSelection (View view, Canvas c) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: a selected message is a rounded tonal block (primary at 16%, 16dp corners, 6dp in from the sides,
+      // 1dp apart from the next one) that fades in and out, instead of a flat full-width band
+      if (selectionFactor > 0f) {
+        final RectF rect = Paints.getRectF();
+        rect.set(Screen.dp(6f), findTopEdge() + Screen.dp(1f), view.getMeasuredWidth() - Screen.dp(6f), findBottomEdge() - Screen.dp(1f));
+        if (rect.height() > 0f) {
+          final float radius = Math.min(Screen.dp(16f), rect.height() / 2f);
+          final int primary = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
+          c.drawRoundRect(rect, radius, radius, Paints.fillingPaint(ColorUtils.alphaColor(.16f * selectionFactor, primary)));
+        }
+      }
+      return;
+    }
     if (selectionFactor == 1f) {
       c.drawRect(0, findTopEdge(), view.getMeasuredWidth(), findBottomEdge(), Paints.fillingPaint(getSelectionColor(1f)));
       return;

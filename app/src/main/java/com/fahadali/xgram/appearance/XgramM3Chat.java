@@ -607,6 +607,24 @@ public final class XgramM3Chat {
       }
       contentColor = XgramExpressive.color(contentRole);
     }
+
+    /** The icon buttons' size (48dp; 40dp when compact). */
+    private float buttonDp = 48f;
+
+    /**
+     * A compact toolbar: 40dp icon buttons with 4dp padding (48dp tall) and 16dp corners instead of the full pill, for
+     * actions over content that should take little of it. Before adding buttons, after the colors.
+     */
+    public void setCompact () {
+      buttonDp = 40f;
+      final int padding = Screen.dp(4f);
+      setPadding(padding, padding, padding, padding);
+      final XgramExpressive.MorphDrawable compact = new XgramExpressive.MorphDrawable(0, XgramExpressive.CORNER_L, Float.NaN);
+      compact.setColorRole(contentRole == XgramExpressive.ON_SURFACE_VARIANT ? XgramExpressive.SURFACE_CONTAINER : XgramExpressive.PRIMARY_CONTAINER);
+      compact.setHost(this);
+      setBackground(compact);
+      background = compact;
+    }
     private @ColorInt int contentColor, errorColor;
     private final android.util.SparseBooleanArray destructive = new android.util.SparseBooleanArray();
     private final android.util.SparseIntArray icons = new android.util.SparseIntArray();
@@ -659,9 +677,9 @@ public final class XgramM3Chat {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         button.setTooltipText(description); // a plain tooltip on long press, never a toast
       }
-      button.setBackground(XgramExpressiveC.iconButtonRipple(color, 48f));
+      button.setBackground(XgramExpressiveC.iconButtonRipple(color, buttonDp));
       button.setOnClickListener(onClick);
-      button.setLayoutParams(new android.widget.LinearLayout.LayoutParams(Screen.dp(48f), Screen.dp(48f)));
+      button.setLayoutParams(new android.widget.LinearLayout.LayoutParams(Screen.dp(buttonDp), Screen.dp(buttonDp)));
       addView(button);
       return button;
     }
@@ -812,7 +830,7 @@ public final class XgramM3Chat {
           if (child instanceof android.widget.ImageView) {
             int tint = destructive.get(child.getId()) ? error : color;
             ((android.widget.ImageView) child).setColorFilter(tint);
-            child.setBackground(XgramExpressiveC.iconButtonRipple(tint, 48f));
+            child.setBackground(XgramExpressiveC.iconButtonRipple(tint, buttonDp));
           }
         }
       }
