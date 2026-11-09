@@ -592,6 +592,21 @@ public final class XgramM3Chat {
 
     private final XgramExpressive.Spring visibility;
     private boolean shown;
+    private XgramExpressive.MorphDrawable background;
+    /** The content role: onPrimaryContainer (vibrant, the default) or onSurfaceVariant (standard). */
+    private int contentRole = XgramExpressive.ON_PRIMARY_CONTAINER;
+
+    /**
+     * M3 Expressive's standard floating toolbar colors (surfaceContainer, onSurfaceVariant icons) instead of the
+     * vibrant ones (primaryContainer): a quieter bar for actions that sit over content. Before adding buttons.
+     */
+    public void setStandardColors () {
+      contentRole = XgramExpressive.ON_SURFACE_VARIANT;
+      if (background != null) {
+        background.setColorRole(XgramExpressive.SURFACE_CONTAINER);
+      }
+      contentColor = XgramExpressive.color(contentRole);
+    }
     private @ColorInt int contentColor, errorColor;
     private final android.util.SparseBooleanArray destructive = new android.util.SparseBooleanArray();
     private final android.util.SparseIntArray icons = new android.util.SparseIntArray();
@@ -611,6 +626,7 @@ public final class XgramM3Chat {
       background.setColorRole(XgramExpressive.PRIMARY_CONTAINER);
       background.setHost(this);
       setBackground(background);
+      this.background = background;
       setOutlineProvider(ViewOutlineProvider.BACKGROUND);
       setElevation(Screen.dp(XgramExpressive.ELEVATION_3));
       setVisibility(View.GONE);
@@ -786,7 +802,7 @@ public final class XgramM3Chat {
 
     @Override
     protected void dispatchDraw (Canvas c) {
-      int color = XgramExpressive.color(XgramExpressive.ON_PRIMARY_CONTAINER);
+      int color = XgramExpressive.color(contentRole);
       int error = XgramExpressive.color(XgramExpressive.ERROR);
       if (color != contentColor || error != errorColor) {
         contentColor = color;

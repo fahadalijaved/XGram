@@ -188,6 +188,40 @@ public final class XgramDragSelect implements RecyclerView.OnItemTouchListener {
     return true;
   }
 
+  /**
+   * A touch of the drag-select's gesture the list couldn't see, handed on by the item that keeps it (a chat message
+   * keeps its long press's gesture: the list's intercept is disallowed). Moves drag, the end ends it.
+   */
+  public void onForwardedTouch (@NonNull MotionEvent e) {
+    switch (e.getActionMasked()) {
+      case MotionEvent.ACTION_MOVE: {
+        if (!fingerDown) {
+          return;
+        }
+        track(e);
+        if (armed) {
+          armed = false;
+          dragging = true;
+        }
+        if (dragging) {
+          update();
+        }
+        break;
+      }
+      case MotionEvent.ACTION_POINTER_UP: {
+        if (e.getPointerId(e.getActionIndex()) == pointerId) {
+          cancel();
+        }
+        break;
+      }
+      case MotionEvent.ACTION_UP:
+      case MotionEvent.ACTION_CANCEL: {
+        cancel();
+        break;
+      }
+    }
+  }
+
   /** Ends a drag-select now (a list that swallows its cancel events reports them here). */
   public void cancel () {
     fingerDown = false;

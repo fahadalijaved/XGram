@@ -1509,7 +1509,7 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
     MessagesController m = (MessagesController) c;
     if (msg.canBeSelected()) {
       selectMessage(m, msg, touchX, touchY);
-      m.xgramStartMessageDragSelect(this, msg); // XGram: the same finger may go on to select more (swipe to select)
+      xgramLongPressSelected = true; // XGram: the same finger may go on to select more (swipe to select)
       return true;
     }
     return false;
@@ -1581,6 +1581,7 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
   }
 
   private void onLongPress (boolean allowHapticFeedback) {
+    xgramLongPressSelected = false;
     if ((flags & FLAG_CAUGHT_CLICK) != 0) {
       if (performLongPress()) {
         flags &= ~FLAG_CAUGHT_CLICK;
@@ -1592,6 +1593,81 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
         setLongPressed(true, allowHapticFeedback);
       }
     }
+    if (xgramLongPressSelected) {
+      // XGram: armed after setLongPressed, which keeps the gesture here (the list's intercept disallowed): the moves are
+      // handed on from this view (xgramDragSelectTouch)
+      xgramLongPressSelected = false;
+      final ViewController<?> c = ViewController.findRoot(this);
+      if (c instanceof MessagesController && ((MessagesController) c).xgramStartMessageDragSelect(this, msg)) {
+        xgramDragForwarding = true;
+      }
+    }
+  }
+
+  // XGram: swipe to select, as official Telegram. A long press that selects a message, or (while selecting) a swipe
+  // that starts on the check circles' column, goes on as a drag over the other messages
+  // (MessagesController#xgramMessageDragSelect). This view keeps that gesture, so the list never sees its moves: they
+  // are handed on from here. A swipe on the circles keeps the list from scrolling; a tap on them still toggles.
+
+  private boolean xgramLongPressSelected, xgramDragForwarding, xgramCheckColumnPress;
+  private float xgramDownRawY;
+
+  private boolean xgramOnCheckColumn (float x) {
+    final int column = Screen.dp(48f);
+    return Lang.rtl() ? x >= getMeasuredWidth() - column : x < column;
+  }
+
+  /** True when the event is the drag-select's (the usual handling skips it). */
+  private boolean xgramDragSelectTouch (MotionEvent e) {
+    final ViewController<?> root = ViewController.findRoot(this);
+    final MessagesController m = root instanceof MessagesController ? (MessagesController) root : null;
+    switch (e.getActionMasked()) {
+      case MotionEvent.ACTION_DOWN: {
+        xgramDragForwarding = false;
+        xgramCheckColumnPress = m != null && msg != null && m.inSelectMode() && msg.canBeSelected() && xgramOnCheckColumn(e.getX());
+        if (xgramCheckColumnPress) {
+          xgramDownRawY = e.getRawY();
+          if (getParent() != null) {
+            getParent().requestDisallowInterceptTouchEvent(true); // the list doesn't scroll from the circles
+          }
+        }
+        return false;
+      }
+      case MotionEvent.ACTION_MOVE: {
+        if (xgramDragForwarding) {
+          if (m != null) {
+            m.xgramForwardDragSelect(e);
+          }
+          return true;
+        }
+        if (xgramCheckColumnPress && Math.abs(e.getRawY() - xgramDownRawY) > android.view.ViewConfiguration.get(getContext()).getScaledTouchSlop()) {
+          xgramCheckColumnPress = false;
+          preventLongPress();
+          flags &= ~FLAG_CAUGHT_CLICK; // a swipe, not a tap: nothing more on lift
+          if (m != null && msg != null && msg.canBeSelected()) {
+            selectMessage(m, msg, touchX, touchY); // the first message toggles as a tap would, the others follow it
+            if (m.xgramStartMessageDragSelect(this, msg)) {
+              xgramDragForwarding = true;
+              m.xgramForwardDragSelect(e);
+            }
+          }
+          return true;
+        }
+        return false;
+      }
+      case MotionEvent.ACTION_UP:
+      case MotionEvent.ACTION_CANCEL: {
+        xgramCheckColumnPress = false;
+        if (xgramDragForwarding) {
+          xgramDragForwarding = false;
+          if (m != null) {
+            m.xgramForwardDragSelect(e);
+          }
+        }
+        return false; // the usual end (the long press state)
+      }
+    }
+    return false;
   }
 
   private CancellableRunnable longPressRunnable;
@@ -1791,6 +1867,9 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
         // Lifted without moving: the long press does what it did before, then the touch ends as usual
         onLongPress(false);
         break;
+    }
+    if (xgramDragSelectTouch(e)) {
+      return true; // XGram: swipe to select
     }
     switch (e.getAction()) {
       case MotionEvent.ACTION_DOWN: {
