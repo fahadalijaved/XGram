@@ -461,6 +461,7 @@
   <string name="XgramOpenInOfficialApp">Not supported in XGram yet</string>
   <string name="XgramPhotoCopied">Photo copied to clipboard</string>
   <string name="XgramRegisteredAbout">Registered about %1$s (estimate)</string>
+  <string name="XgramPeerIdJoined">%1$s, joined around %2$s</string>
   <string name="XgramJoinedOn">You joined on %1$s</string>
   <string name="XgramCreatedOn">Created on %1$s</string>
   <string name="XgramCopyChatId">Copy %1$s</string>

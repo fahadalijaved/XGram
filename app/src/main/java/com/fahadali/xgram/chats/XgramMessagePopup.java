@@ -249,6 +249,7 @@ public final class XgramMessagePopup {
 
     // The card: the options, then who viewed and who reacted
     final MenuMoreWrap card = new MenuMoreWrap(context, /* scrollable */ true);
+    card.xgramSetCompact(); // official Telegram's size: 44dp rows, 15dp labels (the card takes less of the screen)
     card.init(themeListeners, null);
     card.setAnchorMode(MenuMoreWrap.ANCHOR_MODE_CENTER);
     card.setRightNumber(0);
@@ -953,6 +954,7 @@ public final class XgramMessagePopup {
   /** The card's second page: Back, then one row per person (photo, name, the reaction and when), a tap opens them. */
   private static MenuMoreWrap newDetails (Context context, Tdlib tdlib, TGMessage msg, ThemeListenerList themeListeners, CharSequence title, List<Viewer> viewers, Runnable onBack, SenderClick onSender) {
     final MenuMoreWrap details = new MenuMoreWrap(context, /* scrollable */ true);
+    details.xgramSetCompact(); // as the card's first page
     details.init(themeListeners, null);
     details.setAnchorMode(MenuMoreWrap.ANCHOR_MODE_CENTER);
     details.setRightNumber(0);

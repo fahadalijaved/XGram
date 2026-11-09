@@ -2085,10 +2085,15 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         } else if (itemId == R.id.btn_encryptionKey) {
           view.setData(R.string.PictureAndText);
         } else if (itemId == R.id.btn_peer_id) {
-          view.setName(getPeerTypeStringResourceId());
-          // XGram: estimated registration date next to a user's ID.
-          // XGram: IDs as plain digits (as copied, and as bots and links use them), not a counter with separators
-          view.setData(user != null && secretChat == null ? getPeerId() + " · " + com.fahadali.xgram.chats.XgramIdInfo.registrationLabel(user.id) : Long.toString(getPeerId()));
+          // XGram: the ID alone as the value, plain digits (as copied, and as bots and links use them), not a counter
+          // with separators; a user's estimated registration in words on the label line ("User ID, joined around
+          // Mar 2016") instead of "· ~Mar 2016" after the digits
+          if (user != null && secretChat == null) {
+            view.setName(Lang.getString(R.string.XgramPeerIdJoined, Lang.getString(getPeerTypeStringResourceId()), com.fahadali.xgram.chats.XgramIdInfo.monthYear(com.fahadali.xgram.chats.XgramIdInfo.estimateRegistration(user.id))));
+          } else {
+            view.setName(getPeerTypeStringResourceId());
+          }
+          view.setData(Long.toString(getPeerId()));
         } else if (itemId == R.id.btn_birthdate) {
           view.setData(R.string.Birthdate);
           TdApi.Birthdate birthdate = userFull != null ? userFull.birthdate : null;

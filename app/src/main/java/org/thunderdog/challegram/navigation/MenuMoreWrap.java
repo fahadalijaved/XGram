@@ -83,6 +83,32 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
   public static final int ITEM_HEIGHT = 48;
   public static final int PADDING = 8;
 
+  // XGram: a compact menu (the message popup, as official Telegram's): shorter rows, smaller labels without
+  // bodyLarge's tracking, so it takes less of the screen. Set before the rows are added.
+  public static final int XGRAM_COMPACT_ITEM_HEIGHT = 44;
+  private int xgramItemHeightDp = ITEM_HEIGHT;
+  private boolean xgramCompact;
+
+  public void xgramSetCompact () {
+    xgramCompact = true;
+    xgramItemHeightDp = XGRAM_COMPACT_ITEM_HEIGHT;
+  }
+
+  /** A row's height, in px (compact or not). */
+  public int xgramItemHeight () {
+    return Screen.dp(xgramItemHeightDp);
+  }
+
+  /** A compact menu's label: 15dp, no extra tracking (official Telegram's popups are 16dp Roboto, untracked). */
+  private void xgramApplyCompactText (TextView v) {
+    if (xgramCompact) {
+      v.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15f);
+      if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+        v.setLetterSpacing(0f);
+      }
+    }
+  }
+
   public static final float START_SCALE = .56f;
 
   public static final long REVEAL_DURATION = 258l;
@@ -305,7 +331,7 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
       receiver.requestMessageSender(tdlib, menuItem.messageSenderId, AvatarReceiver.Options.NONE);
     }
 
-    FrameLayout.LayoutParams lp = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(ITEM_HEIGHT), Gravity.LEFT);
+    FrameLayout.LayoutParams lp = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(xgramItemHeightDp), Gravity.LEFT);
     final TextView[] titleTextItemRef = new TextView[1];
     FrameLayout frameLayout = new FrameLayoutFix(getContext()) {
       @Override
@@ -423,7 +449,7 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     }
     frameLayout.setWillNotDraw(false);
     if (receiver != null) {
-      receiver.setBounds(iconCenterX - Screen.dp(10), Screen.dp(ITEM_HEIGHT / 2f - 10), iconCenterX + Screen.dp(10), Screen.dp(ITEM_HEIGHT / 2f + 10));
+      receiver.setBounds(iconCenterX - Screen.dp(10), Screen.dp(xgramItemHeightDp / 2f - 10), iconCenterX + Screen.dp(10), Screen.dp(xgramItemHeightDp / 2f + 10));
       receiver.setUpdateListener(r -> frameLayout.invalidate());
     }
 
@@ -433,10 +459,10 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     titleTextItem.setText(menuItem.title);
     titleTextItem.setSingleLine(true);
     titleTextItem.setEllipsize(TextUtils.TruncateAt.END);
-    titleTextItem.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(ITEM_HEIGHT)));
+    titleTextItem.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(xgramItemHeightDp)));
     if (!StringUtils.isEmpty(menuItem.subtitle)) {
       titleTextItem.setGravity(Gravity.TOP | Lang.gravity());
-      titleTextItem.setPadding(textStartX, Screen.dp(5f), textRightOffset, 0);
+      titleTextItem.setPadding(textStartX, Screen.dp(xgramCompact ? 4f : 5f), textRightOffset, 0); // XGram: compact rows are 44dp
     } else {
       titleTextItem.setGravity(Gravity.CENTER_HORIZONTAL | Lang.gravity());
       titleTextItem.setPadding(textStartX, 0, textRightOffset, 0);
@@ -457,8 +483,8 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
       subtitleTextItem.setGravity(Gravity.BOTTOM | Lang.gravity());
       subtitleTextItem.setSingleLine(true);
       subtitleTextItem.setEllipsize(TextUtils.TruncateAt.END);
-      subtitleTextItem.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(ITEM_HEIGHT)));
-      subtitleTextItem.setPadding(textStartX, 0, textRightOffset, Screen.dp(8f));
+      subtitleTextItem.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(xgramItemHeightDp)));
+      subtitleTextItem.setPadding(textStartX, 0, textRightOffset, Screen.dp(xgramCompact ? 6f : 8f));
       subtitleTextItem.setMaxWidth(maxWidth);
       if (XgramExpressive.isEnabled()) {
         XgramExpressive.applyText(subtitleTextItem, XgramExpressive.TS_BODY_S, false); // XGram: supporting text, bodySmall
@@ -482,6 +508,7 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     titleTextItemRef[0] = titleTextItem;
     if (xgramExpressive) {
       XgramExpressive.applyText(titleTextItem, XgramExpressive.TS_BODY_L, false); // XGram: menu item labels are bodyLarge
+      xgramApplyCompactText(titleTextItem);
     }
     if (forcedTheme != null && xgramExpressive) {
       titleTextItem.setTextColor(xgramRole(XgramExpressive.ON_SURFACE)); // XGram M3E r6: onSurface in the forced theme's scheme
@@ -530,6 +557,7 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     if (xgramExpressive) {
       XgramExpressive.applyText(menuItem, XgramExpressive.TS_BODY_L, false); // XGram: menu item labels are bodyLarge
     }
+    xgramApplyCompactText(menuItem);
     if (forcedTheme != null && xgramExpressive) {
       menuItem.setTextColor(xgramRole(XgramExpressive.ON_SURFACE)); // XGram M3E r6: onSurface in the forced theme's scheme
     } else if (forcedTheme != null) {
@@ -552,7 +580,7 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     menuItem.setSingleLine(true);
     menuItem.setEllipsize(TextUtils.TruncateAt.END);
     menuItem.setOnClickListener(listener);
-    menuItem.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(ITEM_HEIGHT)));
+    menuItem.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(xgramItemHeightDp)));
     if (xgramExpressive) {
       // XGram: Material 3 menu item spec: 12dp leading and trailing padding, 12dp between icon and label.
       menuItem.setPadding(Screen.dp(12f), 0, Screen.dp(12f), 0);
@@ -647,7 +675,7 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
   /** XGram: the height of all the rows and the padding; the menu itself may be shorter (capped: the rest scrolls). */
   @Override
   public int getItemsHeight () {
-    int itemHeight = Screen.dp(ITEM_HEIGHT);
+    int itemHeight = Screen.dp(xgramItemHeightDp);
     int padding = Screen.dp(PADDING);
     int total = 0;
     int childCount = itemsLayout.getChildCount(); // XGram: the rows (in the scroll view's column when scrollable)
@@ -775,10 +803,10 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
       if (viewportY < 0f || viewportY >= viewportHeight) {
         index = -1;
       } else {
-        index = Math.floorDiv((int) Math.floor(viewportY + scrollView.getScrollY() - itemsLayout.getTop()), Screen.dp(ITEM_HEIGHT));
+        index = Math.floorDiv((int) Math.floor(viewportY + scrollView.getScrollY() - itemsLayout.getTop()), Screen.dp(xgramItemHeightDp));
       }
     } else {
-      index = Math.floorDiv((int) Math.floor(localY - Screen.dp(PADDING)), Screen.dp(ITEM_HEIGHT));
+      index = Math.floorDiv((int) Math.floor(localY - Screen.dp(PADDING)), Screen.dp(xgramItemHeightDp));
     }
     setSelectedIndex(index >= 0 && index < getVisibleItemCount() ? index : -1);
 
@@ -1244,7 +1272,7 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     if (lastSelectedIndex == -1) {
       return;
     }
-    final int itemHeight = Screen.dp(ITEM_HEIGHT);
+    final int itemHeight = Screen.dp(xgramItemHeightDp);
     final int count = getVisibleItemCount(); // slots of the visible rows (see processMoveEvent)
     final float factor = factorAnimator.getFactor();
     if (XgramExpressive.isEnabled()) {

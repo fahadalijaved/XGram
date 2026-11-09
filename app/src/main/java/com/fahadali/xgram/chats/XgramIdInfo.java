@@ -66,11 +66,6 @@ public final class XgramIdInfo {
     return new SimpleDateFormat("MMM yyyy", Lang.locale()).format(new Date(unixSeconds * 1000L));
   }
 
-  /** "~ Mar 2016", shown next to a user's ID. */
-  public static String registrationLabel (long userId) {
-    return "~" + monthYear(estimateRegistration(userId));
-  }
-
   /** Opens the sheet for the ID row of a profile. */
   public static void show (ViewController<?> context, long peerId, @Nullable TdApi.User user, @Nullable TdApi.Chat chat, @Nullable TdApi.Supergroup supergroup) {
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
