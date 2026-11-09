@@ -372,10 +372,24 @@ public final class XgramPullToNext implements FactorAnimator.Target {
   private void applyOffset (float offset) {
     if (this.offset != offset) {
       this.offset = offset;
+      updateHapticStep();
       updateArmed();
       updateHint();
       view.invalidate();
     }
+  }
+
+  /** The haptic step the pull is at (XgramHaptics#pullStep): a tick as the finger passes the next one. */
+  private int hapticStep;
+
+  /** As the archive's pull: a tick at each step towards the threshold, stronger the closer it gets (the finger's only). */
+  private void updateHapticStep () {
+    final float threshold = threshold();
+    final int step = threshold > 0f ? (int) Math.floor(Math.max(0f, Math.min(1f, offset / threshold)) * com.fahadali.xgram.XgramHaptics.PULL_STEPS) : 0;
+    if (pulling && target != null && step > hapticStep && step < com.fahadali.xgram.XgramHaptics.PULL_STEPS) {
+      com.fahadali.xgram.XgramHaptics.pullStep(view, step / (float) com.fahadali.xgram.XgramHaptics.PULL_STEPS);
+    }
+    hapticStep = step;
   }
 
   /** A finger resting right on the threshold doesn't flip the state (and buzz) with every pixel of jitter. */
@@ -390,7 +404,11 @@ public final class XgramPullToNext implements FactorAnimator.Target {
     if (armed != isArmed) {
       armed = isArmed;
       if (pulling) {
-        com.fahadali.xgram.XgramHaptics.gestureThreshold(view, armed); // armed: Android 14's threshold haptic (a tap before); let go: 14+ only
+        if (armed) {
+          com.fahadali.xgram.XgramHaptics.pullArmed(view); // a firm click: letting go opens the target now
+        } else {
+          com.fahadali.xgram.XgramHaptics.gestureThreshold(view, false); // let go of it: Android 14+ only
+        }
       }
     }
   }

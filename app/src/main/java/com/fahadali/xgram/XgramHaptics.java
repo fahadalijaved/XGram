@@ -105,6 +105,107 @@ public final class XgramHaptics {
     return armed && perform(view, HapticFeedbackConstants.KEYBOARD_TAP);
   }
 
+  // A pull (the archive's, the next channel's): a tick at each step that grows as the pull nears its threshold, then
+  // a firm click there. Android 13+ plays them as touch vibrations (the phone's touch feedback intensity and switch
+  // apply): the composition primitives where the phone has them (a low tick turning into a tick), else a short buzz
+  // whose strength grows; older Androids get the view's constants.
+
+  /** The steps a pull's way to its threshold is cut into (a tick at each). */
+  public static final int PULL_STEPS = 8;
+
+  @Nullable private static Boolean primitivesSupported;
+
+  @Nullable
+  private static android.os.Vibrator vibrator (android.content.Context context) {
+    try {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        android.os.VibratorManager manager = (android.os.VibratorManager) context.getSystemService(android.content.Context.VIBRATOR_MANAGER_SERVICE);
+        return manager != null ? manager.getDefaultVibrator() : null;
+      }
+      return (android.os.Vibrator) context.getSystemService(android.content.Context.VIBRATOR_SERVICE);
+    } catch (Throwable t) {
+      return null;
+    }
+  }
+
+  @androidx.annotation.RequiresApi(Build.VERSION_CODES.TIRAMISU)
+  private static boolean hasPrimitives (android.os.Vibrator vibrator) {
+    Boolean supported = primitivesSupported;
+    if (supported == null) {
+      supported = vibrator.areAllPrimitivesSupported(android.os.VibrationEffect.Composition.PRIMITIVE_LOW_TICK, android.os.VibrationEffect.Composition.PRIMITIVE_TICK, android.os.VibrationEffect.Composition.PRIMITIVE_CLICK);
+      primitivesSupported = supported;
+    }
+    return supported;
+  }
+
+  @androidx.annotation.RequiresApi(Build.VERSION_CODES.TIRAMISU)
+  private static boolean vibrateTouch (View view, @Nullable android.os.VibrationEffect effect) {
+    final android.os.Vibrator vibrator = effect != null ? vibrator(view.getContext()) : null;
+    if (vibrator == null || !vibrator.hasVibrator()) {
+      return false;
+    }
+    try {
+      vibrator.vibrate(effect, android.os.VibrationAttributes.createForUsage(android.os.VibrationAttributes.USAGE_TOUCH));
+      return true;
+    } catch (Throwable t) {
+      return false;
+    }
+  }
+
+  /** A pull crossed a step at {@code progress} (0..1 of its way to the threshold): a tick as strong as it is far. */
+  public static boolean pullStep (@Nullable View view, float progress) {
+    if (view == null || !enabled()) {
+      return false;
+    }
+    final long now = SystemClock.uptimeMillis();
+    if (lastTickTime != 0 && now - lastTickTime < TICK_INTERVAL_MS) {
+      return false;
+    }
+    lastTickTime = now;
+    final float p = Math.max(0f, Math.min(1f, progress));
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      final android.os.Vibrator vibrator = vibrator(view.getContext());
+      if (vibrator != null && vibrator.hasVibrator()) {
+        android.os.VibrationEffect effect = null;
+        if (hasPrimitives(vibrator)) {
+          effect = android.os.VibrationEffect.startComposition()
+            .addPrimitive(p < .5f ? android.os.VibrationEffect.Composition.PRIMITIVE_LOW_TICK : android.os.VibrationEffect.Composition.PRIMITIVE_TICK, .25f + .75f * p)
+            .compose();
+        } else if (vibrator.hasAmplitudeControl()) {
+          effect = android.os.VibrationEffect.createOneShot(10, Math.round(30 + 170 * p));
+        }
+        if (vibrateTouch(view, effect)) {
+          return true;
+        }
+      }
+    }
+    try {
+      return view.performHapticFeedback(clockTick());
+    } catch (Throwable ignored) {
+      return false;
+    }
+  }
+
+  /** A pull reached its threshold: letting go acts now. A firm click. */
+  public static boolean pullArmed (@Nullable View view) {
+    if (view == null || !enabled()) {
+      return false;
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      final android.os.Vibrator vibrator = vibrator(view.getContext());
+      if (vibrator != null && vibrator.hasVibrator()) {
+        final android.os.VibrationEffect effect = hasPrimitives(vibrator)
+          ? android.os.VibrationEffect.startComposition().addPrimitive(android.os.VibrationEffect.Composition.PRIMITIVE_CLICK, 1f).compose()
+          : vibrator.hasAmplitudeControl() ? android.os.VibrationEffect.createOneShot(22, 255) : android.os.VibrationEffect.createPredefined(android.os.VibrationEffect.EFFECT_CLICK);
+        if (vibrateTouch(view, effect)) {
+          lastTickTime = SystemClock.uptimeMillis();
+          return true;
+        }
+      }
+    }
+    return gestureThreshold(view, true);
+  }
+
   /** A clock tick: a row or value under the finger changed. */
   public static boolean tick (@Nullable View view) {
     return performTick(view, clockTick());

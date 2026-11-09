@@ -140,10 +140,20 @@ public final class XgramArchivePull {
       return;
     }
     lastFraction = fraction;
+    // A tick at each step of the way, stronger the closer it gets; a firm click at the threshold
+    final int step = (int) Math.floor(XgramMotion.clamp01(fraction / THRESHOLD) * com.fahadali.xgram.XgramHaptics.PULL_STEPS);
+    if (step > hapticStep && step < com.fahadali.xgram.XgramHaptics.PULL_STEPS) {
+      com.fahadali.xgram.XgramHaptics.pullStep(list, step / (float) com.fahadali.xgram.XgramHaptics.PULL_STEPS);
+    }
+    hapticStep = step;
     final boolean ready = fraction >= THRESHOLD;
     if (this.ready != ready) {
       this.ready = ready;
-      com.fahadali.xgram.XgramHaptics.gestureThreshold(list, ready); // armed: Android 14's threshold haptic (a tap before); let go: 14+ only
+      if (ready) {
+        com.fahadali.xgram.XgramHaptics.pullArmed(list);
+      } else {
+        com.fahadali.xgram.XgramHaptics.gestureThreshold(list, false); // let go of it: Android 14+ only
+      }
       readyFactor.animateTo(ready ? 1f : 0f);
     }
     invalidate();
@@ -343,6 +353,8 @@ public final class XgramArchivePull {
   private static final float DISK_RADIUS = 20f, PILL_HEIGHT = 40f, GROUP_GAP = 8f, PILL_PAD = 16f;
   /** How much of the row the last pull showed (its progress ring fills up to the threshold). */
   private float lastFraction;
+  /** The haptic step the pull is at (XgramHaptics#pullStep): a tick when it passes the next one. */
+  private int hapticStep;
   private final TextPaint pillPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
   @Nullable private CharSequence pillPull, pillRelease;
   private float pillPullWidth, pillReleaseWidth;
