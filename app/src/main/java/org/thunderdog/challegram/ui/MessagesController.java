@@ -12680,7 +12680,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
       case Intents.ACTIVITY_RESULT_GALLERY_FILE: {
         final Uri path = data != null ? data.getData() : null;
         if (path == null) break;
-        String imagePath = U.tryResolveFilePath(path);
+        String imagePath = U.resolveSharedFilePath(path);
+        if (imagePath == null) {
+          break;
+        }
 
         if (inPreviewMode) {
           if (previewMode == PREVIEW_MODE_WALLPAPER) {
@@ -12706,7 +12709,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
         if (showSlowModeRestriction(xgramAttachAnchor(), null) || showRestriction(xgramAttachAnchor(), RightId.SEND_AUDIO)) {
           return;
         }
-        final String audioPath = U.tryResolveFilePath(path);
+        final String audioPath = U.resolveSharedFilePath(path);
         if (audioPath != null) {
           final long chatId = chat.id;
           final boolean disableNotification = obtainSilentMode();
