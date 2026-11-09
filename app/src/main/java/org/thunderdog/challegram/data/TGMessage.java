@@ -2437,7 +2437,11 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     }
 
     // Check box
-    if (useBubbles) {
+    if (useBubbles && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      if (selectableFactor > 0 && canBeSelected()) {
+        xgramDrawSelectionCircle(c, viewWidth, selectableFactor);
+      }
+    } else if (useBubbles) {
       if (selectableFactor > 0 && canBeSelected()) {
         int centerY = (findTopEdge() / 2 + findBottomEdge() / 2);
         int centerX = Screen.dp(18f) - contentOffset;
@@ -6843,6 +6847,47 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
   private int findBottomEdge () {
     return height - getExtraPadding();
+  }
+
+  @Nullable private static Drawable xgramCheckIcon;
+
+  /**
+   * XGram M3E: the selection circle inside the message's rounded tint (drawSelection): 20dp, centred on the message and
+   * 22dp from the start edge (6dp inside the tint, as far as from its top and bottom on one line). A 2dp onSurfaceVariant
+   * outline while unselected; selected, a primary disc grows in with an onPrimary check. It slides in with the
+   * selection's content shift, as Telegram X's.
+   */
+  private void xgramDrawSelectionCircle (Canvas c, int viewWidth, float selectableFactor) {
+    final int contentOffset = getSelectableContentOffset(selectableFactor);
+    final float centerY = (findTopEdge() + findBottomEdge()) / 2f;
+    float centerX = Screen.dp(22f) - contentOffset;
+    if (contentOffset != 0) {
+      centerX -= Screen.dp(32f) * (1f - selectableFactor);
+    }
+    if (Lang.rtl()) {
+      centerX = viewWidth - centerX;
+    }
+    final float radius = Screen.dp(10f);
+    final float selected = MathUtils.clamp(selectionFactor);
+    final int outline = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+    final int primary = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
+    final int onPrimary = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY);
+    if (selected < 1f) {
+      c.drawCircle(centerX, centerY, radius - Screen.dp(1f), Paints.getProgressPaint(ColorUtils.alphaColor(selectableFactor * (1f - selected), outline), Screen.dp(2f)));
+    }
+    if (selected > 0f) {
+      c.drawCircle(centerX, centerY, radius * (.4f + .6f * selected), Paints.fillingPaint(ColorUtils.alphaColor(selectableFactor, primary)));
+      if (xgramCheckIcon == null) {
+        xgramCheckIcon = Drawables.get(R.drawable.baseline_check_18);
+      }
+      if (xgramCheckIcon != null) {
+        final int save = c.save();
+        final float scale = .7f + .3f * selected;
+        c.scale(scale, scale, centerX, centerY);
+        Drawables.drawCentered(c, xgramCheckIcon, centerX, centerY, Paints.getPorterDuffPaint(ColorUtils.alphaColor(selectableFactor * selected, onPrimary)));
+        c.restoreToCount(save);
+      }
+    }
   }
 
   private void drawSelection (View view, Canvas c) {

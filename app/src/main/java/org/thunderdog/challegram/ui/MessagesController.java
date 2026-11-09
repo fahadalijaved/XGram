@@ -13573,7 +13573,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (on && xgramSelectionBack == null) {
       final android.window.OnBackInvokedCallback callback = () -> {
         if (inSelectMode()) {
-          closeSelectMode();
+          finishSelectMode(-1); // as Back and the close button: the messages are unselected, then the selection closes
         }
       };
       dispatcher.registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_OVERLAY, callback);
