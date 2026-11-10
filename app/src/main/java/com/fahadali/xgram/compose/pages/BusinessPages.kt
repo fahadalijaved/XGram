@@ -124,6 +124,12 @@ fun BusinessPage() {
       link(3, s(R.string.XgramBusinessAway), if (!premium) needs else if (!loaded) dots else onOff(info?.awayMessageSettings != null), icon = R.drawable.baseline_schedule_24, enabled = premium) {
         host.openPage(XgramPage.BUSINESS_AWAY)
       }
+      link(4, s(R.string.XgramBusinessHours), if (!premium) needs else if (!loaded) dots else onOff(info?.openingHours != null), icon = R.drawable.baseline_access_time_24, enabled = premium) {
+        host.openPage(XgramPage.BUSINESS_HOURS)
+      }
+      link(5, s(R.string.XgramBusinessLocation), if (!premium) needs else if (!loaded) dots else info?.location?.address?.takeIf { it.isNotBlank() } ?: s(R.string.XgramBusinessNotSet), icon = R.drawable.baseline_location_on_24, enabled = premium) {
+        host.openPage(XgramPage.BUSINESS_LOCATION)
+      }
     }
     description(R.string.XgramBusinessInfo)
   }
@@ -210,21 +216,25 @@ private fun PageScope.shortcutRow(host: XgramComposeHost, name: String, title: I
 
 /** A full-width Save button at the end of the page; [busy] shows a spinner in it. */
 private fun PageScope.saveButton(enabled: Boolean, busy: Boolean, onSave: () -> Unit) {
-  item("save") {
-    Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp), contentAlignment = Alignment.Center) {
-      Button(onClick = onSave, enabled = enabled && !busy, modifier = Modifier.fillMaxWidth().height(56.dp)) {
-        if (busy) {
-          CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 3.dp)
-        } else {
-          Text(str(R.string.Save))
-        }
+  item("save") { SaveButton(enabled, busy, onSave) }
+}
+
+/** The Business pages' Save button: full width, [busy] shows a spinner in it. */
+@Composable
+internal fun SaveButton(enabled: Boolean, busy: Boolean, onSave: () -> Unit) {
+  Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp), contentAlignment = Alignment.Center) {
+    Button(onClick = onSave, enabled = enabled && !busy, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+      if (busy) {
+        CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 3.dp)
+      } else {
+        Text(str(R.string.Save))
       }
     }
   }
 }
 
 /** Sends [function]; [done] runs on the UI thread, with a plain-words toast on an error. */
-private fun save(tdlib: Tdlib, function: TdApi.Function<TdApi.Ok>, done: (Boolean) -> Unit) {
+internal fun businessSave(tdlib: Tdlib, function: TdApi.Function<TdApi.Ok>, done: (Boolean) -> Unit) {
   tdlib.send(function) { _, error ->
     UI.post {
       if (error != null) {
@@ -304,7 +314,7 @@ fun BusinessGreetingPage() {
         TdApi.SetBusinessGreetingMessageSettings(TdApi.BusinessGreetingMessageSettings(shortcut.id, recipients, days))
       }
       busy = true
-      save(tdlib, function) { ok ->
+      businessSave(tdlib, function) { ok ->
         busy = false
         if (ok) {
           edited = false
@@ -420,7 +430,7 @@ fun BusinessAwayPage() {
         TdApi.SetBusinessAwayMessageSettings(TdApi.BusinessAwayMessageSettings(shortcut.id, recipients, schedule, offlineOnly))
       }
       busy = true
-      save(tdlib, function) { ok ->
+      businessSave(tdlib, function) { ok ->
         busy = false
         if (ok) {
           edited = false

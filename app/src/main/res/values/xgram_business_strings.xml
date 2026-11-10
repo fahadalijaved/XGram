@@ -2,7 +2,7 @@
 <!-- XGram: Telegram Business (included with Premium): quick replies, see XgramQuickReplies and QuickRepliesPage -->
 <resources>
   <string name="XgramPremiumBusiness">Telegram Business</string>
-  <string name="XgramPremiumBusinessInfo">Quick replies, greeting and away messages</string>
+  <string name="XgramPremiumBusinessInfo">Quick replies, greeting and away messages, opening hours, location</string>
   <string name="XgramBusinessInfo">Telegram sends greeting and away messages for you, from your quick replies, in private chats with people.</string>
   <string name="XgramBusinessNone">None yet</string>
   <string name="XgramBusinessOn">On</string>
@@ -43,12 +43,36 @@
   <string name="XgramBusinessSchedule">When</string>
   <string name="XgramBusinessScheduleAlways">Always</string>
   <string name="XgramBusinessScheduleOutside">Outside of opening hours</string>
-  <string name="XgramBusinessScheduleOutsideNoHours">Set opening hours in Telegram first</string>
+  <string name="XgramBusinessScheduleOutsideNoHours">Set your opening hours first</string>
   <string name="XgramBusinessScheduleCustom">Between two dates</string>
   <string name="XgramBusinessScheduleStart">From</string>
   <string name="XgramBusinessScheduleEnd">Until</string>
   <string name="XgramBusinessOfflineOnly">Only when offline</string>
   <string name="XgramBusinessOfflineOnlyInfo">Not sent if you were online in the last 10 minutes</string>
+
+  <item name="btn_xgramBusinessClosed" type="id"/>
+  <item name="btn_xgramBusinessAllDay" type="id"/>
+  <item name="btn_xgramBusinessSetHours" type="id"/>
+  <string name="XgramBusinessNotSet">Not set</string>
+  <string name="XgramBusinessRemove">Remove</string>
+  <string name="XgramBusinessHours">Opening hours</string>
+  <string name="XgramBusinessHoursSwitch">Show opening hours</string>
+  <string name="XgramBusinessHoursInfo">Your profile shows when you are open, in Telegram\'s apps. The away message can follow these hours.</string>
+  <string name="XgramBusinessTimeZone">Time zone</string>
+  <string name="XgramBusinessDaysHeader">Days</string>
+  <string name="XgramBusinessClosed">Closed</string>
+  <string name="XgramBusinessOpenAllDay">Open 24 hours</string>
+  <string name="XgramBusinessSetHours">Set hours</string>
+  <string name="XgramBusinessFromTo">%1$s – %2$s</string>
+  <string name="XgramBusinessOpensAt">%1$s: opens at</string>
+  <string name="XgramBusinessClosesAt">%1$s: closes at</string>
+  <string name="XgramBusinessHoursAllClosed">Open at least one day, or turn opening hours off.</string>
+  <string name="XgramBusinessLocation">Location</string>
+  <string name="XgramBusinessAddress">Address</string>
+  <string name="XgramBusinessAddressHint">Street, city</string>
+  <string name="XgramBusinessLocationInfo">Your profile shows this address, in Telegram\'s apps.</string>
+  <string name="XgramBusinessLocationRemove">Remove location</string>
+  <string name="XgramBusinessLocationRemoveInfo">Your address will no longer show on your profile.</string>
 
   <string name="XgramQuickReplies">Quick replies</string>
   <string name="XgramQuickRepliesInfo">Save messages under a shortcut and send them in one tap: type / in a chat with a person and pick the shortcut.</string>
