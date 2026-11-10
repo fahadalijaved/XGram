@@ -2,7 +2,7 @@
 <!-- XGram: Telegram Business (included with Premium): quick replies, see XgramQuickReplies and QuickRepliesPage -->
 <resources>
   <string name="XgramPremiumBusiness">Telegram Business</string>
-  <string name="XgramPremiumBusinessInfo">Quick replies, greeting and away messages, opening hours, location</string>
+  <string name="XgramPremiumBusinessInfo">Quick replies, greeting and away messages, opening hours, location, intro, chat links, chatbots</string>
   <string name="XgramBusinessInfo">Telegram sends greeting and away messages for you, from your quick replies, in private chats with people.</string>
   <string name="XgramBusinessNone">None yet</string>
   <string name="XgramBusinessOn">On</string>
@@ -73,6 +73,59 @@
   <string name="XgramBusinessLocationInfo">Your profile shows this address, in Telegram\'s apps.</string>
   <string name="XgramBusinessLocationRemove">Remove location</string>
   <string name="XgramBusinessLocationRemoveInfo">Your address will no longer show on your profile.</string>
+
+  <string name="XgramBusinessIntro">Intro</string>
+  <string name="XgramBusinessIntroTitle">Title</string>
+  <string name="XgramBusinessIntroTitleDefault">No messages here yet…</string>
+  <string name="XgramBusinessIntroMessage">Message</string>
+  <string name="XgramBusinessIntroMessageDefault">Send a message or tap the greeting below.</string>
+  <string name="XgramBusinessIntroInfo">People see this in an empty chat with you, before they write. Empty fields show Telegram\'s own text.</string>
+  <string name="XgramBusinessIntroRemoveSticker">Remove the sticker</string>
+  <string name="XgramBusinessIntroStickerInfo">The intro has a sticker (picked in another app)</string>
+  <string name="XgramBusinessIntroReset">Reset to default</string>
+
+  <string name="XgramBusinessLinks">Chat links</string>
+  <string name="XgramBusinessLinksShort">Links that start a chat with a typed message</string>
+  <string name="XgramBusinessLinksInfo">A link opens a chat with you with your message already typed, ready to send.</string>
+  <string name="XgramBusinessLinksYours">Your links</string>
+  <string name="XgramBusinessLinksEmpty">No chat links yet</string>
+  <string name="XgramBusinessLinksFull">You can have up to %1$d chat links.</string>
+  <string name="XgramBusinessLinkNew">New link</string>
+  <string name="XgramBusinessLinkNewInfo">The message, then a title only you see</string>
+  <string name="XgramBusinessLinkMessage">Message</string>
+  <string name="XgramBusinessLinkMessageHint">What the chat starts with</string>
+  <string name="XgramBusinessLinkTitle">Title</string>
+  <string name="XgramBusinessLinkTitleHint">Only you see it (optional)</string>
+  <string name="XgramBusinessLinkEdit">Edit</string>
+  <string name="XgramBusinessLinkDelete">Delete link</string>
+  <string name="XgramBusinessLinkDeleteInfo">The link will stop working.</string>
+
+  <string name="XgramBusinessBot">Chatbots</string>
+  <string name="XgramBusinessBotShort">A bot that answers in your chats</string>
+  <string name="XgramBusinessBotName">Bot</string>
+  <string name="XgramBusinessBotNone">None</string>
+  <string name="XgramBusinessBotNameHint">Bot username</string>
+  <string name="XgramBusinessBotInfo">A bot made for Telegram Business can answer in your private chats for you, in the chats and with the rights you pick.</string>
+  <string name="XgramBusinessBotNotFound">There is no @%1$s.</string>
+  <string name="XgramBusinessBotCantConnect">@%1$s can\'t be connected: it isn\'t made for Telegram Business.</string>
+  <string name="XgramBusinessBotRights">What the bot may do</string>
+  <string name="XgramBusinessBotDisconnect">Disconnect the bot</string>
+  <string name="XgramBusinessBotDisconnectInfo">The bot will no longer see or answer your chats.</string>
+  <string name="XgramBusinessBotDisconnectConfirm">Disconnect</string>
+  <string name="XgramBotCanReply">Reply to messages</string>
+  <string name="XgramBotCanRead">Mark messages as read</string>
+  <string name="XgramBotCanDeleteSent">Delete its messages</string>
+  <string name="XgramBotCanDeleteAll">Delete any message</string>
+  <string name="XgramBotCanEditName">Edit your name</string>
+  <string name="XgramBotCanEditBio">Edit your bio</string>
+  <string name="XgramBotCanEditPhoto">Edit your profile photo</string>
+  <string name="XgramBotCanEditUsername">Edit your username</string>
+  <string name="XgramBotCanViewGifts">See your gifts and Stars</string>
+  <string name="XgramBotCanSellGifts">Sell your gifts</string>
+  <string name="XgramBotCanGiftSettings">Change your gift settings</string>
+  <string name="XgramBotCanTransferGifts">Transfer and upgrade gifts</string>
+  <string name="XgramBotCanTransferStars">Transfer Stars</string>
+  <string name="XgramBotCanStories">Post and manage stories</string>
 
   <string name="XgramQuickReplies">Quick replies</string>
   <string name="XgramQuickRepliesInfo">Save messages under a shortcut and send them in one tap: type / in a chat with a person and pick the shortcut.</string>

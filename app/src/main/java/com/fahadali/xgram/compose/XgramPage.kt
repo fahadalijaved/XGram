@@ -48,7 +48,7 @@ import org.thunderdog.challegram.navigation.ViewController
 enum class XgramPage {
   MAIN, APPEARANCE, CHAT_LIST, MESSAGES, TRANSLATION, SIDE_MENU, PRIVACY, FILTERS, HISTORY, NETWORK, UPDATES, BACKUP,
   MESSAGE_MENU, CHAT_ACTIONS, INPUT_BUTTONS, TRANSLATE_TARGET, WORD_FILTERS, HIDDEN_PEOPLE, WHATS_NEW,
-  NAV_BAR, SEARCH, XDRIVE, HEADER_BUTTONS, ACTIVITY, LARGE_SCREENS, CHAT_MENU, STARS, PREMIUM, NAME_COLORS, QUICK_REPLIES, QUICK_REPLY, BUSINESS, BUSINESS_GREETING, BUSINESS_AWAY, BUSINESS_HOURS, BUSINESS_LOCATION;
+  NAV_BAR, SEARCH, XDRIVE, HEADER_BUTTONS, ACTIVITY, LARGE_SCREENS, CHAT_MENU, STARS, PREMIUM, NAME_COLORS, QUICK_REPLIES, QUICK_REPLY, BUSINESS, BUSINESS_GREETING, BUSINESS_AWAY, BUSINESS_HOURS, BUSINESS_LOCATION, BUSINESS_INTRO, BUSINESS_LINKS, BUSINESS_BOT;
 
   companion object {
     /** The page of an XgramSettingsController.SECTION_* (Ghost mode is the top of Privacy). */
@@ -111,6 +111,9 @@ internal fun XgramPageContent(page: XgramPage) {
     XgramPage.BUSINESS_AWAY -> com.fahadali.xgram.compose.pages.BusinessAwayPage()
     XgramPage.BUSINESS_HOURS -> com.fahadali.xgram.compose.pages.BusinessHoursPage()
     XgramPage.BUSINESS_LOCATION -> com.fahadali.xgram.compose.pages.BusinessLocationPage()
+    XgramPage.BUSINESS_INTRO -> com.fahadali.xgram.compose.pages.BusinessIntroPage()
+    XgramPage.BUSINESS_LINKS -> com.fahadali.xgram.compose.pages.BusinessLinksPage()
+    XgramPage.BUSINESS_BOT -> com.fahadali.xgram.compose.pages.BusinessBotPage()
   }
 }
 

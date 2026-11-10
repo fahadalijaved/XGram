@@ -4259,6 +4259,9 @@ public class TdlibUi extends Handler {
                 subsection != null && subsection.startsWith("away") ? com.fahadali.xgram.compose.XgramPage.BUSINESS_AWAY :
                 subsection != null && subsection.startsWith("hours") ? com.fahadali.xgram.compose.XgramPage.BUSINESS_HOURS :
                 subsection != null && subsection.startsWith("location") ? com.fahadali.xgram.compose.XgramPage.BUSINESS_LOCATION :
+                subsection != null && subsection.startsWith("intro") ? com.fahadali.xgram.compose.XgramPage.BUSINESS_INTRO :
+                subsection != null && subsection.startsWith("links") ? com.fahadali.xgram.compose.XgramPage.BUSINESS_LINKS :
+                subsection != null && subsection.startsWith("chatbots") ? com.fahadali.xgram.compose.XgramPage.BUSINESS_BOT :
                 com.fahadali.xgram.compose.XgramPage.BUSINESS);
               break;
             }

@@ -130,6 +130,15 @@ fun BusinessPage() {
       link(5, s(R.string.XgramBusinessLocation), if (!premium) needs else if (!loaded) dots else info?.location?.address?.takeIf { it.isNotBlank() } ?: s(R.string.XgramBusinessNotSet), icon = R.drawable.baseline_location_on_24, enabled = premium) {
         host.openPage(XgramPage.BUSINESS_LOCATION)
       }
+      link(6, s(R.string.XgramBusinessIntro), if (!premium) needs else if (!loaded) dots else info?.startPage?.title?.takeIf { it.isNotBlank() } ?: s(R.string.XgramBusinessNotSet), icon = R.drawable.baseline_format_text_24, enabled = premium) {
+        host.openPage(XgramPage.BUSINESS_INTRO)
+      }
+      link(7, s(R.string.XgramBusinessLinks), if (premium) s(R.string.XgramBusinessLinksShort) else needs, icon = R.drawable.baseline_link_24, enabled = premium) {
+        host.openPage(XgramPage.BUSINESS_LINKS)
+      }
+      link(8, s(R.string.XgramBusinessBot), if (premium) s(R.string.XgramBusinessBotShort) else needs, icon = R.drawable.deproko_baseline_bots_24, enabled = premium) {
+        host.openPage(XgramPage.BUSINESS_BOT)
+      }
     }
     description(R.string.XgramBusinessInfo)
   }
@@ -141,7 +150,7 @@ private fun onOff(on: Boolean): String = s(if (on) R.string.XgramBusinessOn else
 private fun TdApi.BusinessRecipients.edit(change: TdApi.BusinessRecipients.() -> Unit): TdApi.BusinessRecipients =
   TdApi.BusinessRecipients(chatIds.clone(), excludedChatIds.clone(), selectExistingChats, selectNewChats, selectContacts, selectNonContacts, excludeSelected).apply(change)
 
-private fun defaultRecipients(): TdApi.BusinessRecipients =
+internal fun defaultRecipients(): TdApi.BusinessRecipients =
   TdApi.BusinessRecipients(LongArray(0), LongArray(0), false, false, false, false, true)
 
 private fun sameRecipients(a: TdApi.BusinessRecipients, b: TdApi.BusinessRecipients): Boolean =
@@ -152,7 +161,7 @@ private fun sameRecipients(a: TdApi.BusinessRecipients, b: TdApi.BusinessRecipie
  * Who gets an automatic message: all private chats except the picked ones, or only the picked ones; picked are chat
  * kinds (existing, new, contacts, non-contacts) and single chats (the people picker).
  */
-private fun PageScope.recipientRows(host: XgramComposeHost, r: TdApi.BusinessRecipients, enabled: Boolean, onChange: (TdApi.BusinessRecipients) -> Unit) {
+internal fun PageScope.recipientRows(host: XgramComposeHost, r: TdApi.BusinessRecipients, enabled: Boolean, onChange: (TdApi.BusinessRecipients) -> Unit) {
   val tdlib = host.tdlib
   header(R.string.XgramBusinessRecipients)
   group("recipients") {
