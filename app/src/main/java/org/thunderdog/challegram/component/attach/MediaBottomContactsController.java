@@ -25,6 +25,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import org.drinkless.tdlib.Client;
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
+import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.component.user.SimpleUsersAdapter;
 import org.thunderdog.challegram.core.Background;
 import org.thunderdog.challegram.data.TD;
@@ -114,9 +115,29 @@ public class MediaBottomContactsController extends MediaBottomBaseController<Voi
     return users == null ? R.drawable.baseline_group_96 : super.xgramErrorIcon();
   }
 
+  /** XGram: the contacts permission was asked for once while the app runs (from this tab). */
+  private static boolean xgramAskedForContacts;
+
+  private void xgramAllowContacts () {
+    tdlib.contacts().startSyncIfNeeded(context(), true, () -> tdlib.searchContacts(null, ContactsController.DISPLAY_LIMIT, this));
+  }
+
   protected void displayContacts (final ArrayList<TGUser> users) {
+    if (users.isEmpty() && this.users == null && !context().permissions().canReadContacts()) {
+      // XGram: no contacts because XGram may not read the phone's: say so, a tap asks (as the first time does) and
+      // syncs them, and the list fills
+      showError(Lang.getString(R.string.XgramContactsAllow), null, null, true);
+      xgramSetErrorClick(v -> xgramAllowContacts());
+      adapter.setUsers(null);
+      if (!xgramAskedForContacts) {
+        xgramAskedForContacts = true;
+        xgramAllowContacts();
+      }
+      return;
+    }
     if (users.isEmpty()) {
       showError(this.users == null ? R.string.NoContacts : R.string.NothingFound, 0, null, this.users == null);
+      xgramSetErrorClick(null);
       adapter.setUsers(null);
     } else if (this.users == null) {
       hideProgress();

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: the attach menu's Contact tab without the contacts permission, see MediaBottomContactsController -->
+<resources>
+  <string name="XgramContactsAllow">XGram can\'t see your contacts yet. Tap to allow access to them.</string>
+</resources>

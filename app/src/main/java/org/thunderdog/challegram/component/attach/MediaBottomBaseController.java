@@ -689,6 +689,15 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
     return xgramEmptyView;
   }
 
+  /** XGram: a tap on the empty state shown now does {@code onClick} (null: nothing), e.g. asking for a permission. */
+  protected final void xgramSetErrorClick (@Nullable View.OnClickListener onClick) {
+    final View errorView = xgramEmptyView != null ? xgramEmptyView : emptyView;
+    if (errorView != null) {
+      errorView.setOnClickListener(onClick);
+      errorView.setClickable(onClick != null);
+    }
+  }
+
   // Called when removed from view tree
   public final void resetState () {
     // force scroll to top
