@@ -19,6 +19,7 @@ import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
 import android.content.Context;
+import android.graphics.Canvas;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.os.Build;
@@ -56,6 +57,12 @@ import org.thunderdog.challegram.theme.Theme;
 import org.thunderdog.challegram.theme.ThemeId;
 import org.thunderdog.challegram.tool.Intents;
 import org.thunderdog.challegram.tool.Screen;
+import org.drinkless.tdlib.TdApi;
+import org.thunderdog.challegram.loader.ImageFile;
+import org.thunderdog.challegram.loader.ImageFileRemote;
+import org.thunderdog.challegram.loader.ImageReceiver;
+import org.thunderdog.challegram.telegram.Tdlib;
+import me.vkryl.core.MathUtils;
 import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.unsorted.Settings;
 import org.thunderdog.challegram.util.ActivityPermissionResult;
@@ -139,6 +146,13 @@ public class MediaLocationMapView extends FrameLayoutFix implements OnMapReadyCa
     };
     mapView.setLayoutParams(params);
     addView(mapView);
+
+    // XGram: Telegram's still map of the spot over Google's until Google's tiles have loaded
+    xgramTdlib = themeProvider.tdlib();
+    xgramMapHeight = mapHeight;
+    xgramStillMap = new XgramStillMap(getContext());
+    xgramStillMap.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, mapHeight));
+    addView(xgramStillMap);
 
     pinXView = new ImageView(getContext());
     pinXView.setScaleType(ImageView.ScaleType.CENTER);
@@ -492,10 +506,74 @@ public class MediaLocationMapView extends FrameLayoutFix implements OnMapReadyCa
     return true;
   }
 
+  // XGram: with a Maps key that doesn't allow this app (Telegram X's own was built in) Google's tiles never load and
+  // the map stayed blank: Telegram's still map of the camera's spot (TDLib getMapThumbnailFile) shows over it, again
+  // each time the camera stops, until Google's map has rendered (then it goes for good)
+
+  private @Nullable Tdlib xgramTdlib;
+  private @Nullable XgramStillMap xgramStillMap;
+  private boolean xgramTilesLoaded;
+  private int xgramMapHeight;
+
+  private static final class XgramStillMap extends View {
+    private final ImageReceiver receiver;
+
+    XgramStillMap (Context context) {
+      super(context);
+      receiver = new ImageReceiver(this, 0);
+    }
+
+    void setFile (ImageFile file) {
+      receiver.requestFile(file);
+    }
+
+    @Override
+    protected void onAttachedToWindow () {
+      super.onAttachedToWindow();
+      receiver.attach();
+    }
+
+    @Override
+    protected void onDetachedFromWindow () {
+      super.onDetachedFromWindow();
+      receiver.detach();
+    }
+
+    @Override
+    protected void onDraw (Canvas c) {
+      receiver.setBounds(0, 0, getWidth(), getHeight());
+      receiver.draw(c);
+    }
+  }
+
+  private void xgramUpdateStillMap () {
+    if (xgramTilesLoaded || xgramStillMap == null || googleMap == null || xgramTdlib == null) {
+      return;
+    }
+    final LatLng target = googleMap.getCameraPosition().target;
+    final int zoom = MathUtils.clamp(Math.round(googleMap.getCameraPosition().zoom), 13, 20);
+    final int scale = 2;
+    final int viewWidth = getMeasuredWidth() > 0 ? getMeasuredWidth() : Screen.currentWidth();
+    final int w = MathUtils.clamp(viewWidth / scale, 16, 1024);
+    final int h = MathUtils.clamp(xgramMapHeight / scale, 16, 1024);
+    final ImageFileRemote file = new ImageFileRemote(xgramTdlib,
+      new TdApi.GetMapThumbnailFile(new TdApi.Location(target.latitude, target.longitude, 0), zoom, w, h, scale, 0),
+      "xgram_still_map_" + target.latitude + "," + target.longitude + "_" + zoom + "_" + w + "x" + h);
+    file.setScaleType(ImageFile.CENTER_CROP);
+    xgramStillMap.setFile(file);
+  }
+
   @Override
   public void onMapReady (GoogleMap googleMap) {
     this.googleMap = googleMap;
     pinView.setAlpha(1f);
+    googleMap.setOnMapLoadedCallback(() -> {
+      // XGram: Google's map rendered: the still map goes
+      xgramTilesLoaded = true;
+      if (xgramStillMap != null) {
+        xgramStillMap.setVisibility(View.GONE);
+      }
+    });
     xgramStyleMap(googleMap); // XGram
 
     try {
@@ -884,6 +962,7 @@ public class MediaLocationMapView extends FrameLayoutFix implements OnMapReadyCa
   public void onCameraIdle () {
     setCameraMoving(false);
     saveLastLocation();
+    xgramUpdateStillMap();
   }
 
   @Override
