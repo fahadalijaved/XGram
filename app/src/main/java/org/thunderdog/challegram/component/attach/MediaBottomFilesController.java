@@ -189,6 +189,7 @@ public class MediaBottomFilesController extends MediaBottomBaseController<Void> 
   // XGram: a folder of an SFTP server: "sftp://" + the server's id + "\n" + the folder (empty: where it opens)
   private static final String KEY_SFTP = "sftp://";
   private static final String KEY_ADD_SFTP = "xgram_add_sftp";
+  private static final String KEY_ADD_STORAGE = "xgram_add_storage";
   private static final int REQUEST_SFTP_KEY = 10096;
   private View xgramLastView;
   private InlineResultCommon xgramLastResult;
@@ -291,6 +292,8 @@ public class MediaBottomFilesController extends MediaBottomBaseController<Void> 
       Log.e("Cannot add storage directory", t);
     }
 
+    xgramAddStorageItems(items); // XGram: the pinned folders and SFTP servers, Other apps, Add storage
+
     InlineResultCommon galleryItem = createItem(context, tdlib, KEY_GALLERY, R.drawable.baseline_image_24, Lang.getString(R.string.Gallery), Lang.getString(R.string.SendMediaHint));
     items.add(createItem(galleryItem, R.id.btn_galleryFiles));
 
@@ -318,8 +321,6 @@ public class MediaBottomFilesController extends MediaBottomBaseController<Void> 
       InlineResultCommon downloadsItem = createItem(context, tdlib, KEY_DOWNLOADS, R.drawable.baseline_file_download_24, Lang.getString(R.string.Downloads), Lang.getString(R.string.Files));
       items.add(createItem(downloadsItem, R.id.btn_downloads));
     }
-
-    xgramAddStorageItems(items); // XGram: Other apps, the pinned folders, Add a folder
 
     boolean hasRoot = false;
     try {
@@ -541,16 +542,14 @@ public class MediaBottomFilesController extends MediaBottomBaseController<Void> 
 
     abstract Result act ();
 
+    // XGram: no lock (the field is volatile): run() holds the lock through act(), which may now wait on the network
+    // (an SFTP server or another app's folder), and cancelling from the main thread froze the app meanwhile
     public void cancel () {
-      synchronized (this) {
-        isCancelled = true;
-      }
+      isCancelled = true;
     }
 
     public boolean isCancelled () {
-      synchronized (this) {
-        return isCancelled;
-      }
+      return isCancelled;
     }
 
     private Runnable onDone, onError;
@@ -1125,6 +1124,8 @@ public class MediaBottomFilesController extends MediaBottomBaseController<Void> 
         xgramPickFolder();
       } else if (KEY_ADD_SFTP.equals(result.getId())) {
         xgramEditServer(null);
+      } else if (KEY_ADD_STORAGE.equals(result.getId())) {
+        xgramAddStorage();
       } else {
         String path = result.getId();
         boolean isMusic = KEY_MUSIC.equals(path);
@@ -1412,16 +1413,29 @@ public class MediaBottomFilesController extends MediaBottomBaseController<Void> 
   }
 
   private void xgramAddStorageItems (ArrayList<ListItem> items) {
-    items.add(createItem(createItem(context, tdlib, KEY_OTHER_APPS, R.drawable.baseline_cloud_24, Lang.getString(R.string.XgramFilesOtherApps), Lang.getString(R.string.XgramFilesOtherAppsInfo)), R.id.btn_folder));
     for (com.fahadali.xgram.files.XgramStorageFolders.Pinned folder : com.fahadali.xgram.files.XgramStorageFolders.list(context)) {
       final String path = xgramTreePath(folder.tree, com.fahadali.xgram.files.XgramStorageFolders.rootDocumentId(folder.tree));
       items.add(createItem(createItem(context, tdlib, path, R.drawable.baseline_folder_24, folder.name, folder.app != null ? folder.app : Lang.getString(R.string.XgramFilesPinned)), R.id.btn_folder));
     }
-    items.add(createItem(createItem(context, tdlib, KEY_ADD_FOLDER, R.drawable.baseline_create_new_folder_24, Lang.getString(R.string.XgramFilesAddFolder), Lang.getString(R.string.XgramFilesAddFolderInfo)), R.id.btn_folder));
     for (com.fahadali.xgram.files.XgramSftp.Server server : com.fahadali.xgram.files.XgramSftp.servers()) {
       items.add(createItem(createItem(context, tdlib, KEY_SFTP + server.id + "\n", R.drawable.baseline_router_24, server.label(), "SFTP · " + server.address()), R.id.btn_folder));
     }
-    items.add(createItem(createItem(context, tdlib, KEY_ADD_SFTP, R.drawable.baseline_router_24, Lang.getString(R.string.XgramSftpAdd), Lang.getString(R.string.XgramSftpAddInfo)), R.id.btn_folder));
+    items.add(createItem(createItem(context, tdlib, KEY_OTHER_APPS, R.drawable.baseline_cloud_24, Lang.getString(R.string.XgramFilesOtherApps), Lang.getString(R.string.XgramFilesOtherAppsInfo)), R.id.btn_folder));
+    items.add(createItem(createItem(context, tdlib, KEY_ADD_STORAGE, R.drawable.baseline_create_new_folder_24, Lang.getString(R.string.XgramFilesAddStorage), Lang.getString(R.string.XgramFilesAddStorageInfo)), R.id.btn_folder));
+  }
+
+  /** Add storage: a folder of another app, or an SFTP server. */
+  private void xgramAddStorage () {
+    showOptions(null, new int[] {R.id.btn_xgramAddStorageFolder, R.id.btn_xgramAddStorageSftp},
+      new String[] {Lang.getString(R.string.XgramFilesAddFolder), Lang.getString(R.string.XgramSftpAdd)},
+      null, new int[] {R.drawable.baseline_create_new_folder_24, R.drawable.baseline_router_24}, (itemView, id) -> {
+        if (id == R.id.btn_xgramAddStorageFolder) {
+          xgramPickFolder();
+        } else if (id == R.id.btn_xgramAddStorageSftp) {
+          xgramEditServer(null);
+        }
+        return true;
+      });
   }
 
   private void xgramPickFolder () {
@@ -1574,8 +1588,14 @@ public class MediaBottomFilesController extends MediaBottomBaseController<Void> 
         if (id == R.id.btn_edit) {
           xgramEditServer(server);
         } else if (id == R.id.btn_delete) {
-          com.fahadali.xgram.files.XgramSftp.remove(server.id);
-          buildCells();
+          xgramNetworkQueue.execute(() -> {
+            com.fahadali.xgram.files.XgramSftp.remove(server.id); // closes its connection: not on the main thread
+            UI.post(() -> {
+              if (!isDestroyed() && stack.isEmpty()) {
+                buildCells();
+              }
+            });
+          });
         }
         return true;
       });
@@ -1585,7 +1605,13 @@ public class MediaBottomFilesController extends MediaBottomBaseController<Void> 
   private void xgramEditServer (@Nullable com.fahadali.xgram.files.XgramSftp.Server server) {
     com.fahadali.xgram.compose.XgramSftpDialog.show(context, server, this::xgramPickKey, (name, host, port, user, folder, password, privateKey) ->
       xgramNetworkQueue.execute(() -> {
-        final com.fahadali.xgram.files.XgramSftp.Server saved = com.fahadali.xgram.files.XgramSftp.save(server != null ? server.id : null, name, host, port, user, folder, password, privateKey);
+        final com.fahadali.xgram.files.XgramSftp.Server saved;
+        try {
+          saved = com.fahadali.xgram.files.XgramSftp.save(server != null ? server.id : null, name, host, port, user, folder, password, privateKey);
+        } catch (IllegalStateException e) {
+          UI.post(() -> UI.showToast(R.string.XgramSftpNotStored, Toast.LENGTH_LONG));
+          return;
+        }
         UI.post(() -> {
           if (!isDestroyed() && stack.isEmpty()) {
             buildCells();

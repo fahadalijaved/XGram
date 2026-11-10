@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- XGram: SFTP servers in the attach menu's File tab, see XgramSftp and XgramSftpDialog -->
 <resources>
-  <string name="XgramSftpAdd">Add an SFTP server</string>
+  <string name="XgramSftpAdd">An SFTP server</string>
+  <string name="XgramSftpAddTitle">Add an SFTP server</string>
   <string name="XgramSftpAddInfo">Browse a server and attach its files</string>
   <string name="XgramSftpEdit">Edit server</string>
   <string name="XgramSftpHost">Server address</string>
@@ -24,4 +25,6 @@
   <string name="XgramSftpSignInFailed">Couldn\'t sign in. Check the user name, password or key.</string>
   <string name="XgramSftpUnreachable">Couldn\'t reach the server. Check the address, port and your connection.</string>
   <string name="XgramSftpConnected">Connected to %1$s</string>
+  <string name="XgramSftpPasswordRemove">Remove the saved password</string>
+  <string name="XgramSftpNotStored">The password or key couldn\'t be stored securely, so the server wasn\'t saved.</string>
 </resources>

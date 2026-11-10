@@ -76,6 +76,7 @@ object XgramSftpDialog {
     var port by remember { mutableStateOf((server?.port ?: 22).toString()) }
     var user by remember { mutableStateOf(server?.user.orEmpty()) }
     var password by remember { mutableStateOf("") }
+    var removePassword by remember { mutableStateOf(false) }
     var folder by remember { mutableStateOf(server?.folder.orEmpty()) }
     // null: keep the saved key (or none), "": remove it, text: a new key
     var key by remember { mutableStateOf<String?>(null) }
@@ -91,7 +92,7 @@ object XgramSftpDialog {
     ) {
       Column(Modifier.padding(top = 24.dp, bottom = 8.dp)) {
         Text(
-          Lang.getString(if (server == null) R.string.XgramSftpAdd else R.string.XgramSftpEdit),
+          Lang.getString(if (server == null) R.string.XgramSftpAddTitle else R.string.XgramSftpEdit),
           style = MaterialTheme.typography.headlineSmall, color = cs.onSurface, modifier = Modifier.padding(horizontal = 24.dp)
         )
         Spacer(Modifier.height(16.dp))
@@ -113,9 +114,12 @@ object XgramSftpDialog {
           OutlinedTextField(
             password, { password = it }, singleLine = true, visualTransformation = PasswordVisualTransformation(),
             label = { Text(Lang.getString(R.string.XgramSftpPassword)) },
-            placeholder = { if (server?.hasPassword() == true) Text(Lang.getString(R.string.XgramSftpPasswordKept)) },
+            placeholder = { if (server?.hasPassword() == true && !removePassword) Text(Lang.getString(R.string.XgramSftpPasswordKept)) },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth()
           )
+          if (server?.hasPassword() == true && password.isEmpty() && !removePassword) {
+            TextButton(onClick = { removePassword = true }) { Text(Lang.getString(R.string.XgramSftpPasswordRemove)) }
+          }
           Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
               Lang.getString(if (hasKey) R.string.XgramSftpKeySet else R.string.XgramSftpKeyNone),
@@ -137,7 +141,7 @@ object XgramSftpDialog {
           TextButton(onClick = dismiss) { Text(Lang.getString(R.string.Cancel)) }
           TextButton(enabled = ready, onClick = {
             dismiss()
-            onSave.onSave(name, host, port.toIntOrNull() ?: 22, user, folder, password.ifEmpty { null }, key)
+            onSave.onSave(name, host, port.toIntOrNull() ?: 22, user, folder, if (password.isNotEmpty()) password else if (removePassword) "" else null, key)
           }) { Text(Lang.getString(R.string.Save)) }
         }
       }

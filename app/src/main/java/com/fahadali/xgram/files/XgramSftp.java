@@ -114,11 +114,15 @@ public final class XgramSftp {
   public static final class UnknownHostKeyException extends Exception {
     public final String type, fingerprint;
     final byte[] key;
+    final String host;
+    final int port;
 
-    UnknownHostKeyException (String type, byte[] key) {
+    UnknownHostKeyException (String type, byte[] key, String host, int port) {
       super("Unknown host key");
       this.type = type;
       this.key = key;
+      this.host = host;
+      this.port = port;
       this.fingerprint = fingerprint(key);
     }
   }
@@ -226,24 +230,36 @@ public final class XgramSftp {
     server.user = user.trim();
     server.folder = folder == null || folder.trim().isEmpty() ? null : folder.trim();
     if (password != null) {
-      server.password = password.isEmpty() ? null : XgramSecrets.encrypt(password);
+      final String encrypted = password.isEmpty() ? null : XgramSecrets.encrypt(password);
+      if (!password.isEmpty() && encrypted == null) {
+        throw new IllegalStateException("The password couldn't be stored securely");
+      }
+      server.password = encrypted;
     }
     if (privateKey != null) {
-      server.privateKey = privateKey.trim().isEmpty() ? null : XgramSecrets.encrypt(privateKey);
+      final String encrypted = privateKey.trim().isEmpty() ? null : XgramSecrets.encrypt(privateKey);
+      if (!privateKey.trim().isEmpty() && encrypted == null) {
+        throw new IllegalStateException("The key couldn't be stored securely");
+      }
+      server.privateKey = encrypted;
     }
     store(list);
     disconnect(server.id);
     return server;
   }
 
-  public static synchronized void remove (String id) {
-    final List<Server> list = new ArrayList<>(servers());
-    for (int i = list.size() - 1; i >= 0; i--) {
-      if (list.get(i).id.equals(id)) {
-        list.remove(i);
+  /** Removes a server and closes its connection (network: not on the main thread). */
+  @WorkerThread
+  public static void remove (String id) {
+    synchronized (XgramSftp.class) {
+      final List<Server> list = new ArrayList<>(servers());
+      for (int i = list.size() - 1; i >= 0; i--) {
+        if (list.get(i).id.equals(id)) {
+          list.remove(i);
+        }
       }
+      store(list);
     }
-    store(list);
     disconnect(id);
   }
 
@@ -251,7 +267,8 @@ public final class XgramSftp {
   public static synchronized void trust (String id, UnknownHostKeyException key) {
     final List<Server> list = new ArrayList<>(servers());
     for (Server s : list) {
-      if (s.id.equals(id)) {
+      // Only the server it was shown for, as it still is, and only a first key: never over a trusted one
+      if (s.id.equals(id) && s.hostKey == null && s.host.equals(key.host) && s.port == key.port) {
         s.hostKey = Base64.encodeToString(key.key, Base64.NO_WRAP);
       }
     }
@@ -263,14 +280,19 @@ public final class XgramSftp {
   private static final Map<String, Session> sessions = new HashMap<>();
   private static final Map<String, ChannelSftp> channels = new HashMap<>();
 
-  private static synchronized void disconnect (String id) {
-    final ChannelSftp channel = channels.remove(id);
+  /** Closes a server's connection; the sockets are closed outside the class lock. */
+  private static void disconnect (String id) {
+    final ChannelSftp channel;
+    final Session session;
+    synchronized (XgramSftp.class) {
+      channel = channels.remove(id);
+      session = sessions.remove(id);
+    }
     if (channel != null) {
       try {
         channel.disconnect();
       } catch (Throwable ignored) { }
     }
-    final Session session = sessions.remove(id);
     if (session != null) {
       try {
         session.disconnect();
@@ -328,15 +350,34 @@ public final class XgramSftp {
     }
   }
 
+  private static final Map<String, Object> connectLocks = new HashMap<>();
+
+  private static Object connectLock (String id) {
+    synchronized (XgramSftp.class) {
+      Object lock = connectLocks.get(id);
+      if (lock == null) {
+        connectLocks.put(id, lock = new Object());
+      }
+      return lock;
+    }
+  }
+
   @WorkerThread
   private static Session session (Server server) throws Exception {
+    // One connection per server: the check, the connect and the store happen under the server's own lock
+    synchronized (connectLock(server.id)) {
+      return sessionLocked(server);
+    }
+  }
+
+  private static Session sessionLocked (Server server) throws Exception {
     synchronized (XgramSftp.class) {
       final Session cached = sessions.get(server.id);
       if (cached != null && cached.isConnected()) {
         return cached;
       }
-      disconnect(server.id);
     }
+    disconnect(server.id);
     final JSch jsch = new JSch();
     final Repository repository = new Repository(server);
     jsch.setHostKeyRepository(repository);
@@ -358,7 +399,7 @@ public final class XgramSftp {
     } catch (JSchException e) {
       if (repository.seen != null) {
         if (server.hostKey == null) {
-          throw new UnknownHostKeyException(hostKeyType(server.host, repository.seen), repository.seen);
+          throw new UnknownHostKeyException(hostKeyType(server.host, repository.seen), repository.seen, server.host, server.port);
         }
         throw new ChangedHostKeyException(repository.seen);
       }
@@ -366,6 +407,10 @@ public final class XgramSftp {
     }
     synchronized (XgramSftp.class) {
       sessions.put(server.id, session);
+    }
+    if (server(server.id) == null) {
+      disconnect(server.id); // removed while it connected
+      throw new JSchException("The server was removed");
     }
     return session;
   }
@@ -377,6 +422,9 @@ public final class XgramSftp {
       return "";
     }
   }
+
+  /** Guards the shared listing channel (never the channel object: JSch's session thread locks that one). */
+  private static final Object LIST_LOCK = new Object();
 
   @WorkerThread
   private static ChannelSftp channel (Server server) throws Exception {
@@ -397,19 +445,31 @@ public final class XgramSftp {
   /** The folder a server opens at: its saved folder, or the user's home. */
   @WorkerThread
   public static String startFolder (Server server) throws Exception {
-    final ChannelSftp channel = channel(server);
-    synchronized (channel) {
-      return channel.realpath(server.folder != null ? server.folder : ".");
+    synchronized (LIST_LOCK) {
+      return channel(server).realpath(server.folder != null ? server.folder : ".");
     }
+  }
+
+  /** JSch reads *, ? and \\ in paths as a pattern: a name with them is meant as it is written. */
+  private static String quote (String path) {
+    final StringBuilder b = new StringBuilder(path.length() + 4);
+    for (int i = 0; i < path.length(); i++) {
+      final char c = path.charAt(i);
+      if (c == '\\' || c == '*' || c == '?') {
+        b.append('\\');
+      }
+      b.append(c);
+    }
+    return b.toString();
   }
 
   /** A folder's entries, folders first, then by name; hidden ones (".name") left out. */
   @WorkerThread
   public static List<Entry> list (Server server, String folder) throws Exception {
-    final ChannelSftp channel = channel(server);
     final List<Entry> entries = new ArrayList<>();
-    synchronized (channel) {
-      final Vector<ChannelSftp.LsEntry> ls = channel.ls(folder);
+    synchronized (LIST_LOCK) {
+      final ChannelSftp channel = channel(server);
+      final Vector<ChannelSftp.LsEntry> ls = channel.ls(quote(folder));
       for (ChannelSftp.LsEntry entry : ls) {
         final String name = entry.getFilename();
         if (name == null || name.startsWith(".")) {
@@ -419,7 +479,7 @@ public final class XgramSftp {
         SftpATTRS attrs = entry.getAttrs();
         if (attrs.isLink()) {
           try {
-            attrs = channel.stat(path); // a link: what it points to
+            attrs = channel.stat(quote(path)); // a link: what it points to
           } catch (Throwable ignored) { }
         }
         entries.add(new Entry(name, path, attrs.isDir(), attrs.getSize(), attrs.getMTime() * 1000L));
@@ -445,7 +505,7 @@ public final class XgramSftp {
   }
 
   public static String path (Server server, Entry entry) {
-    return PATH_PREFIX + server.id + "/" + Math.max(0, entry.size) + "/" + Math.max(0, entry.modified) + entry.path;
+    return PATH_PREFIX + server.id + "/" + Math.max(0, entry.size) + "/" + Math.max(0, entry.modified) + "/" + entry.path;
   }
 
   private static final class Parsed {
@@ -473,7 +533,7 @@ public final class XgramSftp {
       return null;
     }
     try {
-      return new Parsed(rest.substring(0, a), Long.parseLong(rest.substring(a + 1, b)), rest.substring(c));
+      return new Parsed(rest.substring(0, a), Long.parseLong(rest.substring(a + 1, b)), rest.substring(c + 1));
     } catch (NumberFormatException e) {
       return null;
     }
@@ -495,6 +555,18 @@ public final class XgramSftp {
   }
 
   private static final Set<Long> active = Collections.synchronizedSet(new HashSet<>());
+  /** At most 4 downloads at once per server (OpenSSH allows 10 channels per connection; listing uses one). */
+  private static final Map<String, java.util.concurrent.Semaphore> downloadSlots = new HashMap<>();
+
+  private static java.util.concurrent.Semaphore downloadSlots (String id) {
+    synchronized (XgramSftp.class) {
+      java.util.concurrent.Semaphore slots = downloadSlots.get(id);
+      if (slots == null) {
+        downloadSlots.put(id, slots = new java.util.concurrent.Semaphore(4));
+      }
+      return slots;
+    }
+  }
   private static final Set<Long> cancelled = Collections.synchronizedSet(new HashSet<>());
 
   /** TDLib no longer needs the file (the message was cancelled): a running download stops. */
@@ -525,12 +597,23 @@ public final class XgramSftp {
         callback.onDone("The SFTP server was removed");
         return;
       }
+      final java.util.concurrent.Semaphore slots = downloadSlots(server.id);
+      try {
+        slots.acquire(); // an album of many files waits its turn instead of failing past the server's channel limit
+      } catch (InterruptedException e) {
+        callback.onDone("Interrupted");
+        return;
+      }
       ChannelSftp channel = null;
       try (OutputStream out = new FileOutputStream(new File(destinationPath))) {
+        if (cancelled.contains(generationId)) {
+          callback.onDone("Cancelled");
+          return;
+        }
         channel = (ChannelSftp) session(server).openChannel("sftp"); // its own channel: listing goes on meanwhile
         channel.connect(TIMEOUT_MS);
         final long[] done = {0};
-        channel.get(parsed.remotePath, out, new SftpProgressMonitor() {
+        channel.get(quote(parsed.remotePath), out, new SftpProgressMonitor() {
           @Override public void init (int op, String src, String dest, long max) { }
 
           @Override
@@ -552,6 +635,7 @@ public final class XgramSftp {
             channel.disconnect();
           } catch (Throwable ignored) { }
         }
+        slots.release();
       }
     }
   }
