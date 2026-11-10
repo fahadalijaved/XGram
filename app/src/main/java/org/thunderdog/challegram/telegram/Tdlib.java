@@ -7939,24 +7939,31 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
 
   // Updates: SHORTCUTS
 
+  private final com.fahadali.xgram.business.XgramQuickReplies quickReplies = new com.fahadali.xgram.business.XgramQuickReplies(this);
+
+  /** XGram: this account's quick replies (Telegram Business). */
+  public com.fahadali.xgram.business.XgramQuickReplies xgramQuickReplies () {
+    return quickReplies;
+  }
+
   @TdlibThread
   private void updateQuickReplyShortcuts (TdApi.UpdateQuickReplyShortcuts update) {
-
+    quickReplies.onUpdate(update); // XGram: kept for quick replies (Telegram Business)
   }
 
   @TdlibThread
   private void updateQuickReplyShortcut (TdApi.UpdateQuickReplyShortcut update) {
-
+    quickReplies.onUpdate(update); // XGram: kept for quick replies (Telegram Business)
   }
 
   @TdlibThread
   private void updateQuickReplyShortcutMessages (TdApi.UpdateQuickReplyShortcutMessages update) {
-
+    quickReplies.onUpdate(update); // XGram: kept for quick replies (Telegram Business)
   }
 
   @TdlibThread
   private void updateQuickReplyShortcutDeleted (TdApi.UpdateQuickReplyShortcutDeleted update) {
-
+    quickReplies.onUpdate(update); // XGram: kept for quick replies (Telegram Business)
   }
 
   // Updates: CHATS

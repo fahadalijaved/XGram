@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: Telegram Business (included with Premium): quick replies, see XgramQuickReplies and QuickRepliesPage -->
+<resources>
+  <string name="XgramPremiumBusiness">Telegram Business</string>
+  <string name="XgramPremiumQuickRepliesInfo">Messages you send with /name in a private chat</string>
+
+  <string name="XgramQuickReplies">Quick replies</string>
+  <string name="XgramQuickRepliesInfo">Save messages under a shortcut and send them in one tap: type / in a chat with a person and pick the shortcut.</string>
+  <string name="XgramQuickRepliesYours">Your quick replies</string>
+  <string name="XgramQuickRepliesEmpty">No quick replies yet</string>
+  <string name="XgramQuickRepliesFull">You can have up to %1$d quick replies.</string>
+  <string name="XgramQuickReplyNew">New quick reply</string>
+  <string name="XgramQuickReplyNewInfo">A shortcut name, then its messages</string>
+  <string name="XgramQuickReplyNameHint">Shortcut, like hello</string>
+  <string name="XgramQuickReplyNameConfirm">Next</string>
+  <string name="XgramQuickReplyNameTaken">You already have /%1$s.</string>
+  <string name="XgramQuickReplyNameInvalid">Use up to 32 letters, digits or underscores (_), without spaces.</string>
+  <string name="XgramQuickReplyMessages">Messages</string>
+  <string name="XgramQuickReplyNoMessages">No messages yet. Add the first one: the quick reply is saved with it.</string>
+  <string name="XgramQuickReplyNotSaved">Not saved</string>
+  <string name="XgramQuickReplyOther">Message</string>
+  <string name="XgramQuickReplyMore">%1$s, and %2$d more</string>
+  <string name="XgramQuickReplyAdd">Add a message</string>
+  <string name="XgramQuickReplyAddInfo">They are sent in this order</string>
+  <string name="XgramQuickReplyAddConfirm">Add</string>
+  <string name="XgramQuickReplyMessageHint">Message</string>
+  <string name="XgramQuickReplyFull">A quick reply holds up to %1$d messages.</string>
+  <string name="XgramQuickReplyEdit">Edit message</string>
+  <string name="XgramQuickReplyMessageOptions">Message options</string>
+  <string name="XgramQuickReplyMessageNumber">Message %1$d of %2$d</string>
+  <string name="XgramQuickReplyUse">In a chat with a person, type /%1$s and tap it to send these messages.</string>
+  <string name="XgramQuickReplyRename">Rename</string>
+  <string name="XgramQuickReplyDelete">Delete quick reply</string>
+  <string name="XgramQuickReplyDeleteInfo">/%1$s and its messages will be deleted.</string>
+  <string name="XgramQuickReplyFailed">That didn\'t work. Try again later.</string>
+  <string name="XgramQuickReplySendFailed">The quick reply couldn\'t be sent.</string>
+</resources>

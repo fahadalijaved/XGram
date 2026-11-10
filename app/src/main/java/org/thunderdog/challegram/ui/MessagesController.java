@@ -3531,7 +3531,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
     liveLocation.init();
 
     if (inputView != null) {
-      inputView.setCommandListProvider(botHelper);
+      // XGram: in a private chat with a person, "/" offers your quick replies (Telegram Business)
+      inputView.setCommandListProvider(botHelper != null ? botHelper : com.fahadali.xgram.business.XgramQuickReplyCommands.forChat(context, tdlib, chat));
       // inputView.setIgnoreAnyChanges(false);
     }
 
@@ -12105,6 +12106,15 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   public void sendCommand (InlineResultCommand command) {
+    if (command instanceof com.fahadali.xgram.business.XgramQuickReplyCommands.Result) {
+      // XGram: a quick reply sends all of its messages; the typed "/name" goes
+      com.fahadali.xgram.business.XgramQuickReplyCommands.send(tdlib, getChatId(), ((com.fahadali.xgram.business.XgramQuickReplyCommands.Result) command).getShortcutId(), () -> {
+        if (inputView != null && !isDestroyed()) {
+          inputView.setInput("", false, true);
+        }
+      });
+      return;
+    }
     pickDateOrProceed(Td.newSendOptions(), (sendOptions, disableMarkdown) -> {
       if (ChatId.isUserChat(getChatId()) || command.getUsername() == null) {
         sendText(command.getCommand(), true, true, false, sendOptions);

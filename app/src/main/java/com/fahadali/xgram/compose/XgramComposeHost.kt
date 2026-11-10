@@ -150,6 +150,8 @@ class PromptSpec(
   val hint: String? = null,
   val confirm: String = Lang.getString(R.string.Save),
   val initial: String = "",
+  /** A message rather than a name: several lines, Enter makes a new line. */
+  val multiLine: Boolean = false,
   val onDone: (String) -> Unit
 )
 

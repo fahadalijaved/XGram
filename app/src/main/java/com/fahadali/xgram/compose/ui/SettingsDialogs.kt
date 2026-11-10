@@ -177,8 +177,9 @@ fun PromptDialog(spec: PromptSpec, onDismiss: () -> Unit) {
         onValueChange = { value = it },
         modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
         placeholder = spec.hint?.let { hint -> { Text(hint) } },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        singleLine = !spec.multiLine,
+        maxLines = if (spec.multiLine) 8 else 1,
+        keyboardOptions = KeyboardOptions(imeAction = if (spec.multiLine) ImeAction.Default else ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { done() })
       )
       // In the dialog's own composition, so the field is attached when this runs.

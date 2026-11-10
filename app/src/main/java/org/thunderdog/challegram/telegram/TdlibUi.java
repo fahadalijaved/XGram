@@ -4250,7 +4250,13 @@ public class TdlibUi extends Handler {
             case TdApi.SettingsSectionMyGrams.CONSTRUCTOR:
             case TdApi.SettingsSectionPowerSaving.CONSTRUCTOR:
             case TdApi.SettingsSectionSendGift.CONSTRUCTOR:
-            case TdApi.SettingsSectionBusiness.CONSTRUCTOR:
+            case TdApi.SettingsSectionBusiness.CONSTRUCTOR: {
+              // XGram: Business is on the Premium page; quick replies have a page of their own
+              final String subsection = ((TdApi.SettingsSectionBusiness) section).subsection;
+              result = com.fahadali.xgram.compose.XgramComposeController.create(context.context(), context.tdlib(),
+                subsection != null && subsection.startsWith("quick-replies") ? com.fahadali.xgram.compose.XgramPage.QUICK_REPLIES : com.fahadali.xgram.compose.XgramPage.PREMIUM);
+              break;
+            }
             case TdApi.SettingsSectionInAppBrowser.CONSTRUCTOR: {
               unsupported.run();
               break;

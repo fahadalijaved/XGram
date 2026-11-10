@@ -210,6 +210,14 @@ fun PremiumPage() {
       }
     }
 
+    // Telegram Business (included with Premium): each part as XGram gets it
+    header(R.string.XgramPremiumBusiness)
+    group {
+      link(50, s(R.string.XgramQuickReplies), if (premium) s(R.string.XgramPremiumQuickRepliesInfo) else needs, icon = R.drawable.baseline_reply_24, enabled = premium) {
+        host.openPage(XgramPage.QUICK_REPLIES)
+      }
+    }
+
     // Gifts: the gift button everyone can show; which gifts people may send you is Premium's
     header(R.string.XgramPremiumGifts)
     group {
