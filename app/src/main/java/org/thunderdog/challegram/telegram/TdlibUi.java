@@ -4231,16 +4231,23 @@ public class TdlibUi extends Handler {
               result = new SettingsDataController(context.context(), context.tdlib());
               break;
             }
+            // XGram: Stars and Premium have pages of their own (XgramPage.STARS / PREMIUM)
+            case TdApi.SettingsSectionMyStars.CONSTRUCTOR: {
+              result = com.fahadali.xgram.compose.XgramComposeController.create(context.context(), context.tdlib(), com.fahadali.xgram.compose.XgramPage.STARS);
+              break;
+            }
+            case TdApi.SettingsSectionPremium.CONSTRUCTOR:
+            case TdApi.SettingsSectionFeatures.CONSTRUCTOR: {
+              result = com.fahadali.xgram.compose.XgramComposeController.create(context.context(), context.tdlib(), com.fahadali.xgram.compose.XgramPage.PREMIUM);
+              break;
+            }
             case TdApi.SettingsSectionQrCode.CONSTRUCTOR:
             case TdApi.SettingsSectionSearch.CONSTRUCTOR:
-            case TdApi.SettingsSectionMyStars.CONSTRUCTOR:
             case TdApi.SettingsSectionMyGrams.CONSTRUCTOR:
             case TdApi.SettingsSectionPowerSaving.CONSTRUCTOR:
-            case TdApi.SettingsSectionPremium.CONSTRUCTOR:
             case TdApi.SettingsSectionSendGift.CONSTRUCTOR:
             case TdApi.SettingsSectionBusiness.CONSTRUCTOR:
-            case TdApi.SettingsSectionInAppBrowser.CONSTRUCTOR:
-            case TdApi.SettingsSectionFeatures.CONSTRUCTOR: {
+            case TdApi.SettingsSectionInAppBrowser.CONSTRUCTOR: {
               unsupported.run();
               break;
             }
@@ -4311,7 +4318,6 @@ public class TdlibUi extends Handler {
       case TdApi.InternalLinkTypeNewPrivateChat.CONSTRUCTOR:
       case TdApi.InternalLinkTypeNewStory.CONSTRUCTOR:
       case TdApi.InternalLinkTypeOauth.CONSTRUCTOR:
-      case TdApi.InternalLinkTypePremiumFeaturesPage.CONSTRUCTOR:
       case TdApi.InternalLinkTypePremiumGiftPurchase.CONSTRUCTOR:
       case TdApi.InternalLinkTypeRequestManagedBot.CONSTRUCTOR:
       case TdApi.InternalLinkTypeSavedMessages.CONSTRUCTOR:
@@ -4321,6 +4327,15 @@ public class TdlibUi extends Handler {
       case TdApi.InternalLinkTypeTonConnect.CONSTRUCTOR:
       case TdApi.InternalLinkTypeTonWalletTransfer.CONSTRUCTOR: {
         unsupported.run();
+        break;
+      }
+
+      case TdApi.InternalLinkTypePremiumFeaturesPage.CONSTRUCTOR: {
+        // XGram: what Premium includes and where each part is in XGram
+        context.context().navigation().navigateTo(com.fahadali.xgram.compose.XgramComposeController.create(context.context(), context.tdlib(), com.fahadali.xgram.compose.XgramPage.PREMIUM));
+        if (after != null) {
+          after.runWithBool(true);
+        }
         break;
       }
 

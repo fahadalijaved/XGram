@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: Telegram Premium page (XGram main page → Telegram Premium) -->
+  <item name="btn_xgramPremium" type="id"/>
+  <string name="XgramPremium">Telegram Premium</string>
+  <string name="XgramPremiumSummaryActive">Active: your Premium features in one place</string>
+  <string name="XgramPremiumSummaryInactive">What Premium adds, and where it is in XGram</string>
+  <string name="XgramPremiumActive">Active</string>
+  <string name="XgramPremiumInactive">Not subscribed</string>
+  <string name="XgramPremiumInactiveInfo">Subscribe in the official Telegram app. Everything here works in XGram as soon as Premium is active.</string>
+  <string name="XgramPremiumNeeds">Needs Telegram Premium</string>
+  <string name="XgramPremiumRedeem">Redeem a gift code</string>
+  <string name="XgramPremiumRedeemInfo">Shows what the code gives, then Apply</string>
+  <string name="XgramPremiumRedeemHint">Gift code</string>
+  <string name="XgramPremiumRedeemCheck">Check</string>
+  <string name="XgramPremiumRedeemInvalid">This gift code isn\'t valid</string>
+
+  <string name="XgramPremiumPrivacy">Privacy</string>
+  <string name="XgramPremiumWhoCanMessage">Who can message you</string>
+  <string name="XgramPremiumMessageEverybody">Everybody</string>
+  <string name="XgramPremiumMessageContacts">Contacts and Premium users</string>
+  <string name="XgramPremiumMessagePaid">Paid: %1$s</string>
+  <string name="XgramPremiumReadTime">Last seen and read time</string>
+  <string name="XgramPremiumReadTimeShown">Your read time is shown</string>
+  <string name="XgramPremiumReadTimeHidden">Your read time is hidden</string>
+  <string name="XgramPremiumVoice">Voice and video messages</string>
+  <string name="XgramPremiumVoiceInfo">Who can send them to you</string>
+  <string name="XgramPremiumArchive">New chats from non-contacts</string>
+  <string name="XgramPremiumArchiveOn">Archived and muted</string>
+  <string name="XgramPremiumArchiveOff">Stay in your chat list</string>
+  <string name="XgramPremiumNoAds">No ads</string>
+  <string name="XgramPremiumNoAdsInfo">Turns sponsored messages off for this account on every device (XGram hides them here anyway)</string>
+
+  <string name="XgramPremiumProfile">Profile</string>
+  <string name="XgramPremiumEmojiStatus">Emoji status</string>
+  <string name="XgramPremiumEmojiStatusSet">Set</string>
+  <string name="XgramPremiumEmojiStatusUntil">Set, until %1$s</string>
+  <string name="XgramPremiumEmojiStatusNone">None</string>
+
+  <string name="XgramPremiumChats">Chats</string>
+  <string name="XgramPremiumFolderTags">Folder tags</string>
+  <string name="XgramPremiumFolderTagsInfo">Each chat\'s folders as colored tags in the chat list</string>
+  <string name="XgramPremiumFolders">Chat folders</string>
+  <string name="XgramPremiumFoldersInfo">More folders, and All Chats in any place</string>
+  <string name="XgramPremiumSavedTags">Saved Messages tags</string>
+  <string name="XgramPremiumSavedTagsInfo">Tag saved messages with reactions, then filter by tag</string>
+  <string name="XgramPremiumTranslation">Translation</string>
+  <string name="XgramPremiumTranslationInfo">Translate whole chats as you read</string>
+
+  <string name="XgramPremiumLimits">Your limits</string>
+  <string name="XgramPremiumLimitYours">%1$s (free: %2$s)</string>
+  <string name="XgramPremiumLimitFree">%1$s (Premium: %2$s)</string>
+  <string name="XgramPremiumLimitsInfo">Telegram raises these by itself for Premium accounts.</string>
+
+  <string name="XgramPremiumIncluded">What Premium includes</string>
+  <string name="XgramPremiumIncludedInfo">Where each feature is in XGram. \"Official apps for now\": XGram doesn\'t have it yet.</string>
+  <string name="XgramPremiumOfficialOnly">Official apps for now</string>
+
+  <!-- Premium limit types (PremiumLimitType*) -->
+  <string name="XgramPremiumLimitSupergroupCount">Groups and channels you can join</string>
+  <string name="XgramPremiumLimitPinnedChatCount">Pinned chats</string>
+  <string name="XgramPremiumLimitCreatedPublicChatCount">Public links you own</string>
+  <string name="XgramPremiumLimitSavedAnimationCount">Saved GIFs</string>
+  <string name="XgramPremiumLimitFavoriteStickerCount">Favorite stickers</string>
+  <string name="XgramPremiumLimitChatFolderCount">Chat folders</string>
+  <string name="XgramPremiumLimitChatFolderChosenChatCount">Chats in a folder</string>
+  <string name="XgramPremiumLimitPinnedArchivedChatCount">Pinned chats in Archive</string>
+  <string name="XgramPremiumLimitPinnedSavedMessagesTopicCount">Pinned chats in Saved Messages</string>
+  <string name="XgramPremiumLimitMessageTextLength">Message length</string>
+  <string name="XgramPremiumLimitCaptionLength">Caption length</string>
+  <string name="XgramPremiumLimitBioLength">Bio length</string>
+  <string name="XgramPremiumLimitChatFolderInviteLinkCount">Invite links of a folder</string>
+  <string name="XgramPremiumLimitShareableChatFolderCount">Shared folders</string>
+  <string name="XgramPremiumLimitActiveStoryCount">Active stories</string>
+  <string name="XgramPremiumLimitWeeklyPostedStoryCount">Stories a week</string>
+  <string name="XgramPremiumLimitMonthlyPostedStoryCount">Stories a month</string>
+  <string name="XgramPremiumLimitStoryCaptionLength">Story caption length</string>
+  <string name="XgramPremiumLimitStorySuggestedReactionAreaCount">Reactions on a story</string>
+  <string name="XgramPremiumLimitSimilarChatCount">Similar channels shown</string>
+  <string name="XgramPremiumLimitOwnedBotCount">Bots you own</string>
+  <string name="XgramPremiumLimitCustomTextCompositionStyleCount">Your AI writing styles</string>
+
+  <!-- Premium features (PremiumFeature*): the name, and where it is in XGram -->
+  <string name="XgramPremiumFeatureIncreasedLimits">Doubled limits</string>
+  <string name="XgramPremiumFeatureIncreasedLimitsWhere">Your limits, above</string>
+  <string name="XgramPremiumFeatureIncreasedUploadFileSize">4 GB uploads</string>
+  <string name="XgramPremiumFeatureIncreasedUploadFileSizeWhere">Works by itself</string>
+  <string name="XgramPremiumFeatureImprovedDownloadSpeed">Faster downloads</string>
+  <string name="XgramPremiumFeatureImprovedDownloadSpeedWhere">Works by itself</string>
+  <string name="XgramPremiumFeatureVoiceRecognition">Voice-to-text</string>
+  <string name="XgramPremiumFeatureVoiceRecognitionWhere">Long-press a voice or video message → Transcribe</string>
+  <string name="XgramPremiumFeatureDisabledAds">No ads</string>
+  <string name="XgramPremiumFeatureDisabledAdsWhere">No ads, above</string>
+  <string name="XgramPremiumFeatureUniqueReactions">More reactions</string>
+  <string name="XgramPremiumFeatureUniqueReactionsWhere">Long-press a message</string>
+  <string name="XgramPremiumFeatureUniqueStickers">Premium stickers</string>
+  <string name="XgramPremiumFeatureUniqueStickersWhere">The sticker panel</string>
+  <string name="XgramPremiumFeatureCustomEmoji">Custom emoji</string>
+  <string name="XgramPremiumFeatureCustomEmojiWhere">The emoji panel</string>
+  <string name="XgramPremiumFeatureAdvancedChatManagement">Chat management</string>
+  <string name="XgramPremiumFeatureAdvancedChatManagementWhere">Chat folders and New chats from non-contacts, above</string>
+  <string name="XgramPremiumFeatureProfileBadge">Premium badge</string>
+  <string name="XgramPremiumFeatureProfileBadgeWhere">Next to your name, by itself</string>
+  <string name="XgramPremiumFeatureEmojiStatus">Emoji status</string>
+  <string name="XgramPremiumFeatureEmojiStatusWhere">Emoji status, above</string>
+  <string name="XgramPremiumFeatureAnimatedProfilePhoto">Video profile photos</string>
+  <string name="XgramPremiumFeatureAnimatedProfilePhotoWhere">Others\' play in XGram. Setting yours: official apps for now</string>
+  <string name="XgramPremiumFeatureForumTopicIcon">Topic icons</string>
+  <string name="XgramPremiumFeatureForumTopicIconWhere">When you create or edit a topic</string>
+  <string name="XgramPremiumFeatureAppIcons">App icons</string>
+  <string name="XgramPremiumFeatureAppIconsWhere">XGram\'s own icons are in Appearance, for everyone</string>
+  <string name="XgramPremiumFeatureRealTimeChatTranslation">Chat translation</string>
+  <string name="XgramPremiumFeatureRealTimeChatTranslationWhere">Translation, above</string>
+  <string name="XgramPremiumFeatureUpgradedStories">Upgraded stories</string>
+  <string name="XgramPremiumFeatureChatBoost">Boosts</string>
+  <string name="XgramPremiumFeatureChatBoostWhere">A channel\'s profile → Boost</string>
+  <string name="XgramPremiumFeatureAccentColor">Name and profile colors</string>
+  <string name="XgramPremiumFeatureAccentColorWhere">Others\' colors show in XGram. Picking yours: official apps for now</string>
+  <string name="XgramPremiumFeatureBackgroundForBoth">Wallpapers for both sides</string>
+  <string name="XgramPremiumFeatureSavedMessagesTags">Saved Messages tags</string>
+  <string name="XgramPremiumFeatureSavedMessagesTagsWhere">Saved Messages tags, above</string>
+  <string name="XgramPremiumFeatureMessagePrivacy">Message privacy</string>
+  <string name="XgramPremiumFeatureMessagePrivacyWhere">Who can message you, above</string>
+  <string name="XgramPremiumFeatureLastSeenTimes">Last seen times</string>
+  <string name="XgramPremiumFeatureLastSeenTimesWhere">Last seen and read time, above</string>
+  <string name="XgramPremiumFeatureBusiness">Telegram Business</string>
+  <string name="XgramPremiumFeatureMessageEffects">Message effects</string>
+  <string name="XgramPremiumFeatureMessageEffectsWhere">Others\' effects play in XGram. Sending them: official apps for now</string>
+  <string name="XgramPremiumFeatureChecklists">Checklists</string>
+  <string name="XgramPremiumFeatureChecklistsWhere">Tick and add tasks in XGram. Making a checklist: official apps for now</string>
+  <string name="XgramPremiumFeaturePaidMessages">Paid messages</string>
+  <string name="XgramPremiumFeaturePaidMessagesWhere">Who can message you → Charge for Messages, above</string>
+  <string name="XgramPremiumFeatureProtectPrivateChatContent">Protected private chats</string>
+  <string name="XgramPremiumFeatureTextComposition">AI writing</string>
+  <string name="XgramPremiumFeatureTextCompositionWhere">Long-press Send → AI editor</string>
+  <string name="XgramPremiumFeatureRichMessages">Rich messages</string>
+</resources>

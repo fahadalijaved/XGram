@@ -107,6 +107,10 @@ fun MainPage() {
       link(R.id.btn_xgramStarsBalance, s(R.string.XgramStars), s(R.string.XgramStarsSummary), R.drawable.baseline_star_24, IconStyle.CIRCLE) {
         host.openPage(XgramPage.STARS)
       }
+      // XGram: Telegram Premium in one place (state, gift codes, every Premium setting XGram has, limits)
+      link(R.id.btn_xgramPremium, s(R.string.XgramPremium), s(if (host.tdlib.hasPremium()) R.string.XgramPremiumSummaryActive else R.string.XgramPremiumSummaryInactive), R.drawable.baseline_premium_star_24, IconStyle.CIRCLE) {
+        host.openPage(XgramPage.PREMIUM)
+      }
     }
 
     group {
