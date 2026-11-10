@@ -100,6 +100,7 @@ public class BubbleHeaderView extends FrameLayoutFix implements RtlCheckListener
     scrollView.setVerticalScrollBarEnabled(false);
     scrollView.addView(bubbleWrap);
     scrollView.setLayoutParams(params);
+    scrollView.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> xgramUpdateScrollClip());
 
     addView(scrollView);
 
@@ -142,6 +143,27 @@ public class BubbleHeaderView extends FrameLayoutFix implements RtlCheckListener
     scrollView.setPadding(0, newOffset, 0, 0);
     Views.setTopMargin(editText, newOffset);
     xgramUpdateClip();
+    xgramUpdateScrollClip();
+  }
+
+  // XGram: the chip area ends at its first row's top (the status bar plus the wrap's START_Y margin). Scrolled to the
+  // newest rows, that margin showed the bottom of the row above it, a cut-off sliver under the status bar, outside the
+  // two rows the area holds. With few chips the band is empty, so nothing else moves.
+  private final android.graphics.Rect xgramScrollClip = new android.graphics.Rect();
+
+  private void xgramUpdateScrollClip () {
+    if (scrollView == null || xgramScrollClip == null) {
+      return;
+    }
+    final int width = scrollView.getWidth(), height = scrollView.getHeight();
+    if (width <= 0 || height <= 0) {
+      return;
+    }
+    final int top = Math.min(height, currentTopOffset + Screen.dp(BubbleWrapView.START_Y));
+    if (xgramScrollClip.top != top || xgramScrollClip.right != width || xgramScrollClip.bottom != height) {
+      xgramScrollClip.set(0, top, width, height);
+      scrollView.setClipBounds(xgramScrollClip);
+    }
   }
 
   // XGram: nothing is drawn above the status bar's bottom edge on screen. setScaleFactor moves this whole view up as
