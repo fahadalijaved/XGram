@@ -3982,7 +3982,20 @@ public class ShareController extends TelegramViewController<ShareController.Args
           break;
         }
         case MODE_CUSTOM: {
+          final int xgramFrom = functions.size();
           args.customDelegate.generateFunctionsForChat(chatId, chat, sendOptions, functions);
+          if (xgramTopicId != null) {
+            // XGram: what is shared from another app (the system share menu) goes to the topic picked for this forum
+            // too: the delegate builds its sends without one (they went to General)
+            for (int xgramIndex = xgramFrom; xgramIndex < functions.size(); xgramIndex++) {
+              final TdApi.Function<?> function = functions.get(xgramIndex);
+              if (function instanceof TdApi.SendMessage && ((TdApi.SendMessage) function).chatId == chatId && ((TdApi.SendMessage) function).topicId == null) {
+                ((TdApi.SendMessage) function).topicId = xgramTopicId;
+              } else if (function instanceof TdApi.SendMessageAlbum && ((TdApi.SendMessageAlbum) function).chatId == chatId && ((TdApi.SendMessageAlbum) function).topicId == null) {
+                ((TdApi.SendMessageAlbum) function).topicId = xgramTopicId;
+              }
+            }
+          }
           break;
         }
         case MODE_CUSTOM_CONTENT: {
