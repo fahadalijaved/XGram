@@ -9183,6 +9183,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         // unsupported
         case TdApi.MessageInvoice.CONSTRUCTOR:
         case TdApi.MessageUnpaidMessagesAllowedByLink.CONSTRUCTOR:
+        case TdApi.MessageWidget.CONSTRUCTOR:
           break;
 
         case TdApi.MessageUnsupported.CONSTRUCTOR:
@@ -9195,7 +9196,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
           break;
         }
         default: {
-          Td.assertMessageContent_cc875c63();
+          Td.assertMessageContent_37851fea();
           throw Td.unsupported(msg.content);
         }
       }
