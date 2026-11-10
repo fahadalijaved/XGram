@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: Name and profile color (Telegram Premium), see NameColorsPage -->
+<resources>
+  <string name="XgramNameColors">Name and profile color</string>
+  <string name="XgramNameColor">Name color</string>
+  <string name="XgramNameColorInfo">Your name, the quotes of replies to your messages and your link previews show this color, in every Telegram app.</string>
+  <string name="XgramProfileColor">Profile color</string>
+  <string name="XgramProfileColorInfo">The top of your profile shows this color in the official Telegram apps.</string>
+  <string name="XgramProfileColorNone">No color</string>
+  <string name="XgramColorNumber">Color %1$d</string>
+  <string name="XgramNameColorsApply">Apply</string>
+  <string name="XgramNameColorsSaved">Your colors are saved</string>
+  <string name="XgramNameColorsFailed">Your colors couldn\'t be saved. Try again later.</string>
+  <string name="XgramNameColorsPreviewReply">A reply to your message</string>
+  <string name="XgramNameColorsPreviewText">This is how your name looks</string>
+  <string name="XgramNameColorsPreviewOnline">online</string>
+</resources>

@@ -3888,7 +3888,11 @@ public class TdlibUi extends Handler {
                 case "your-color/profile/reset":
                 case "your-color/name":
                 case "your-color/name/add-icons":
-                case "your-color/name/use-gift":
+                case "your-color/name/use-gift": {
+                  // XGram: Name and profile color has a page of its own (XgramPage.NAME_COLORS)
+                  result = com.fahadali.xgram.compose.XgramComposeController.create(context.context(), context.tdlib(), com.fahadali.xgram.compose.XgramPage.NAME_COLORS);
+                  break;
+                }
                 case "app-icon":
                 case "tap-for-next-media": {
                   // TODO

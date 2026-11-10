@@ -115,7 +115,7 @@
   <string name="XgramPremiumFeatureChatBoost">Boosts</string>
   <string name="XgramPremiumFeatureChatBoostWhere">A channel\'s profile → Boost</string>
   <string name="XgramPremiumFeatureAccentColor">Name and profile colors</string>
-  <string name="XgramPremiumFeatureAccentColorWhere">Others\' colors show in XGram. Picking yours: official apps for now</string>
+  <string name="XgramPremiumFeatureAccentColorWhere">Name and profile color, above</string>
   <string name="XgramPremiumFeatureBackgroundForBoth">Wallpapers for both sides</string>
   <string name="XgramPremiumFeatureSavedMessagesTags">Saved Messages tags</string>
   <string name="XgramPremiumFeatureSavedMessagesTagsWhere">Saved Messages tags, above</string>

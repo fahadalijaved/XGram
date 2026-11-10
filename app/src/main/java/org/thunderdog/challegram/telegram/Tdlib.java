@@ -9979,13 +9979,34 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
   private void updateProfileAccentColors (TdApi.UpdateProfileAccentColors update) {
     boolean listChanged;
     synchronized (profileAccentColors) {
-      listChanged = Arrays.equals(this.availableProfileAccentColorIds, update.availableAccentColorIds);
+      listChanged = !Arrays.equals(this.availableProfileAccentColorIds, update.availableAccentColorIds); // XGram: was inverted
       this.availableProfileAccentColorIds = update.availableAccentColorIds;
       for (TdApi.ProfileAccentColor profileAccentColor : update.colors) {
         profileAccentColors.put(profileAccentColor.id, profileAccentColor);
       }
     }
     listeners.updateProfileAccentColors(update, listChanged);
+  }
+
+  /** XGram: the name colors a user can pick, in Telegram's order (the built-in 0-6 when Telegram hasn't said yet). */
+  public int[] xgramAvailableAccentColorIds () {
+    synchronized (accentColors) {
+      return availableAccentColorIds != null && availableAccentColorIds.length > 0 ? availableAccentColorIds.clone() : new int[] {0, 1, 2, 3, 4, 5, 6};
+    }
+  }
+
+  /** XGram: the profile colors a user can pick, in Telegram's order (empty until Telegram has said). */
+  public int[] xgramAvailableProfileAccentColorIds () {
+    synchronized (profileAccentColors) {
+      return availableProfileAccentColorIds != null ? availableProfileAccentColorIds.clone() : new int[0];
+    }
+  }
+
+  /** XGram: a profile color's palette and background colors, or null when Telegram hasn't sent it. */
+  public @Nullable TdApi.ProfileAccentColor xgramProfileAccentColor (int profileAccentColorId) {
+    synchronized (profileAccentColors) {
+      return profileAccentColors.get(profileAccentColorId);
+    }
   }
 
   // Updates: MEDIA

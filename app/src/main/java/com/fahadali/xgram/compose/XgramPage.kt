@@ -48,7 +48,7 @@ import org.thunderdog.challegram.navigation.ViewController
 enum class XgramPage {
   MAIN, APPEARANCE, CHAT_LIST, MESSAGES, TRANSLATION, SIDE_MENU, PRIVACY, FILTERS, HISTORY, NETWORK, UPDATES, BACKUP,
   MESSAGE_MENU, CHAT_ACTIONS, INPUT_BUTTONS, TRANSLATE_TARGET, WORD_FILTERS, HIDDEN_PEOPLE, WHATS_NEW,
-  NAV_BAR, SEARCH, XDRIVE, HEADER_BUTTONS, ACTIVITY, LARGE_SCREENS, CHAT_MENU, STARS, PREMIUM;
+  NAV_BAR, SEARCH, XDRIVE, HEADER_BUTTONS, ACTIVITY, LARGE_SCREENS, CHAT_MENU, STARS, PREMIUM, NAME_COLORS;
 
   companion object {
     /** The page of an XgramSettingsController.SECTION_* (Ghost mode is the top of Privacy). */
@@ -103,6 +103,7 @@ internal fun XgramPageContent(page: XgramPage) {
     XgramPage.CHAT_MENU -> com.fahadali.xgram.compose.pages.ChatMenuPage()
     XgramPage.STARS -> com.fahadali.xgram.compose.pages.StarsPage()
     XgramPage.PREMIUM -> com.fahadali.xgram.compose.pages.PremiumPage()
+    XgramPage.NAME_COLORS -> com.fahadali.xgram.compose.pages.NameColorsPage()
   }
 }
 

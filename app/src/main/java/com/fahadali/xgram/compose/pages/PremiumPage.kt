@@ -170,6 +170,14 @@ fun PremiumPage() {
           override fun getDestY(): Int = Screen.dp(56f)
         }).show()
       }
+      val myColor = tdlib.myUser()?.accentColorId ?: 0
+      value(
+        21, s(R.string.XgramNameColors),
+        if (!premium) needs else if (myColor in 0..6) org.thunderdog.challegram.telegram.TdlibAccentColor.getTextRepresentation(myColor) else s(R.string.XgramColorNumber, myColor + 1),
+        icon = R.drawable.baseline_palette_24, enabled = premium
+      ) {
+        host.openPage(XgramPage.NAME_COLORS)
+      }
     }
 
     header(R.string.XgramPremiumChats)
