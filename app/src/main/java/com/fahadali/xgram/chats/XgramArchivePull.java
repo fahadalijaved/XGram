@@ -372,18 +372,22 @@ public final class XgramArchivePull {
     fillPaint.setColor(ColorUtils.alphaColor(coverAlpha, XgramExpressive.color(XgramExpressive.SURFACE)));
     c.drawRect(0, visibleTop, width, height, fillPaint);
 
-    // The disk, alone in the middle until the pill fits beside it, then the two centred together
+    // One group, laid out once at full size: the disk, an 8dp gap, the pill (the disk at the end in RTL). It is scaled
+    // as a whole around its centre, so the two never come apart or over each other: to fit the row (a short one-line
+    // row) and to grow with what shows of it. The disk's place on screen follows the same scale.
     final float diskR = Screen.dpf(DISK_RADIUS), gap = Screen.dpf(GROUP_GAP), pad = Screen.dpf(PILL_PAD), pillH = Screen.dpf(PILL_HEIGHT);
     preparePillTexts(Math.round(width - Screen.dpf(32f) - diskR * 2f - gap - pad * 2f));
     final float textWidth = XgramMotion.lerp(pillPullWidth, pillReleaseWidth, readyF);
     final float pillWidth = textWidth + pad * 2f;
     final float groupWidth = diskR * 2f + gap + pillWidth;
-    final float groupLeft = (width - groupWidth) / 2f;
+    final float groupCx = width / 2f;
+    final float groupLeft = groupCx - groupWidth / 2f;
     final float centerY = visibleTop + visible / 2f;
-    final float pillShown = XgramMotion.clamp01((visible - pillH - Screen.dpf(4f)) / Screen.dpf(12f));
-    final float scale = XgramMotion.clamp01(visible / (diskR * 2f + Screen.dpf(8f))); // it grows with the room, as the next channel's
-    final float groupDiskCx = rtl ? groupLeft + groupWidth - diskR : groupLeft + diskR;
-    float cx = XgramMotion.lerp(width / 2f, groupDiskCx, pillShown);
+    final float fit = Math.max(.5f, Math.min(1f, (height - Screen.dpf(12f)) / pillH)); // the row's own height, 6dp above and below
+    final float grow = XgramMotion.clamp01(visible / (pillH * fit + Screen.dpf(8f))); // it grows with the room, as the next channel's
+    final float scale = fit * grow;
+    final float localDiskCx = rtl ? groupLeft + groupWidth - diskR : groupLeft + diskR;
+    float cx = groupCx + (localDiskCx - groupCx) * scale;
     float cy = centerY;
     float r = diskR * scale;
     float corner = r;
@@ -437,9 +441,12 @@ public final class XgramArchivePull {
       drawGlyph(c, archive, cx, cy, glyphScale * (.6f + .4f * archiveAlpha), -90f * (1f - archiveAlpha), glyphColor, archiveAlpha);
     }
 
-    // The pill with the hint, beside the disk once it fits (a fade through between the two hints)
-    final float pillAlpha = pillShown * (settling ? XgramMotion.clamp01(1f - settle * 3f) : 1f);
-    if (pillAlpha > 0f) {
+    // The pill with the hint in its own slot beside the disk, scaled with the group (a fade through between the two
+    // hints); it fades in over the last part of the growth, and out as the disk glides into the photo
+    final float pillAlpha = XgramMotion.clamp01((grow - .6f) / .3f) * (settling ? XgramMotion.clamp01(1f - settle * 3f) : 1f);
+    if (pillAlpha > 0f && scale > 0f) {
+      final int save = c.save();
+      c.scale(scale, scale, groupCx, centerY);
       final float pillLeft = rtl ? groupLeft : groupLeft + diskR * 2f + gap;
       final float pillTop = centerY - pillH / 2f;
       XgramM3Content.drawPill(c, pillLeft, pillTop, pillLeft + pillWidth, pillTop + pillH, ColorUtils.alphaColor(pillAlpha, ColorUtils.fromToArgb(rest, armed, readyF)));
@@ -448,6 +455,7 @@ public final class XgramArchivePull {
       final int textColor = ColorUtils.fromToArgb(restContent, armedContent, readyF);
       drawPillText(c, pillPull, pillLeft + (pillWidth - pillPullWidth) / 2f, baseline, textColor, pillAlpha * (reduceMotion ? 1f - readyF : XgramMotion.clamp01(1f - readyF * 2f)));
       drawPillText(c, pillRelease, pillLeft + (pillWidth - pillReleaseWidth) / 2f, baseline, textColor, pillAlpha * (reduceMotion ? readyF : XgramMotion.clamp01(readyF * 2f - 1f)));
+      c.restoreToCount(save);
     }
   }
 
