@@ -285,6 +285,8 @@ public class EditChatFolderController extends EditBaseController<EditChatFolderC
       items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, Lang.getMarkdownString(this, R.string.FolderExcludedChatsInfo)));
     }
 
+    xgramAddTagColorItems(items); // XGram: the folder's tag color (Telegram Premium)
+
     if (chatFolderId != NO_CHAT_FOLDER_ID) {
       items.add(new ListItem(ListItem.TYPE_HEADER_PADDED, 0, 0, R.string.InviteLinks));
       items.add(new ListItem(ListItem.TYPE_SHADOW_TOP, 0));
@@ -339,6 +341,8 @@ public class EditChatFolderController extends EditBaseController<EditChatFolderC
       items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM, excludedChatsNextItemId));
       items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, Lang.getMarkdownString(this, R.string.FolderExcludedChatsInfo)));
     }
+
+    xgramAddTagColorItems(items); // XGram: the folder's tag color (Telegram Premium)
 
     if (chatFolderId != NO_CHAT_FOLDER_ID) {
       items.add(new ListItem(ListItem.TYPE_HEADER_PADDED, 0, 0, R.string.InviteLinks));
@@ -1026,6 +1030,36 @@ public class EditChatFolderController extends EditBaseController<EditChatFolderC
     }
   }
 
+  // XGram: the folder's tag color, as Telegram's folder editor offers it (a Telegram Premium feature)
+
+  private static final int XGRAM_VIEW_TAG_COLOR = 1;
+
+  private void xgramAddTagColorItems (ArrayList<ListItem> items) {
+    if (!tdlib.hasPremium()) { // only for Premium accounts (owner's rule): nothing shown otherwise
+      return;
+    }
+    items.add(new ListItem(ListItem.TYPE_HEADER_PADDED, 0, 0, R.string.XgramFolderTagColor));
+    items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+    items.add(new ListItem(ListItem.TYPE_CUSTOM - XGRAM_VIEW_TAG_COLOR, R.id.btn_xgramFolderColor));
+    items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramFolderTagColorInfo));
+  }
+
+  private void xgramOnTagColorPicked (com.fahadali.xgram.chats.XgramFolderColorRow row, int colorId) {
+    if (!tdlib.hasPremium()) { // the section is only shown with Premium; Premium ended while the screen was open
+      return;
+    }
+    if (editedChatFolder.colorId == colorId) {
+      return;
+    }
+    editedChatFolder.colorId = colorId;
+    row.setSelectedColorId(colorId);
+    if (colorId >= 0 && !tdlib.areChatFolderTagsEnabled()) {
+      UI.showToast(R.string.XgramFolderTagsOffHint, android.widget.Toast.LENGTH_LONG);
+    }
+    updateDoneButton();
+  }
+
   private void updateDoneButton () {
     boolean isDoneVisible = isInProgress() || canSaveChanges();
     setDoneVisible(isDoneVisible);
@@ -1089,6 +1123,31 @@ public class EditChatFolderController extends EditBaseController<EditChatFolderC
   private class Adapter extends SettingsAdapter {
     public Adapter (ViewController<?> context) {
       super(context);
+    }
+
+    @Override
+    protected SettingHolder initCustom (ViewGroup parent, int customViewType) {
+      if (customViewType == XGRAM_VIEW_TAG_COLOR) {
+        // XGram: the tag color swatches, on the list's filling like the other rows
+        com.fahadali.xgram.chats.XgramFolderColorRow row = new com.fahadali.xgram.chats.XgramFolderColorRow(parent.getContext(), tdlib);
+        row.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        ViewSupport.setThemedBackground(row, ColorId.filling, EditChatFolderController.this);
+        addThemeInvalidateListener(row);
+        return new SettingHolder(row);
+      }
+      return super.initCustom(parent, customViewType);
+    }
+
+    @Override
+    protected void modifyCustom (SettingHolder holder, int position, ListItem item, int customViewType, View view, boolean isUpdate) {
+      if (customViewType == XGRAM_VIEW_TAG_COLOR && view instanceof com.fahadali.xgram.chats.XgramFolderColorRow) {
+        com.fahadali.xgram.chats.XgramFolderColorRow row = (com.fahadali.xgram.chats.XgramFolderColorRow) view;
+        row.setSelectedColorId(editedChatFolder.colorId);
+        row.setLocked(!tdlib.hasPremium());
+        row.setListener(EditChatFolderController.this::xgramOnTagColorPicked);
+        return;
+      }
+      super.modifyCustom(holder, position, item, customViewType, view, isUpdate);
     }
 
     @Override

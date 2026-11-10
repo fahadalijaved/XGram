@@ -41,7 +41,7 @@
   <string name="XgramPremiumFolderTags">Folder tags</string>
   <string name="XgramPremiumFolderTagsInfo">Each chat\'s folders as colored tags in the chat list</string>
   <string name="XgramPremiumFolders">Chat folders</string>
-  <string name="XgramPremiumFoldersInfo">More folders, and All Chats in any place</string>
+  <string name="XgramPremiumFoldersInfo">More folders, a tag color for each, and All Chats in any place</string>
   <string name="XgramPremiumSavedTags">Saved Messages tags</string>
   <string name="XgramPremiumSavedTagsInfo">Tag saved messages with reactions, then filter by tag</string>
   <string name="XgramPremiumTranslation">Translation</string>

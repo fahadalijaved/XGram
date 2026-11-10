@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: a folder's tag color (Telegram Premium), in the folder editor -->
+<resources>
+  <item name="btn_xgramFolderColor" type="id"/>
+  <string name="XgramFolderTagColor">Tag color</string>
+  <string name="XgramFolderTagColorInfo">The tag next to chats in your chat list. Tags show while Folder tags is on (Settings > XGram > Premium).</string>
+  <string name="XgramFolderTagsOffHint">Folder tags are off: turn them on in Settings > XGram > Premium to see this color</string>
+</resources>

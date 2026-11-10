@@ -5693,6 +5693,7 @@ public class TD {
     if (chatFolder.icon != null) {
       bundle.putString(prefix + "_iconName", chatFolder.icon.name);
     }
+    bundle.putInt(prefix + "_colorId", chatFolder.colorId); // XGram: the tag color
     bundle.putLongArray(prefix + "_pinnedChatIds", chatFolder.pinnedChatIds);
     bundle.putLongArray(prefix + "_includedChatIds", chatFolder.includedChatIds);
     bundle.putLongArray(prefix + "_excludedChatIds", chatFolder.excludedChatIds);
@@ -5721,6 +5722,7 @@ public class TD {
     if (iconName != null) {
       chatFolder.icon = new TdApi.ChatFolderIcon(iconName);
     }
+    chatFolder.colorId = bundle.getInt(prefix + "_colorId", -1); // XGram: the tag color
     chatFolder.pinnedChatIds = bundle.getLongArray(prefix + "_pinnedChatIds");
     chatFolder.includedChatIds = bundle.getLongArray(prefix + "_includedChatIds");
     chatFolder.excludedChatIds = bundle.getLongArray(prefix + "_excludedChatIds");
@@ -5801,6 +5803,7 @@ public class TD {
     String a = lhs.icon != null ? lhs.icon.name : null;
     String b = rhs.icon != null ? rhs.icon.name : null;
     return ObjectUtils.equals(a, b) &&
+      lhs.colorId == rhs.colorId && // XGram: a tag color change is a change
       lhs.includeContacts == rhs.includeContacts &&
       lhs.includeNonContacts == rhs.includeNonContacts &&
       lhs.includeGroups == rhs.includeGroups &&
