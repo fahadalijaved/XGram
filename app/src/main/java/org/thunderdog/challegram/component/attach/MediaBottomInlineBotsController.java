@@ -20,11 +20,12 @@ import android.view.View;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import androidx.annotation.Nullable;
+
 import org.drinkless.tdlib.Client;
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.component.user.SimpleUsersAdapter;
-import org.thunderdog.challegram.data.TD;
 import org.thunderdog.challegram.data.TGUser;
 
 import java.util.ArrayList;
@@ -93,20 +94,27 @@ public class MediaBottomInlineBotsController extends MediaBottomBaseController<V
   private static final String[] DEFAULT_BOTS = { "bing", "wiki", "gif", "nephobot", "vid" };
 
   private ArrayList<TGUser> defaultBots = new ArrayList<>(DEFAULT_BOTS.length);
+  private int defaultIndex; // XGram: the next popular bot to look up (one that can't be found is skipped)
+  private boolean loadingDefaults;
 
   private void loadNextBot () {
-    if (defaultBots.size() > DEFAULT_BOTS.length) {
+    if (defaultIndex > DEFAULT_BOTS.length) {
       return;
     }
-    if (defaultBots.size() == DEFAULT_BOTS.length) {
+    if (defaultIndex == DEFAULT_BOTS.length) {
+      defaultIndex++;
       runOnUiThread(() -> displayBots(defaultBots));
     } else {
-      tdlib.client().send(new TdApi.SearchPublicChat(DEFAULT_BOTS[defaultBots.size()]), this);
+      loadingDefaults = true;
+      tdlib.client().send(new TdApi.SearchPublicChat(DEFAULT_BOTS[defaultIndex]), this);
     }
   }
 
-  private void addDefaultBot (TdApi.User user) {
-    defaultBots.add(TGUser.createWithUsername(tdlib, user));
+  private void addDefaultBot (@Nullable TdApi.User user) {
+    defaultIndex++;
+    if (user != null) {
+      defaultBots.add(TGUser.createWithUsername(tdlib, user));
+    }
     loadNextBot();
   }
 
@@ -114,7 +122,13 @@ public class MediaBottomInlineBotsController extends MediaBottomBaseController<V
   public void onResult (TdApi.Object object) {
     switch (object.getConstructor()) {
       case TdApi.Error.CONSTRUCTOR: {
-        dispatchError(TD.toErrorString(object), null, null, true);
+        // XGram: no raw error here ("#400: Top chat computation is disabled" when Suggest frequent contacts is off):
+        // the popular inline bots stand in for your frequent ones, and a popular one that can't be found is skipped
+        if (loadingDefaults) {
+          addDefaultBot(null);
+        } else {
+          loadNextBot();
+        }
         break;
       }
       case TdApi.Chat.CONSTRUCTOR: {
