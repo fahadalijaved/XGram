@@ -56,6 +56,9 @@ fun PremiumPage() {
   var adsBusy by remember { mutableStateOf(false) }
   var tagsOn by remember { mutableStateOf<Boolean?>(null) }
   var tagsBusy by remember { mutableStateOf(false) }
+  var giftSettings by remember { mutableStateOf<TdApi.GiftSettings?>(null) }
+  var giftBusy by remember { mutableStateOf(false) }
+  var boostSlots by remember { mutableStateOf<TdApi.ChatBoostSlots?>(null) }
 
   // Read again whenever the page gets focus: a screen opened from here (or another device) may have changed them
   DisposableEffect(tdlib, host.version) {
@@ -66,8 +69,14 @@ fun PremiumPage() {
     tdlib.send(TdApi.GetReadDatePrivacySettings()) { result, _ -> if (result != null) UI.post { if (active) readDate = result } }
     tdlib.send(TdApi.GetArchiveChatListSettings()) { result, _ -> if (result != null) UI.post { if (active) archive = result } }
     tdlib.send(TdApi.GetUserFullInfo(tdlib.myUserId())) { result, _ ->
-      if (result != null) UI.post { if (active) noAds = !result.hasSponsoredMessagesEnabled }
+      if (result != null) UI.post {
+        if (active) {
+          noAds = !result.hasSponsoredMessagesEnabled
+          giftSettings = result.giftSettings
+        }
+      }
     }
+    tdlib.send(TdApi.GetAvailableChatBoostSlots()) { result, _ -> if (result != null) UI.post { if (active) boostSlots = result } }
     tagsOn = null // Telegram's value again (tdlib.areChatFolderTagsEnabled), now that the update has had time to come
     onDispose { active = false }
   }
@@ -191,6 +200,72 @@ fun PremiumPage() {
       link(33, s(R.string.XgramPremiumTranslation), s(R.string.XgramPremiumTranslationInfo), icon = R.drawable.baseline_translate_24) {
         host.openPage(XgramPage.TRANSLATION)
       }
+    }
+
+    // Gifts: the gift button everyone can show; which gifts people may send you is Premium's
+    header(R.string.XgramPremiumGifts)
+    group {
+      val gifts = giftSettings
+      fun saveGifts(updated: TdApi.GiftSettings) {
+        giftBusy = true
+        tdlib.send(TdApi.SetGiftSettings(updated)) { _, error ->
+          UI.post {
+            giftBusy = false
+            if (error != null) {
+              UI.showError(error)
+            } else {
+              giftSettings = updated
+            }
+          }
+        }
+      }
+      switch(
+        40, s(R.string.XgramPremiumGiftButton), s(R.string.XgramPremiumGiftButtonInfo), icon = R.drawable.baseline_gift_outline_24,
+        checked = gifts?.showGiftButton == true, enabled = gifts != null && !giftBusy, busy = giftBusy
+      ) { on ->
+        if (gifts != null) saveGifts(TdApi.GiftSettings(on, gifts.acceptedGiftTypes))
+      }
+      val types = gifts?.acceptedGiftTypes
+      fun accepted(id: Int, title: Int, value: Boolean?, change: (TdApi.AcceptedGiftTypes, Boolean) -> Unit) {
+        switch(
+          id, s(title), if (premium) null else needs, icon = R.drawable.baseline_gift_outline_24,
+          checked = value == true, enabled = premium && gifts != null && !giftBusy, busy = false
+        ) { on ->
+          if (gifts != null && types != null) {
+            val copy = TdApi.AcceptedGiftTypes(types.unlimitedGifts, types.limitedGifts, types.upgradedGifts, types.giftsFromChannels, types.premiumSubscription)
+            change(copy, on)
+            saveGifts(TdApi.GiftSettings(gifts.showGiftButton, copy))
+          }
+        }
+      }
+      accepted(41, R.string.XgramGiftsAcceptUnlimited, types?.unlimitedGifts) { t, on -> t.unlimitedGifts = on }
+      accepted(42, R.string.XgramGiftsAcceptLimited, types?.limitedGifts) { t, on -> t.limitedGifts = on }
+      accepted(43, R.string.XgramGiftsAcceptUpgraded, types?.upgradedGifts) { t, on -> t.upgradedGifts = on }
+      accepted(44, R.string.XgramGiftsAcceptChannels, types?.giftsFromChannels) { t, on -> t.giftsFromChannels = on }
+      accepted(45, R.string.XgramGiftsAcceptPremium, types?.premiumSubscription) { t, on -> t.premiumSubscription = on }
+    }
+    description(R.string.XgramPremiumGiftsInfo)
+
+    // My boosts: the slots Premium gives, what each boosts, until when, and when it can move
+    val slots = boostSlots?.slots
+    if (premium && !slots.isNullOrEmpty()) {
+      header(R.string.XgramPremiumBoosts)
+      group {
+        val now = tdlib.currentTime(TimeUnit.SECONDS)
+        slots.forEachIndexed { index, slot ->
+          val boosted = slot.currentlyBoostedChatId
+          val title = if (boosted != 0L) tdlib.chatTitle(boosted) else s(R.string.XgramPremiumBoostFree)
+          val until = if (slot.expirationDate > 0) s(R.string.XgramPremiumBoostUntil, Lang.dateYearShortTime(slot.expirationDate.toLong(), TimeUnit.SECONDS)) else ""
+          val move = if (slot.cooldownUntilDate > now) s(R.string.XgramPremiumBoostMoveAt, Lang.time(slot.cooldownUntilDate.toLong(), TimeUnit.SECONDS)) else null
+          val text = listOfNotNull(until.ifEmpty { null }, move).joinToString(" · ")
+          value(300 + index, title, text, icon = R.drawable.baseline_flash_on_24, key = "boost_" + slot.slotId) {
+            if (boosted != 0L) {
+              tdlib.ui().openChat(host.controller, boosted, null)
+            }
+          }
+        }
+      }
+      description(R.string.XgramPremiumBoostsInfo)
     }
 
     val data = features

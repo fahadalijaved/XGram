@@ -134,4 +134,18 @@
   <string name="XgramPremiumFeatureTextComposition">AI writing</string>
   <string name="XgramPremiumFeatureTextCompositionWhere">Long-press Send → AI editor</string>
   <string name="XgramPremiumFeatureRichMessages">Rich messages</string>
+  <string name="XgramPremiumGifts">Gifts</string>
+  <string name="XgramPremiumGiftButton">Show gift button</string>
+  <string name="XgramPremiumGiftButtonInfo">A gift button in the message box of chats with you</string>
+  <string name="XgramGiftsAcceptUnlimited">Unlimited gifts</string>
+  <string name="XgramGiftsAcceptLimited">Limited-edition gifts</string>
+  <string name="XgramGiftsAcceptUpgraded">Unique gifts</string>
+  <string name="XgramGiftsAcceptChannels">Gifts from channels</string>
+  <string name="XgramGiftsAcceptPremium">Telegram Premium</string>
+  <string name="XgramPremiumGiftsInfo">Turn a kind off and people can\'t send it to you. Choosing which gifts you accept needs Telegram Premium.</string>
+  <string name="XgramPremiumBoosts">My boosts</string>
+  <string name="XgramPremiumBoostFree">Free boost</string>
+  <string name="XgramPremiumBoostUntil">Until %1$s</string>
+  <string name="XgramPremiumBoostMoveAt">can move at %1$s</string>
+  <string name="XgramPremiumBoostsInfo">Premium gives you boosts for channels and groups. Boost one from its profile; a boost can move to another chat once its wait is over.</string>
 </resources>
