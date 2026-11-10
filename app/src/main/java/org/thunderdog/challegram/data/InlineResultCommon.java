@@ -827,6 +827,15 @@ public class InlineResultCommon extends InlineResult<TdApi.InlineQueryResult> im
 
   // Files stuff
 
+  /** XGram: the row's title and second line (the File tab's Arrange this list). */
+  public String xgramTitle () {
+    return title;
+  }
+
+  public String xgramDescription () {
+    return description;
+  }
+
   private void setDescription (String description) {
     if (!ignoreDescriptionUpdates && (this.description == null || !this.description.equals(description))) {
       this.description = description;

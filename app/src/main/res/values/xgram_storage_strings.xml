@@ -12,4 +12,10 @@
   <item name="btn_xgramAddStorageSftp" type="id"/>
   <string name="XgramFilesAddStorage">Add storage</string>
   <string name="XgramFilesAddStorageInfo">An SFTP server, or a folder from OneDrive, a file manager…</string>
+  <item name="btn_xgramFilesOtherApps" type="id"/>
+  <item name="btn_xgramFilesArrange" type="id"/>
+  <string name="XgramFilesArrange">Arrange this list</string>
+  <string name="XgramArrangeUp">Move up</string>
+  <string name="XgramArrangeDown">Move down</string>
+  <string name="XgramArrangeReset">Reset</string>
 </resources>

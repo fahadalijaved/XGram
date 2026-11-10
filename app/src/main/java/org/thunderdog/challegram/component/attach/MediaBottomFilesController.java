@@ -110,7 +110,21 @@ public class MediaBottomFilesController extends MediaBottomBaseController<Void> 
   @Override
   public void onMenuItemPressed (int id, View view) {
     if (id == R.id.menu_btn_more) {
-      showSystemPicker(false);
+      // XGram: Other apps (Android's picker, as before) and Arrange this list
+      if (!stack.isEmpty()) {
+        showSystemPicker(false);
+        return;
+      }
+      showOptions(null, new int[] {R.id.btn_xgramFilesOtherApps, R.id.btn_xgramFilesArrange},
+        new String[] {Lang.getString(R.string.XgramFilesOtherApps), Lang.getString(R.string.XgramFilesArrange)},
+        null, new int[] {R.drawable.baseline_cloud_24, R.drawable.baseline_sort_24}, (itemView, optionId) -> {
+          if (optionId == R.id.btn_xgramFilesOtherApps) {
+            showSystemPicker(false);
+          } else if (optionId == R.id.btn_xgramFilesArrange) {
+            xgramArrange();
+          }
+          return true;
+        });
     }
   }
 
@@ -385,7 +399,62 @@ public class MediaBottomFilesController extends MediaBottomBaseController<Void> 
       }
     }*/
 
+    xgramApplyOrder(items); // XGram: the order the user arranged
+    xgramRootItems = new ArrayList<>(items);
     setFilesItems(null, items, false);
+  }
+
+  // XGram: the File tab's rows in the user's order (⋮ → Arrange this list), by their paths; rows that came later
+  // (a new pinned folder or server) follow the arranged ones in the app's order
+
+  private static final String KEY_ORDER = "xgram_files_order";
+  private ArrayList<ListItem> xgramRootItems;
+
+  private static @Nullable String xgramKeyOf (ListItem item) {
+    return item.getData() instanceof InlineResultCommon ? ((InlineResultCommon) item.getData()).getId() : null;
+  }
+
+  private void xgramApplyOrder (ArrayList<ListItem> items) {
+    final String saved = org.thunderdog.challegram.unsorted.Settings.instance().pmc().getString(KEY_ORDER, null);
+    if (saved == null || saved.isEmpty()) {
+      return;
+    }
+    final java.util.List<String> order = java.util.Arrays.asList(saved.split("\u0001"));
+    final ArrayList<ListItem> original = new ArrayList<>(items);
+    Collections.sort(items, (a, b) -> {
+      final int ia = order.indexOf(xgramKeyOf(a)), ib = order.indexOf(xgramKeyOf(b));
+      final int ka = ia != -1 ? ia : order.size() + original.indexOf(a);
+      final int kb = ib != -1 ? ib : order.size() + original.indexOf(b);
+      return Integer.compare(ka, kb);
+    });
+  }
+
+  private void xgramArrange () {
+    if (xgramRootItems == null || !stack.isEmpty()) {
+      return;
+    }
+    final ArrayList<com.fahadali.xgram.compose.XgramArrangeDialog.Item> rows = new ArrayList<>();
+    for (ListItem item : xgramRootItems) {
+      final String key = xgramKeyOf(item);
+      if (key != null) {
+        final InlineResultCommon result = (InlineResultCommon) item.getData();
+        rows.add(new com.fahadali.xgram.compose.XgramArrangeDialog.Item(key, result.xgramTitle(), result.xgramDescription()));
+      }
+    }
+    com.fahadali.xgram.compose.XgramArrangeDialog.show(context, Lang.getString(R.string.XgramFilesArrange), rows, keys -> {
+      final StringBuilder b = new StringBuilder();
+      for (String key : keys) {
+        if (b.length() > 0) {
+          b.append('\u0001');
+        }
+        b.append(key);
+      }
+      org.thunderdog.challegram.unsorted.Settings.instance().pmc().putString(KEY_ORDER, b.toString());
+      buildCells();
+    }, () -> {
+      org.thunderdog.challegram.unsorted.Settings.instance().pmc().remove(KEY_ORDER);
+      buildCells();
+    });
   }
 
   @Override
