@@ -293,6 +293,11 @@ public final class XgramMessageActions {
     }
   }
 
+  /** XGram: the →A button of a round video: its transcript in the card, asking Telegram for it the first time. */
+  public static void transcribeFromButton (ViewController<?> context, TdApi.Message message) {
+    transcribe(context, message);
+  }
+
   private static void transcribe (ViewController<?> context, TdApi.Message message) {
     Tdlib tdlib = context.tdlib();
     TdApi.SpeechRecognitionResult known = speechResultOf(message.content);

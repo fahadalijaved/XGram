@@ -615,11 +615,86 @@ public class TGMessageVideo extends TGMessage implements FileProgressComponent.S
         Views.restore(c, restoreToCount);
       }
     }
+    xgramDrawStt(c, receiver);
   }
 
   @Override
   public boolean onTouchEvent (MessageView view, MotionEvent e) {
+    if (xgramSttTouch(view, e)) {
+      return true;
+    }
     return super.onTouchEvent(view, e) || fileProgress.onTouchEvent(view, e);
+  }
+
+  // XGram: round videos as text (Telegram Premium), like official Telegram: a →A disk beside the circle (after an
+  // incoming one, before an outgoing one, level with its bottom; hidden while the video is expanded) opens the
+  // transcript in a card, asking Telegram for it the first time
+
+  private static final float XGRAM_STT_RADIUS = 14f;
+  private float xgramSttX = -1f, xgramSttY;
+  private boolean xgramSttCaught;
+
+  private boolean xgramSttAvailable () {
+    return isFullSizeAnimator.getFloatValue() == 0f && com.fahadali.xgram.chats.XgramSpeech.isAvailable(tdlib, msg);
+  }
+
+  private void xgramDrawStt (Canvas c, Receiver receiver) {
+    if (!xgramSttAvailable()) {
+      xgramSttX = -1f;
+      return;
+    }
+    final int radius = Screen.dp(XGRAM_STT_RADIUS);
+    final int gap = Screen.dp(8f);
+    xgramSttX = isOutgoingBubble() ? receiver.getLeft() - gap - radius : receiver.getRight() + gap + radius; // right-aligned only with bubbles
+    xgramSttY = receiver.getBottom() - radius;
+    final boolean expressive = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    final int disk, text;
+    if (expressive) {
+      disk = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER);
+      text = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER);
+    } else {
+      disk = getBubbleTimeColor();
+      text = getBubbleTimeTextColor();
+    }
+    c.drawCircle(xgramSttX, xgramSttY, radius, Paints.fillingPaint(disk));
+    final android.text.TextPaint paint = Paints.getMediumTextPaint(12f, text, false);
+    final String label = "→A";
+    c.drawText(label, xgramSttX - paint.measureText(label) / 2f, xgramSttY + Screen.dp(4.5f), paint);
+  }
+
+  private boolean xgramSttHit (float x, float y) {
+    final float slop = Screen.dp(XGRAM_STT_RADIUS + 6f);
+    return xgramSttX >= 0f && Math.abs(x - xgramSttX) <= slop && Math.abs(y - xgramSttY) <= slop;
+  }
+
+  private boolean xgramSttTouch (MessageView view, MotionEvent e) {
+    switch (e.getAction()) {
+      case MotionEvent.ACTION_DOWN:
+        xgramSttCaught = xgramSttAvailable() && xgramSttHit(e.getX(), e.getY());
+        return xgramSttCaught;
+      case MotionEvent.ACTION_MOVE:
+        if (xgramSttCaught && !xgramSttHit(e.getX(), e.getY())) {
+          xgramSttCaught = false;
+        }
+        return xgramSttCaught;
+      case MotionEvent.ACTION_UP:
+        if (xgramSttCaught) {
+          xgramSttCaught = false;
+          if (xgramSttHit(e.getX(), e.getY())) {
+            me.vkryl.android.ViewUtils.onClick(view);
+            com.fahadali.xgram.chats.XgramMessageActions.transcribeFromButton(controller(), getMessage());
+          }
+          return true;
+        }
+        return false;
+      case MotionEvent.ACTION_CANCEL:
+        if (xgramSttCaught) {
+          xgramSttCaught = false;
+          return true;
+        }
+        return false;
+    }
+    return false;
   }
 
   @Override
