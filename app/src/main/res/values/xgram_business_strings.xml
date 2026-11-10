@@ -127,6 +127,16 @@
   <string name="XgramBotCanTransferStars">Transfer Stars</string>
   <string name="XgramBotCanStories">Post and manage stories</string>
 
+  <item name="btn_xgramBusinessHours" type="id"/>
+  <item name="btn_xgramBusinessLocation" type="id"/>
+  <item name="btn_xgramBusinessOpenMap" type="id"/>
+  <string name="XgramBusinessOpen24">Open 24 hours</string>
+  <string name="XgramBusinessOpenUntil">Open now, until %1$s</string>
+  <string name="XgramBusinessClosedOpensAt">Closed, opens at %1$s</string>
+  <string name="XgramBusinessClosedOpensDay">Closed, opens %1$s at %2$s</string>
+  <string name="XgramBusinessOpenMap">Open in maps</string>
+  <string name="XgramBusinessNoMaps">There is no maps app to open it.</string>
+
   <string name="XgramQuickReplies">Quick replies</string>
   <string name="XgramQuickRepliesInfo">Save messages under a shortcut and send them in one tap: type / in a chat with a person and pick the shortcut.</string>
   <string name="XgramQuickRepliesYours">Your quick replies</string>

@@ -2112,6 +2112,17 @@ public class ProfileController extends ViewController<ProfileController.Args> im
             view.setName(getPeerTypeStringResourceId());
           }
           view.setData(Long.toString(getPeerId()));
+        } else if (itemId == R.id.btn_xgramBusinessHours || itemId == R.id.btn_xgramBusinessLocation) {
+          // XGram: a Business account's state now ("Open now, until 18:00") or address, over its label
+          final TdApi.BusinessInfo info = userFull != null ? userFull.businessInfo : null;
+          if (itemId == R.id.btn_xgramBusinessHours) {
+            view.setData(R.string.XgramBusinessHours);
+            final String state = com.fahadali.xgram.business.XgramBusinessProfile.state(info);
+            view.setName(state != null ? state : Lang.getString(R.string.LoadingInformation));
+          } else {
+            view.setData(R.string.XgramBusinessLocation);
+            view.setName(info != null ? com.fahadali.xgram.business.XgramBusinessProfile.address(info) : Lang.getString(R.string.LoadingInformation));
+          }
         } else if (itemId == R.id.btn_birthdate) {
           view.setData(R.string.Birthdate);
           TdApi.Birthdate birthdate = userFull != null ? userFull.birthdate : null;
@@ -3081,6 +3092,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   private void addFullCells (TdApi.UserFullInfo userFull) {
     checkBirthdate();
     checkDescription();
+    xgramCheckBusiness();
     checkGroupsInCommon();
 
     /*if (userFull.commonChatCount > 0) {
@@ -3388,6 +3400,39 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       if (setDescription()) {
         updateValuedItem(R.id.btn_description);
       }
+    }
+  }
+
+  /** XGram: a Telegram Business account's opening hours and location, after the bio, like official Telegram. */
+  private void xgramCheckBusiness () {
+    if (isEditing() || xgramTopicId != 0 || !isUserMode()) {
+      return;
+    }
+    final TdApi.BusinessInfo info = userFull != null ? userFull.businessInfo : null;
+    xgramToggleTopItem(R.id.btn_xgramBusinessHours, com.fahadali.xgram.business.XgramBusinessProfile.hasHours(info), R.drawable.baseline_access_time_24, R.string.XgramBusinessHours);
+    xgramToggleTopItem(R.id.btn_xgramBusinessLocation, com.fahadali.xgram.business.XgramBusinessProfile.hasLocation(info), R.drawable.baseline_location_on_24, R.string.XgramBusinessLocation);
+  }
+
+  /** Adds or removes a valued top row (after peer id, username, birthdate, bio and the rows before it) as it comes and goes. */
+  private void xgramToggleTopItem (int id, boolean has, int icon, int title) {
+    final int found = baseAdapter.indexOfViewById(id);
+    if ((found != -1) != has) {
+      if (found != -1) {
+        removeTopItem(found);
+      } else {
+        int index = 0;
+        for (int before : new int[] {R.id.btn_peer_id, R.id.btn_username, R.id.btn_birthdate, R.id.btn_description, R.id.btn_xgramBusinessHours}) {
+          if (before == id) {
+            break;
+          }
+          if (baseAdapter.indexOfViewById(before) != -1) {
+            index++;
+          }
+        }
+        addTopItem(new ListItem(ListItem.TYPE_VALUED_SETTING, id, icon, title), index);
+      }
+    } else if (has) {
+      updateValuedItem(id);
     }
   }
 
@@ -5594,6 +5639,31 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       icons.append(R.drawable.baseline_forward_24);
 
       showOptions("@" + tdlib.chatUsername(chat.id), ids.get(), strings.get(), null, icons.get());
+    } else if (viewId == R.id.btn_xgramBusinessHours || viewId == R.id.btn_xgramBusinessLocation) {
+      // XGram: the week's hours (copy), or the address (open in a maps app, copy)
+      final TdApi.BusinessInfo info = userFull != null ? userFull.businessInfo : null;
+      if (info == null) {
+        return;
+      }
+      if (viewId == R.id.btn_xgramBusinessHours) {
+        final String week = com.fahadali.xgram.business.XgramBusinessProfile.week(info);
+        showOptions(week, new int[] {R.id.btn_copyText}, new String[] {Lang.getString(R.string.Copy)}, null, new int[] {R.drawable.baseline_content_copy_24}, (itemView, id) -> {
+          if (id == R.id.btn_copyText) {
+            UI.copyText(week, R.string.CopiedText);
+          }
+          return true;
+        });
+      } else {
+        final String address = com.fahadali.xgram.business.XgramBusinessProfile.address(info);
+        showOptions(address, new int[] {R.id.btn_xgramBusinessOpenMap, R.id.btn_copyText}, new String[] {Lang.getString(R.string.XgramBusinessOpenMap), Lang.getString(R.string.Copy)}, null, new int[] {R.drawable.baseline_location_on_24, R.drawable.baseline_content_copy_24}, (itemView, id) -> {
+          if (id == R.id.btn_xgramBusinessOpenMap) {
+            com.fahadali.xgram.business.XgramBusinessProfile.openMap(this, info);
+          } else if (id == R.id.btn_copyText) {
+            UI.copyText(address, R.string.CopiedText);
+          }
+          return true;
+        });
+      }
     } else if (viewId == R.id.btn_birthdate) {
       TdApi.Birthdate birthdate = userFull != null ? userFull.birthdate : null;
       if (birthdate != null) {
@@ -7164,6 +7234,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         checkUserButtons();
         checkGroupsInCommon();
         checkDescription();
+        xgramCheckBusiness();
         if (mode == Mode.EDIT_BOT_USER) {
           updateValuedItem(R.id.btn_botDescription);
         }
