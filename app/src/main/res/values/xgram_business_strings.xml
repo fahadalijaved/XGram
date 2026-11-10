@@ -2,7 +2,53 @@
 <!-- XGram: Telegram Business (included with Premium): quick replies, see XgramQuickReplies and QuickRepliesPage -->
 <resources>
   <string name="XgramPremiumBusiness">Telegram Business</string>
-  <string name="XgramPremiumQuickRepliesInfo">Messages you send with /name in a private chat</string>
+  <string name="XgramPremiumBusinessInfo">Quick replies, greeting and away messages</string>
+  <string name="XgramBusinessInfo">Telegram sends greeting and away messages for you, from your quick replies, in private chats with people.</string>
+  <string name="XgramBusinessNone">None yet</string>
+  <string name="XgramBusinessOn">On</string>
+  <string name="XgramBusinessOff">Off</string>
+  <string name="XgramBusinessSaved">Saved</string>
+  <string name="XgramBusinessSaveFailed">That couldn\'t be saved. Try again later.</string>
+  <string name="XgramBusinessAddMessage">Add a message</string>
+
+  <string name="XgramBusinessRecipients">Recipients</string>
+  <string name="XgramBusinessAllChats">All private chats</string>
+  <string name="XgramBusinessAllChatsInfo">Except the ones picked below</string>
+  <string name="XgramBusinessOnlySelected">Only selected chats</string>
+  <string name="XgramBusinessOnlySelectedInfo">The ones picked below</string>
+  <string name="XgramBusinessExcluded">Excluded chats</string>
+  <string name="XgramBusinessIncluded">Included chats</string>
+  <string name="XgramBusinessExistingChats">Existing chats</string>
+  <string name="XgramBusinessNewChats">New chats</string>
+  <string name="XgramBusinessContacts">Contacts</string>
+  <string name="XgramBusinessNonContacts">Non-contacts</string>
+  <string name="XgramBusinessExcludeChats">Exclude people</string>
+  <string name="XgramBusinessIncludeChats">Add people</string>
+  <string name="XgramBusinessRemoveChat">Remove</string>
+
+  <string name="XgramBusinessGreeting">Greeting message</string>
+  <string name="XgramBusinessGreetingSwitch">Send greeting message</string>
+  <string name="XgramBusinessGreetingInfo">Greet people when they message you for the first time, or after a while without messages.</string>
+  <string name="XgramBusinessGreetingMessage">Greeting message (/hello)</string>
+  <string name="XgramBusinessGreetingNoMessage">Add the greeting message first.</string>
+  <string name="XgramBusinessInactivity">Send after no activity</string>
+  <string name="XgramBusinessInactivityTitle">For</string>
+  <string name="XgramBusinessInactivityInfo">The greeting goes to a chat with no messages for this long.</string>
+
+  <string name="XgramBusinessAway">Away message</string>
+  <string name="XgramBusinessAwaySwitch">Send away message</string>
+  <string name="XgramBusinessAwayInfo">Reply automatically when people message you while you are away.</string>
+  <string name="XgramBusinessAwayMessage">Away message (/away)</string>
+  <string name="XgramBusinessAwayNoMessage">Add the away message first.</string>
+  <string name="XgramBusinessSchedule">When</string>
+  <string name="XgramBusinessScheduleAlways">Always</string>
+  <string name="XgramBusinessScheduleOutside">Outside of opening hours</string>
+  <string name="XgramBusinessScheduleOutsideNoHours">Set opening hours in Telegram first</string>
+  <string name="XgramBusinessScheduleCustom">Between two dates</string>
+  <string name="XgramBusinessScheduleStart">From</string>
+  <string name="XgramBusinessScheduleEnd">Until</string>
+  <string name="XgramBusinessOfflineOnly">Only when offline</string>
+  <string name="XgramBusinessOfflineOnlyInfo">Not sent if you were online in the last 10 minutes</string>
 
   <string name="XgramQuickReplies">Quick replies</string>
   <string name="XgramQuickRepliesInfo">Save messages under a shortcut and send them in one tap: type / in a chat with a person and pick the shortcut.</string>

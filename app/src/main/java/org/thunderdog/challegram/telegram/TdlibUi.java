@@ -4251,10 +4251,13 @@ public class TdlibUi extends Handler {
             case TdApi.SettingsSectionPowerSaving.CONSTRUCTOR:
             case TdApi.SettingsSectionSendGift.CONSTRUCTOR:
             case TdApi.SettingsSectionBusiness.CONSTRUCTOR: {
-              // XGram: Business is on the Premium page; quick replies have a page of their own
+              // XGram: Telegram Business has a page of its own, as do its parts
               final String subsection = ((TdApi.SettingsSectionBusiness) section).subsection;
               result = com.fahadali.xgram.compose.XgramComposeController.create(context.context(), context.tdlib(),
-                subsection != null && subsection.startsWith("quick-replies") ? com.fahadali.xgram.compose.XgramPage.QUICK_REPLIES : com.fahadali.xgram.compose.XgramPage.PREMIUM);
+                subsection != null && subsection.startsWith("quick-replies") ? com.fahadali.xgram.compose.XgramPage.QUICK_REPLIES :
+                subsection != null && subsection.startsWith("greeting") ? com.fahadali.xgram.compose.XgramPage.BUSINESS_GREETING :
+                subsection != null && subsection.startsWith("away") ? com.fahadali.xgram.compose.XgramPage.BUSINESS_AWAY :
+                com.fahadali.xgram.compose.XgramPage.BUSINESS);
               break;
             }
             case TdApi.SettingsSectionInAppBrowser.CONSTRUCTOR: {
