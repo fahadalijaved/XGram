@@ -344,6 +344,16 @@ public class FileComponent extends BaseComponent implements FileProgressComponen
     return voice != null;
   }
 
+  public @Nullable TdApi.VoiceNote getVoice () {
+    return voice; // XGram: its transcript (XgramSpeech)
+  }
+
+  /** XGram: the same recording with a new transcript: only the note changes (no new waveform or play button). */
+  public void xgramSwapVoice (TdApi.VoiceNote voice) {
+    this.voice = voice;
+    context.invalidate();
+  }
+
   public FileProgressComponent getFileProgress () {
     return progress;
   }
@@ -361,8 +371,9 @@ public class FileComponent extends BaseComponent implements FileProgressComponen
     if (title != null || subtitle != null) {
       buildTitles(maxWidth - (getPreviewSize() + getPreviewOffset()));
     }
+    xgramSttLaid = xgramSttShown(); // XGram: decided with the layout (Premium can change while it shows)
     if (waveform != null) {
-      waveform.layout(Math.min(Screen.dp(420f), Math.min(TGMessage.getEstimatedContentMaxWidth(), maxWidth) - Screen.dp(FileProgressComponent.DEFAULT_FILE_RADIUS) * 2 - getPreviewOffset() - (int) sizeWidth - Screen.dp(12f)));
+      waveform.layout(Math.min(Screen.dp(420f), Math.min(TGMessage.getEstimatedContentMaxWidth(), maxWidth) - Screen.dp(FileProgressComponent.DEFAULT_FILE_RADIUS) * 2 - getPreviewOffset() - (int) sizeWidth - Screen.dp(12f) - xgramSttSpace()));
     }
   }
 
@@ -525,7 +536,7 @@ public class FileComponent extends BaseComponent implements FileProgressComponen
   public int getWidth () {
     int contentWidth = getPreviewSize() + getPreviewOffset();
     if (waveform != null) {
-      contentWidth += waveform.getWidth() + sizeWidth + Screen.dp(12f);
+      contentWidth += waveform.getWidth() + sizeWidth + Screen.dp(12f) + xgramSttSpace();
     } else {
       contentWidth += Math.max(getTitleWidth(), sizeWidth) + Screen.dp(6f);
     }
@@ -569,6 +580,27 @@ public class FileComponent extends BaseComponent implements FileProgressComponen
 
     float x = event.getX();
     float y = event.getY();
+
+    // XGram: the →A button (XgramSpeech)
+    if (event.getAction() == MotionEvent.ACTION_DOWN) {
+      if (xgramSttHit(startX, startY, x, y)) {
+        clearTouch(); // (it resets the button's flag too: set after)
+        xgramSttCaught = true;
+        return true;
+      }
+      xgramSttCaught = false;
+    } else if (xgramSttCaught) {
+      if (event.getAction() == MotionEvent.ACTION_UP) {
+        xgramSttCaught = false;
+        if (xgramSttHit(startX, startY, x, y)) {
+          com.fahadali.xgram.chats.XgramSpeech.toggle(context, message, voice);
+          context.performClickSoundFeedback();
+        }
+      } else if (event.getAction() == MotionEvent.ACTION_CANCEL) {
+        xgramSttCaught = false;
+      }
+      return true;
+    }
 
     switch (event.getAction()) {
       case MotionEvent.ACTION_DOWN: {
@@ -648,8 +680,56 @@ public class FileComponent extends BaseComponent implements FileProgressComponen
     return loadCaught || seekCaught != null;
   }
 
+  // XGram: voice messages as text (Telegram Premium): the →A button after the duration, like official Telegram's
+
+  private static final float XGRAM_STT_WIDTH = 30f, XGRAM_STT_HEIGHT = 22f, XGRAM_STT_GAP = 8f;
+  private boolean xgramSttCaught, xgramSttLaid;
+
+  private boolean xgramSttShown () {
+    return voice != null && waveform != null && context.getChatId() != 0 && !context.isEventLog() && !context.xgramIsDeleted() &&
+      com.fahadali.xgram.chats.XgramSpeech.isAvailable(context.tdlib(), message);
+  }
+
+  /** The room the layout made for the button: drawing and taps follow it, not a live check. */
+  private boolean xgramSttVisible () {
+    return xgramSttLaid && xgramSttShown();
+  }
+
+  private int xgramSttSpace () {
+    return xgramSttLaid ? Screen.dp(XGRAM_STT_GAP + XGRAM_STT_WIDTH) : 0;
+  }
+
+  private float xgramSttLeft (int startX) {
+    return startX + getPreviewSize() + getPreviewOffset() + waveform.getWidth() + Screen.dp(12f) + sizeWidth + Screen.dp(XGRAM_STT_GAP);
+  }
+
+  private boolean xgramSttHit (int startX, int startY, float x, float y) {
+    if (!xgramSttVisible()) {
+      return false;
+    }
+    final float left = xgramSttLeft(startX);
+    final float cy = startY + Screen.dp(FileProgressComponent.DEFAULT_FILE_RADIUS);
+    final float slop = Screen.dp(8f); // a 46dp-ish target around the 30x22dp button
+    // little room below: the bubble's time (Tap time for details) starts just under the button
+    return x >= left - slop && x <= left + Screen.dp(XGRAM_STT_WIDTH) + slop && y >= cy - Screen.dp(XGRAM_STT_HEIGHT) / 2f - slop && y <= cy + Screen.dp(XGRAM_STT_HEIGHT) / 2f + Screen.dp(2f);
+  }
+
+  private void xgramDrawStt (Canvas c, int startX, int cy, boolean outgoing) {
+    final int color = Theme.getColor(outgoing ? ColorId.bubbleOut_waveformActive : ColorId.waveformActive);
+    final boolean open = com.fahadali.xgram.chats.XgramSpeech.isOpen(message.chatId, message.id);
+    final boolean working = com.fahadali.xgram.chats.XgramSpeech.isWorking(message.chatId, message.id, voice);
+    final float left = xgramSttLeft(startX);
+    final android.graphics.RectF rect = Paints.getRectF(left, cy - Screen.dp(XGRAM_STT_HEIGHT) / 2f, left + Screen.dp(XGRAM_STT_WIDTH), cy + Screen.dp(XGRAM_STT_HEIGHT) / 2f);
+    final float radius = Screen.dp(8f);
+    c.drawRoundRect(rect, radius, radius, Paints.fillingPaint(ColorUtils.alphaColor(open ? .28f : .14f, color)));
+    final String label = working ? "…" : "→A";
+    final android.text.TextPaint paint = Paints.getMediumTextPaint(12f, color, false);
+    c.drawText(label, rect.centerX() - paint.measureText(label) / 2f, cy + Screen.dp(4.5f), paint);
+  }
+
   public void clearTouch () {
     loadCaught = false;
+    xgramSttCaught = false; // a long press took the touch
   }
 
   // private static final boolean USE_ROUND_SMOOTHING = false;
@@ -774,6 +854,9 @@ public class FileComponent extends BaseComponent implements FileProgressComponen
       if (trimmedSubtitle != null) {
         int textX = startX + previewSize + getPreviewOffset() + waveform.getWidth() + Screen.dp(12f);
         trimmedSubtitle.draw(c, textX, textX + trimmedSubtitle.getWidth(), 0, startY + Screen.dp(18f), null, alpha);
+      }
+      if (xgramSttVisible()) {
+        xgramDrawStt(c, startX, cy, align);
       }
     }
   }

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: voice messages as text in their bubble (Telegram Premium) -->
+<resources>
+  <string name="XgramTranscriptFailed">Couldn\'t turn this voice message into text</string>
+  <string name="XgramTranscriptEmpty">No speech in this voice message</string>
+</resources>

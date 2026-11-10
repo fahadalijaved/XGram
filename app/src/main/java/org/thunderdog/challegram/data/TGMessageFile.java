@@ -121,6 +121,10 @@ public class TGMessageFile extends TGMessage {
 
     private boolean updateCaption (boolean animated, boolean force) {
       TdApi.FormattedText caption = translatedCaption != null ? translatedCaption : (this.pendingCaption != null ? this.pendingCaption : this.serverCaption);
+      if (component != null && component.isVoice()) {
+        // XGram: an open voice transcript (→A, XgramSpeech) comes before the caption
+        caption = com.fahadali.xgram.chats.XgramSpeech.withTranscript(getChatId(), messageId, component.getVoice(), caption);
+      }
       if (!Td.equalsTo(this.effectiveCaption, caption) || force) {
         this.effectiveCaption = Td.isEmpty(caption) ? null : caption;
         if (this.captionWrapper != null) {
@@ -453,7 +457,11 @@ public class TGMessageFile extends TGMessage {
         case TdApi.MessageVoiceNote.CONSTRUCTOR: {
           TdApi.MessageVoiceNote voiceNote = (TdApi.MessageVoiceNote) content;
           serverCaption = voiceNote.caption;
-          if (component.isVoice()) {
+          if (component.isVoice() && component.getVoice() != null && component.getVoice().voice.id == voiceNote.voiceNote.voice.id) {
+            // XGram: the same recording with a new transcript (XgramSpeech, partial text comes several times): only
+            // the note changes, the play button and the waveform stay (and keep their state while it plays)
+            component.xgramSwapVoice(voiceNote.voiceNote);
+          } else if (component.isVoice()) {
             component.setVoice(voiceNote.voiceNote, getMessage(messageId), manager);
           } else {
             newComponent = new FileComponent(this, message, voiceNote.voiceNote, message, manager);
@@ -490,10 +498,34 @@ public class TGMessageFile extends TGMessage {
       if (newComponent == null) {
         component.rebuildLayout();
       }
-      files.measure(needAnimateChanges());
+      final boolean animated = needAnimateChanges();
+      files.measure(animated);
+      if (!animated) {
+        rebuildContentDimensions(); // XGram: off screen the height is taken now, not left at the old one (a transcript that came meanwhile was cut off)
+      }
     }
 
     return result;
+  }
+
+  /** XGram: a voice message's transcript was opened or closed (XgramSpeech): its caption again, the bubble re-measured. */
+  public void xgramUpdateTranscript (long messageId) {
+    final CaptionedFile file = findCaptionedFile(messageId);
+    if (file == null) {
+      return;
+    }
+    final boolean hadTextMedia = file.hasTextMedia();
+    final boolean animated = needAnimateChanges();
+    if (file.updateCaption(animated, true)) {
+      if (hadTextMedia || file.hasTextMedia()) {
+        invalidateTextMediaReceiver();
+      }
+      files.measure(animated);
+      if (!animated && rebuildContentDimensions()) {
+        requestLayout();
+      }
+    }
+    invalidate();
   }
 
   @Override
