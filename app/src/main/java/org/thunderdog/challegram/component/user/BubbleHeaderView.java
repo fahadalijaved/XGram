@@ -141,6 +141,47 @@ public class BubbleHeaderView extends FrameLayoutFix implements RtlCheckListener
     Views.setLayoutHeight(scrollView, maxBubbleHeight + newOffset);
     scrollView.setPadding(0, newOffset, 0, 0);
     Views.setTopMargin(editText, newOffset);
+    xgramUpdateClip();
+  }
+
+  // XGram: nothing is drawn above the status bar's bottom edge on screen. setScaleFactor moves this whole view up as
+  // the list below scrolls (by up to the picked chats' height), so clipping only the scroll view at its padding still
+  // let the picked chats and the search bar slide up under the see-through status bar. A clip on the view itself is
+  // a property of its render node: moving it costs no redraw.
+  private final android.graphics.Rect xgramClip = new android.graphics.Rect();
+  private boolean xgramClipSet;
+
+  private void xgramUpdateClip () {
+    final int width = getWidth(), height = getHeight();
+    if (xgramClip == null) { // a move during construction, before the fields are set
+      return;
+    }
+    if (currentTopOffset <= 0 || width <= 0 || height <= 0) {
+      if (xgramClipSet) {
+        xgramClipSet = false;
+        setClipBounds(null);
+      }
+      return;
+    }
+    final int top = Math.min(height, Math.max(0, Math.round(currentTopOffset - getTranslationY())));
+    if (!xgramClipSet || xgramClip.top != top || xgramClip.right != width || xgramClip.bottom != height) {
+      xgramClip.set(0, top, width, height);
+      xgramClipSet = true;
+      setClipBounds(xgramClip);
+    }
+  }
+
+  @Override
+  protected void onSizeChanged (int w, int h, int oldw, int oldh) {
+    super.onSizeChanged(w, h, oldw, oldh);
+    xgramUpdateClip();
+  }
+
+  // Every vertical move, whoever makes it: setScaleFactor, and HeaderView's own transitions and resets
+  @Override
+  public void setTranslationY (float translationY) {
+    super.setTranslationY(translationY);
+    xgramUpdateClip();
   }
 
   @Override
