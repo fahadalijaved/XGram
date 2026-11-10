@@ -8328,6 +8328,28 @@ public class MessagesController extends ViewController<MessagesController.Argume
   private @Nullable com.fahadali.xgram.chats.XgramUndoSendBar xgramUndoBar;
   /** "Send now" from the long-press menu of Send: this one send skips the wait. */
   private boolean xgramUndoBypass;
+
+  // XGram: creating checklists (Telegram Premium): not in channels or secret chats, only with Premium
+
+  public boolean xgramCanSendChecklist () {
+    return chat != null && tdlib.hasPremium() && !ChatId.isSecret(chat.id) && !tdlib.isChannel(chat.id) && !isEditingMessage();
+  }
+
+  public void xgramComposeChecklist () {
+    final tgx.td.client.TdlibOptions options = tdlib.options();
+    com.fahadali.xgram.compose.XgramR5ChatPickers.showChecklistComposer(context, Math.max(1, options.checklistTaskCountMax),
+      Math.max(1, options.checklistTitleLengthMax), Math.max(1, options.checklistTaskTextLengthMax), (title, tasks, othersCanAdd, othersCanMark) -> {
+        final TdApi.InputChecklistTask[] items = new TdApi.InputChecklistTask[tasks.length];
+        for (int i = 0; i < tasks.length; i++) {
+          items[i] = new TdApi.InputChecklistTask(i + 1, new TdApi.FormattedText(tasks[i], new TdApi.TextEntity[0]));
+        }
+        final TdApi.InputMessageChecklist content = new TdApi.InputMessageChecklist(new TdApi.InputChecklist(
+          new TdApi.FormattedText(title, new TdApi.TextEntity[0]), items, othersCanAdd, othersCanMark));
+        pickDateOrProceed(Td.newSendOptions(getInputSuggestedPostInfo(getCurrentReplyId()), false), (sendOptions, disableMarkdown) ->
+          send(content, true, sendOptions, null)
+        );
+      });
+  }
   /** The tray's documents and music wait and their requests are being made: slow mode was checked before they did. */
   private boolean xgramHoldingFiles;
   /** The prompt before a prefill replaces the draft is open: nothing goes back into the message box meanwhile. */

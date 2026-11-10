@@ -29,6 +29,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
@@ -237,6 +240,96 @@ object XgramR5ChatPickers {
     }
     return show(context) { dismiss ->
       TimePickerContent(title, hourOfDay, minute, is24Hour, dismiss) { h, m -> onPick.onTimePicked(h, m) }
+    }
+  }
+
+  fun interface ChecklistCallback {
+    fun onChecklist(title: String, tasks: Array<String>, othersCanAddTasks: Boolean, othersCanMarkTasksAsDone: Boolean)
+  }
+
+  /**
+   * XGram: a new checklist (Telegram Premium): a title, tasks (a new empty row comes when the last one gets text, up to
+   * [maxTasks]) and whether others may add tasks and tick them. In both designs: Telegram X has no checklist editor.
+   */
+  @JvmStatic
+  fun showChecklistComposer(context: Context, maxTasks: Int, titleMax: Int, taskMax: Int, onSend: ChecklistCallback): Boolean {
+    return show(context) { dismiss ->
+      ChecklistContent(maxTasks, titleMax, taskMax, dismiss) { title, tasks, add, mark -> onSend.onChecklist(title, tasks, add, mark) }
+    }
+  }
+
+  @Composable
+  private fun ChecklistContent(maxTasks: Int, titleMax: Int, taskMax: Int, dismiss: () -> Unit, onSend: (String, Array<String>, Boolean, Boolean) -> Unit) {
+    var title by remember { mutableStateOf("") }
+    val tasks = remember { mutableStateListOf("", "") }
+    var othersAdd by remember { mutableStateOf(true) }
+    var othersMark by remember { mutableStateOf(true) }
+    val canSend = title.isNotBlank() && tasks.any { it.isNotBlank() }
+    Surface(
+      modifier = Modifier
+        .widthIn(max = 460.dp)
+        .padding(horizontal = 16.dp)
+        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { },
+      shape = MaterialTheme.shapes.extraLarge,
+      color = MaterialTheme.colorScheme.surfaceContainerHigh
+    ) {
+      Column(modifier = Modifier.padding(top = 24.dp, bottom = 8.dp)) {
+        Text(Lang.getString(R.string.XgramChecklistNew), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(horizontal = 24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+        Column(
+          modifier = Modifier
+            .heightIn(max = 440.dp)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp)
+        ) {
+          OutlinedTextField(
+            value = title,
+            onValueChange = { if (it.length <= titleMax) title = it },
+            label = { Text(Lang.getString(R.string.XgramChecklistTitle)) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+          )
+          Spacer(modifier = Modifier.height(12.dp))
+          tasks.forEachIndexed { index, task ->
+            OutlinedTextField(
+              value = task,
+              onValueChange = { value ->
+                if (value.length <= taskMax) {
+                  tasks[index] = value
+                  if (index == tasks.lastIndex && value.isNotEmpty() && tasks.size < maxTasks) {
+                    tasks.add("") // the next task's row
+                  }
+                }
+              },
+              label = { Text(Lang.getString(R.string.XgramChecklistTaskNumber, index + 1)) },
+              singleLine = true,
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp)
+            )
+          }
+          Spacer(modifier = Modifier.height(12.dp))
+          Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Text(Lang.getString(R.string.XgramChecklistOthersAdd), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+            Switch(checked = othersAdd, onCheckedChange = { othersAdd = it })
+          }
+          Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Text(Lang.getString(R.string.XgramChecklistOthersMark), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+            Switch(checked = othersMark, onCheckedChange = { othersMark = it })
+          }
+        }
+        DialogButtons(neutral = null) {
+          TextButton(onClick = dismiss) {
+            Text(Lang.getString(R.string.Cancel))
+          }
+          TextButton(enabled = canSend, onClick = {
+            dismiss()
+            onSend(title.trim(), tasks.map { it.trim() }.filter { it.isNotEmpty() }.toTypedArray(), othersAdd, othersMark)
+          }) {
+            Text(Lang.getString(R.string.Send))
+          }
+        }
+      }
     }
   }
 

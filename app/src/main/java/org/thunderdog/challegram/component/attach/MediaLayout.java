@@ -904,7 +904,23 @@ public class MediaLayout extends FrameLayoutFix implements
         if (needVote) {
           if (target != null && target.isFocused()) {
             long chatId = getTargetChatId();
-            if (chatId != 0) {
+            if (chatId != 0 && target.xgramCanSendChecklist()) {
+              // XGram: with Premium the button offers a checklist too (Telegram X has no checklist editor)
+              final MessagesController owner = target;
+              owner.showOptions(null, new int[] {R.id.btn_xgramNewPoll, R.id.btn_xgramNewChecklist},
+                new String[] {Lang.getString(R.string.CreatePoll), Lang.getString(R.string.XgramChecklist)}, null,
+                new int[] {R.drawable.baseline_poll_24, R.drawable.baseline_playlist_add_check_24}, (itemView, optionId) -> {
+                  if (optionId == R.id.btn_xgramNewChecklist) {
+                    owner.xgramComposeChecklist();
+                  } else if (optionId == R.id.btn_xgramNewPoll) {
+                    CreatePollController poll = new CreatePollController(owner.context(), owner.tdlib());
+                    poll.setArguments(new CreatePollController.Args(chatId, owner.getMessageTopicId(), owner.getInputSuggestedPostInfo(null), owner));
+                    owner.navigateTo(poll);
+                  }
+                  return true;
+                });
+              hide(false);
+            } else if (chatId != 0) {
               CreatePollController c = new CreatePollController(target.context(), target.tdlib());
               c.setArguments(new CreatePollController.Args(
                 chatId,

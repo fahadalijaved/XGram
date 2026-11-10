@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: creating checklists (Telegram Premium) -->
+<resources>
+  <item name="btn_xgramNewPoll" type="id"/>
+  <item name="btn_xgramNewChecklist" type="id"/>
+  <string name="XgramChecklistNew">New checklist</string>
+  <string name="XgramChecklistTitle">Title</string>
+  <string name="XgramChecklistTaskNumber">Task %1$d</string>
+  <string name="XgramChecklistOthersAdd">Others can add tasks</string>
+  <string name="XgramChecklistOthersMark">Others can mark tasks as done</string>
+</resources>
