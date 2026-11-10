@@ -94,7 +94,9 @@ public class BubbleHeaderView extends FrameLayoutFix implements RtlCheckListener
         return ev.getAction() == MotionEvent.ACTION_DOWN ? (ev.getY() < lastHeight && super.onTouchEvent(ev)) : super.onTouchEvent(ev);
       }
     };
-    scrollView.setClipToPadding(false);
+    // XGram: clipped at its top padding (the status bar's height, onHeaderOffsetChanged): picked chats scrolled up
+    // were drawn under the status bar, which is see-through edge to edge (the Remove Fee picker with 5+ people)
+    scrollView.setClipToPadding(true);
     scrollView.setVerticalScrollBarEnabled(false);
     scrollView.addView(bubbleWrap);
     scrollView.setLayoutParams(params);
