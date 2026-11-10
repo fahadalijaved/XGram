@@ -13654,7 +13654,16 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (xgramMessageDragSelect == null || messagesView == null || !inSelectMode()) {
       return false;
     }
-    final int position = messagesView.getChildAdapterPosition(view);
+    // The list's own child: a media message (a video, an album) is inside a wrapper (MessageViewGroup), and the list
+    // only knows the positions of its direct children
+    View child = view;
+    while (child != null && child.getParent() != messagesView) {
+      child = child.getParent() instanceof View ? (View) child.getParent() : null;
+    }
+    if (child == null) {
+      return false;
+    }
+    final int position = messagesView.getChildAdapterPosition(child);
     return position != RecyclerView.NO_POSITION && xgramMessageDragSelect.start(position, msg.isCompletelySelected());
   }
 
