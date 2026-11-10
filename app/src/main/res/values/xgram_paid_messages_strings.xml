@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- Privacy > Messages > Charge for Messages: the price and who pays (Telegram X left the price out) -->
+  <item name="btn_xgramPaidPrice" type="id"/>
+  <string name="XgramPaidPriceHeader">Set your price per message</string>
+  <string name="XgramPaidPriceTitle">Price per message</string>
+  <string name="XgramPaidStarsOne">1 Star</string>
+  <string name="XgramPaidStarsMany">%1$s Stars</string>
+  <string name="XgramPaidPriceHint">You get %1$s%% of every fee. Your contacts never pay.</string>
+  <string name="XgramPaidPriceInputHint">Stars, from 1 to %1$s</string>
+  <string name="XgramPaidNotAllowed">Telegram doesn\'t let this account charge for messages yet.</string>
+</resources>

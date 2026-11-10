@@ -281,22 +281,120 @@ public class SettingsPrivacyKeyController extends RecyclerViewController<Setting
     return changedUnpaidRules != null ? changedUnpaidRules : unpaidRules;
   }
 
+  // XGram: "Charge for Messages" (Mode.NOBODY here) has its price; Telegram X sent 0 and dropped a paid setting.
+  private static final int XGRAM_DEFAULT_STAR_COUNT = 10;
+  /** The settings as Telegram has them (loaded or last saved). */
+  private @Nullable TdApi.NewChatPrivacySettings xgramSavedNewChat;
+  /** The price while "Charge for Messages" is picked. */
+  private long xgramStarCount;
+
+  private long xgramMaxStarCount () {
+    return Math.max(1, tdlib.options().paidMessageStarCountMax);
+  }
+
+  private long xgramClampedStarCount () {
+    return Math.max(1, Math.min(xgramStarCount, xgramMaxStarCount()));
+  }
+
   private TdApi.NewChatPrivacySettings currentNewChatPrivacySettings () {
-    boolean allowNewChatsFromUnknownUsers = currentRules().getMode() != PrivacySettings.Mode.CONTACTS;
-    long incomingMessageStarCount = 0;
-    if (currentRules().getMode() == PrivacySettings.Mode.NOBODY) {
-      // TODO
+    switch (currentRules().getMode()) {
+      case PrivacySettings.Mode.NOBODY:
+        return new TdApi.NewChatPrivacySettings(true, xgramClampedStarCount());
+      case PrivacySettings.Mode.CONTACTS:
+        return new TdApi.NewChatPrivacySettings(false, 0);
+      case PrivacySettings.Mode.EVERYBODY:
+      default:
+        return new TdApi.NewChatPrivacySettings(true, 0);
     }
-    return new TdApi.NewChatPrivacySettings(allowNewChatsFromUnknownUsers, 0);
+  }
+
+  private boolean xgramNewChatChanged () {
+    if (privacyRules == null) {
+      return false;
+    }
+    TdApi.NewChatPrivacySettings current = currentNewChatPrivacySettings();
+    return xgramSavedNewChat == null ||
+      current.allowNewChatsFromUnknownUsers != xgramSavedNewChat.allowNewChatsFromUnknownUsers ||
+      current.incomingPaidMessageStarCount != xgramSavedNewChat.incomingPaidMessageStarCount;
   }
 
   private void setNewChatPrivacySettings (@NonNull TdApi.NewChatPrivacySettings newChatPrivacySettings, @NonNull TdApi.UserPrivacySettingRules unpaidRules) {
     this.unpaidRules = PrivacySettings.valueOf(unpaidRules);
-    if (newChatPrivacySettings.allowNewChatsFromUnknownUsers) {
+    if (changedUnpaidRules != null && changedUnpaidRules.equals(this.unpaidRules)) {
+      changedUnpaidRules = null;
+    }
+    this.xgramSavedNewChat = newChatPrivacySettings;
+    if (newChatPrivacySettings.incomingPaidMessageStarCount > 0) {
+      xgramStarCount = newChatPrivacySettings.incomingPaidMessageStarCount;
+    } else if (xgramStarCount <= 0) {
+      xgramStarCount = Math.min(XGRAM_DEFAULT_STAR_COUNT, xgramMaxStarCount());
+    }
+    if (newChatPrivacySettings.incomingPaidMessageStarCount > 0) {
+      setPrivacyRules(new TdApi.UserPrivacySettingRules(new TdApi.UserPrivacySettingRule[] {new TdApi.UserPrivacySettingRuleRestrictAll()}));
+    } else if (newChatPrivacySettings.allowNewChatsFromUnknownUsers) {
       setPrivacyRules(new TdApi.UserPrivacySettingRules(new TdApi.UserPrivacySettingRule[] {new TdApi.UserPrivacySettingRuleAllowAll()}));
     } else {
       setPrivacyRules(new TdApi.UserPrivacySettingRules(new TdApi.UserPrivacySettingRule[] {new TdApi.UserPrivacySettingRuleAllowContacts(), new TdApi.UserPrivacySettingRuleAllowPremiumUsers()}));
     }
+    if (adapter != null) {
+      adapter.updateValuedSettingById(R.id.btn_xgramPaidPrice);
+      adapter.updateValuedSettingById(R.id.btn_alwaysAllow);
+    }
+  }
+
+  private static final int XGRAM_PAID_ITEM_COUNT = 10;
+
+  /** Under the hint while "Charge for Messages" is picked: the price, then who never pays (the unpaid-messages rules). */
+  private List<ListItem> xgramPaidItems () {
+    long perMille = tdlib.options().paidMessageEarningsPerMille;
+    String percent = perMille % 10 == 0 ? Long.toString(perMille / 10) : (perMille / 10) + "." + (perMille % 10);
+    return Arrays.asList(
+      new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramPaidPriceHeader),
+      new ListItem(ListItem.TYPE_SHADOW_TOP),
+      new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramPaidPrice, 0, R.string.XgramPaidPriceTitle),
+      new ListItem(ListItem.TYPE_SHADOW_BOTTOM),
+      new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, Lang.getString(R.string.XgramPaidPriceHint, percent), false),
+      new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.AddExceptions),
+      new ListItem(ListItem.TYPE_SHADOW_TOP),
+      new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_alwaysAllow, 0, R.string.RemoveMessageFee),
+      new ListItem(ListItem.TYPE_SHADOW_BOTTOM),
+      new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.RemoveMessageFeeHint)
+    );
+  }
+
+  private void xgramUpdatePaidSection (boolean show) {
+    int hintIndex = adapter.indexOfViewById(R.id.btn_description);
+    if (hintIndex == -1) {
+      return;
+    }
+    boolean shown = adapter.indexOfViewById(R.id.btn_xgramPaidPrice) != -1;
+    if (show == shown) {
+      return;
+    }
+    if (show) {
+      List<ListItem> paidItems = xgramPaidItems();
+      adapter.getItems().addAll(hintIndex + 1, paidItems);
+      adapter.notifyItemRangeInserted(hintIndex + 1, paidItems.size());
+    } else {
+      adapter.removeRange(hintIndex + 1, XGRAM_PAID_ITEM_COUNT);
+    }
+  }
+
+  private CharSequence xgramStarsText (long stars) {
+    return stars == 1 ? Lang.getString(R.string.XgramPaidStarsOne) : Lang.getString(R.string.XgramPaidStarsMany, Lang.formatNumber(stars));
+  }
+
+  private void xgramEditStarCount () {
+    final long max = xgramMaxStarCount();
+    openInputAlert(Lang.getString(R.string.XgramPaidPriceTitle), Lang.getString(R.string.XgramPaidPriceInputHint, Lang.formatNumber(max)), R.string.Done, R.string.Cancel, String.valueOf(xgramClampedStarCount()), (inputView, value) -> {
+      int stars = StringUtils.parseInt(value != null ? value.trim() : null, -1);
+      if (stars < 1 || stars > max) {
+        return false;
+      }
+      xgramStarCount = stars;
+      adapter.updateValuedSettingById(R.id.btn_xgramPaidPrice);
+      return true;
+    }, true).getEditText().setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
   }
 
   private boolean needNobodyOption () {
@@ -491,7 +589,11 @@ public class SettingsPrivacyKeyController extends RecyclerViewController<Setting
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
 
     items.add(hintItem);
-    if (needExceptions()) {
+    if (args.mode == Mode.INCOMING_MESSAGES_PRIVACY) {
+      if (rulesType == PrivacySettings.Mode.NOBODY) {
+        items.addAll(xgramPaidItems());
+      }
+    } else if (needExceptions()) {
       items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.AddExceptions));
       items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
 
@@ -574,6 +676,11 @@ public class SettingsPrivacyKeyController extends RecyclerViewController<Setting
   }
 
   private void updateRulesState (PrivacySettings newPrivacySettings) {
+    if (getArgumentsStrict().mode == Mode.INCOMING_MESSAGES_PRIVACY) {
+      // XGram: the price and who never pays come and go with "Charge for Messages" (Telegram X looked for rows it never built)
+      xgramUpdatePaidSection(newPrivacySettings.getMode() == PrivacySettings.Mode.NOBODY);
+      return;
+    }
     int newRules = newPrivacySettings.getMode();
     if (!needExceptions()) {
       updateHints();
@@ -648,7 +755,7 @@ public class SettingsPrivacyKeyController extends RecyclerViewController<Setting
         return false;
       }
       case Mode.INCOMING_MESSAGES_PRIVACY: {
-        return privacyRules.getMode() == PrivacySettings.Mode.NOBODY;
+        return false; // XGram: its "Restrict bots" row had no handler (a tap threw); the paid section is xgramPaidItems
       }
     }
     throw new UnsupportedOperationException(Integer.toString(args.mode));
@@ -769,8 +876,13 @@ public class SettingsPrivacyKeyController extends RecyclerViewController<Setting
       Args args = getArgumentsStrict();
       if (args.mode == Mode.USER_PRIVACY_SETTING && args.userPrivacySetting.getConstructor() == setting.getConstructor()) {
         setPrivacyRules(rules);
-      } else if (args.mode == Mode.INCOMING_MESSAGES_PRIVACY && setting.getConstructor() == TdApi.UserPrivacySettingAllowUnpaidMessages.CONSTRUCTOR) {
-        setNewChatPrivacySettings(currentNewChatPrivacySettings(), rules);
+      } else if (args.mode == Mode.INCOMING_MESSAGES_PRIVACY && setting.getConstructor() == TdApi.UserPrivacySettingAllowUnpaidMessages.CONSTRUCTOR && unpaidRules != null) {
+        // XGram: only who never pays changed (Telegram X re-applied the unsaved mode as if Telegram had it)
+        unpaidRules = PrivacySettings.valueOf(rules);
+        if (changedUnpaidRules != null && changedUnpaidRules.equals(unpaidRules)) {
+          changedUnpaidRules = null;
+        }
+        adapter.updateValuedSettingById(R.id.btn_alwaysAllow);
       }
     });
   }
@@ -779,8 +891,8 @@ public class SettingsPrivacyKeyController extends RecyclerViewController<Setting
   public void onNewChatPrivacySettingsChanged (TdApi.NewChatPrivacySettings settings) {
     runOnUiThreadOptional(() -> {
       Args args = getArgumentsStrict();
-      if (args.mode == Mode.INCOMING_MESSAGES_PRIVACY) {
-        setNewChatPrivacySettings(settings, currentUnpaidRules().toRules());
+      if (args.mode == Mode.INCOMING_MESSAGES_PRIVACY && unpaidRules != null) {
+        setNewChatPrivacySettings(settings, unpaidRules.toRules()); // XGram: the saved rules stay the baseline, unsaved exceptions stay pending
       }
     });
   }
@@ -795,8 +907,11 @@ public class SettingsPrivacyKeyController extends RecyclerViewController<Setting
       protected void setValuedSetting (ListItem item, SettingView view, boolean isUpdate) {
         final int itemId = item.getId();
         if (itemId == R.id.btn_alwaysAllow) {
-          int count = currentRules().getPlusTotalCount(tdlib);
+          PrivacySettings rules = args.mode == Mode.INCOMING_MESSAGES_PRIVACY && currentUnpaidRules() != null ? currentUnpaidRules() : currentRules(); // XGram: who never pays
+          int count = rules.getPlusTotalCount(tdlib);
           view.setData(count > 0 ? Lang.plural(R.string.xUsers, count) : Lang.getString(R.string.PrivacyAddUsers));
+        } else if (itemId == R.id.btn_xgramPaidPrice) {
+          view.setData(xgramStarsText(xgramClampedStarCount()));
         } else if (itemId == R.id.btn_neverAllow) {
           int count = currentRules().getMinusTotalCount(tdlib);
           view.setData(count > 0 ? Lang.plural(R.string.xUsers, count) : Lang.getString(R.string.PrivacyAddUsers));
@@ -932,6 +1047,9 @@ public class SettingsPrivacyKeyController extends RecyclerViewController<Setting
   }
 
   private boolean nothingChanged () {
+    if (getArgumentsStrict().mode == Mode.INCOMING_MESSAGES_PRIVACY) {
+      return !xgramNewChatChanged() && (changedUnpaidRules == null || changedUnpaidRules.equals(unpaidRules)); // XGram: the price counts too
+    }
     return (changedPrivacyRules == null || changedPrivacyRules.equals(privacyRules)) && (changedUnpaidRules == null || changedUnpaidRules.equals(unpaidRules));
   }
 
@@ -947,10 +1065,17 @@ public class SettingsPrivacyKeyController extends RecyclerViewController<Setting
         break;
       }
       case Mode.INCOMING_MESSAGES_PRIVACY: {
-        TdApi.NewChatPrivacySettings newChatPrivacySettings = currentNewChatPrivacySettings();
-        tdlib.send(new TdApi.SetNewChatPrivacySettings(newChatPrivacySettings), tdlib.typedOkHandler(() ->
-          tdlib.listeners().updateNewChatPrivacySettings(newChatPrivacySettings))
-        );
+        if (xgramNewChatChanged()) {
+          TdApi.NewChatPrivacySettings newChatPrivacySettings = currentNewChatPrivacySettings();
+          xgramSavedNewChat = newChatPrivacySettings; // XGram: not sent again when this screen blurs for the user picker
+          tdlib.send(new TdApi.SetNewChatPrivacySettings(newChatPrivacySettings), tdlib.typedOkHandler(() ->
+            tdlib.listeners().updateNewChatPrivacySettings(newChatPrivacySettings))
+          );
+        }
+        if (changedUnpaidRules != null && !changedUnpaidRules.equals(unpaidRules)) {
+          // XGram: "Remove Fee" exceptions were kept on screen and never saved
+          tdlib.send(new TdApi.SetUserPrivacySettingRules(new TdApi.UserPrivacySettingAllowUnpaidMessages(), changedUnpaidRules.toRules()), tdlib.typedOkHandler());
+        }
         break;
       }
     }
@@ -967,6 +1092,9 @@ public class SettingsPrivacyKeyController extends RecyclerViewController<Setting
 
   @Override
   public long[] getAlreadySelectedChatIds () {
+    if (userPickMode == R.id.btn_alwaysAllow && getArgumentsStrict().mode == Mode.INCOMING_MESSAGES_PRIVACY) {
+      return currentUnpaidRules() != null ? currentUnpaidRules().getAllPlusIds() : null; // XGram: who never pays
+    }
     if (userPickMode == R.id.btn_alwaysAllow) {
       return currentRules().getAllPlusIds();
     } else if (userPickMode == R.id.btn_neverAllow) {
@@ -976,6 +1104,14 @@ public class SettingsPrivacyKeyController extends RecyclerViewController<Setting
   }
 
   private void setAllowUsers (long[] userIds, long[] chatIds) {
+    if (getArgumentsStrict().mode == Mode.INCOMING_MESSAGES_PRIVACY) {
+      if (currentUnpaidRules() != null) {
+        // XGram: "Remove Fee" edits the unpaid-messages rules (Telegram X edited the synthetic mode rules)
+        changedUnpaidRules = PrivacySettings.valueOf(currentUnpaidRules().allowExceptions(userIds, chatIds));
+        adapter.updateValuedSettingById(R.id.btn_alwaysAllow);
+      }
+      return;
+    }
     changedPrivacyRules = PrivacySettings.valueOf(currentRules().allowExceptions(userIds, chatIds));
     adapter.updateValuedSettingById(R.id.btn_alwaysAllow);
     adapter.updateValuedSettingById(R.id.btn_neverAllow);
@@ -989,6 +1125,9 @@ public class SettingsPrivacyKeyController extends RecyclerViewController<Setting
 
   @Override
   public int provideMultiUserPickerHint () {
+    if (getArgumentsStrict().mode == Mode.INCOMING_MESSAGES_PRIVACY) {
+      return R.string.RemoveMessageFee;
+    }
     if (userPickMode == R.id.btn_neverAllow) {
       return getArgumentsStrict().userPrivacySetting.getConstructor() == TdApi.UserPrivacySettingShowStatus.CONSTRUCTOR ? R.string.NeverShareWith : R.string.NeverAllow;
     } else if (userPickMode == R.id.btn_alwaysAllow) {
@@ -1038,7 +1177,19 @@ public class SettingsPrivacyKeyController extends RecyclerViewController<Setting
       ContactsController c = new ContactsController(context, tdlib);
       c.setArguments(new ContactsController.Args(this).useGlobalSearch(SearchManager.FLAG_NEED_TOP_CHATS | SearchManager.FLAG_NEED_GLOBAL_SEARCH | SearchManager.FLAG_NO_BOTS | SearchManager.FLAG_NO_CHANNELS | SearchManager.FLAG_NO_SELF));
       navigateTo(c);
+    } else if (viewId == R.id.btn_xgramPaidPrice) {
+      xgramEditStarCount();
     } else if (viewId == R.id.btn_everybody || viewId == R.id.btn_contacts || viewId == R.id.btn_nobody) {
+      if (viewId == R.id.btn_nobody && args.mode == Mode.INCOMING_MESSAGES_PRIVACY && !tdlib.options().canEnablePaidMessages && currentRules().getMode() != PrivacySettings.Mode.NOBODY) {
+        // XGram: Telegram decides who may charge (can_enable_paid_messages); the radio stays where it was
+        context.tooltipManager()
+          .builder(v)
+          .icon(R.drawable.baseline_info_24)
+          .controller(this)
+          .show(tdlib, Lang.getString(R.string.XgramPaidNotAllowed))
+          .hideDelayed();
+        return;
+      }
       ListItem item = (ListItem) v.getTag();
       if (adapter.processToggle(v)) {
         final int desiredMode;

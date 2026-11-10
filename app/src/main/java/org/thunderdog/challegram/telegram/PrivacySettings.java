@@ -830,7 +830,7 @@ public class PrivacySettings {
     if (chatIds != null && chatIds.length > 0) {
       int index = 0;
       while (index < newRules.size()) {
-        TdApi.UserPrivacySettingRule rule = rules.get(index);
+        TdApi.UserPrivacySettingRule rule = newRules.get(index); // XGram: newRules (the old list put a group exception after "Nobody", where it never applied)
         switch (rule.getConstructor()) {
           case TdApi.UserPrivacySettingRuleAllowUsers.CONSTRUCTOR:
           case TdApi.UserPrivacySettingRuleRestrictUsers.CONSTRUCTOR:
