@@ -37,6 +37,7 @@ import org.thunderdog.challegram.navigation.HeaderView;
 import org.thunderdog.challegram.navigation.ViewController;
 import org.thunderdog.challegram.support.ViewSupport;
 import org.thunderdog.challegram.theme.ColorId;
+import org.thunderdog.challegram.theme.Theme;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.Views;
 import org.thunderdog.challegram.unsorted.Settings;
@@ -1138,8 +1139,76 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
     }
   }
 
+  // XGram: a pill over the list while a page waits on the network ("Connecting to Server…"), a spinner and the text
+
+  private @Nullable android.widget.LinearLayout xgramBusyView;
+  private android.widget.TextView xgramBusyText;
+  private android.widget.ProgressBar xgramBusySpinner;
+
+  /** Shows the pill with {@code text}, or hides it with null. */
+  protected final void xgramShowBusy (@Nullable CharSequence text) {
+    if (text == null) {
+      if (xgramBusyView != null && xgramBusyView.getVisibility() == View.VISIBLE) {
+        final View view = xgramBusyView;
+        view.animate().cancel();
+        view.animate().alpha(0f).setDuration(120).withEndAction(() -> view.setVisibility(View.GONE)).start();
+      }
+      return;
+    }
+    if (contentView == null) {
+      return;
+    }
+    final boolean expressive = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    final int background = expressive ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGHEST) : Theme.getColor(ColorId.filling);
+    final int foreground = expressive ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE) : Theme.getColor(ColorId.text);
+    final int accent = expressive ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY) : Theme.getColor(ColorId.progress);
+    if (xgramBusyView == null) {
+      final android.widget.LinearLayout pill = new android.widget.LinearLayout(context());
+      pill.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+      pill.setGravity(Gravity.CENTER_VERTICAL);
+      pill.setPadding(Screen.dp(16f), Screen.dp(10f), Screen.dp(20f), Screen.dp(10f));
+      pill.setElevation(Screen.dp(3f));
+      xgramBusySpinner = new android.widget.ProgressBar(context());
+      xgramBusySpinner.setIndeterminate(true);
+      pill.addView(xgramBusySpinner, new android.widget.LinearLayout.LayoutParams(Screen.dp(20f), Screen.dp(20f)));
+      xgramBusyText = new android.widget.TextView(context());
+      xgramBusyText.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 15f);
+      xgramBusyText.setMaxLines(1);
+      xgramBusyText.setEllipsize(android.text.TextUtils.TruncateAt.END);
+      final android.widget.LinearLayout.LayoutParams textParams = new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+      textParams.leftMargin = Screen.dp(12f);
+      pill.addView(xgramBusyText, textParams);
+      final FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(XGRAM_BUSY_HEIGHT), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+      params.topMargin = HeaderView.getSize(false);
+      params.leftMargin = params.rightMargin = Screen.dp(24f);
+      pill.setLayoutParams(params);
+      contentView.addView(pill);
+      xgramBusyView = pill;
+    }
+    final android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
+    shape.setColor(background);
+    shape.setCornerRadius(Screen.dp(XGRAM_BUSY_HEIGHT) / 2f);
+    xgramBusyView.setBackground(shape);
+    xgramBusyText.setTextColor(foreground);
+    xgramBusySpinner.setIndeterminateTintList(android.content.res.ColorStateList.valueOf(accent));
+    xgramBusyText.setText(text);
+    xgramBusyView.setTranslationY(findYForStaticView(Screen.dp(XGRAM_BUSY_HEIGHT)));
+    xgramBusyView.bringToFront();
+    xgramBusyView.animate().cancel();
+    if (xgramBusyView.getVisibility() != View.VISIBLE) {
+      xgramBusyView.setAlpha(0f);
+      xgramBusyView.setVisibility(View.VISIBLE);
+    }
+    xgramBusyView.animate().alpha(1f).setDuration(150).start();
+  }
+
+  private static final float XGRAM_BUSY_HEIGHT = 44f;
+
   @CallSuper
   protected void onRecyclerTopUpdate (float top) {
+    if (xgramBusyView != null) {
+      xgramBusyView.setTranslationY(findYForStaticView(Screen.dp(XGRAM_BUSY_HEIGHT)));
+    }
     if (progressView != null) {
       progressView.setTranslationY(findYForStaticView(progressView.getLayoutParams().height));
     }

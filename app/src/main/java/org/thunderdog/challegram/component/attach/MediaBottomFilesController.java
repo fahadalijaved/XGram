@@ -272,7 +272,34 @@ public class MediaBottomFilesController extends MediaBottomBaseController<Void> 
         operation = null;
       }
       if (operation != null) {
-        operation.setCallbacks(onDone, onError);
+        if (currentPath.startsWith(KEY_SFTP) || currentPath.startsWith(KEY_TREE)) {
+          // XGram: a server or another app may take a while: after a moment a "Connecting…" pill says so, and it
+          // goes when the folder opens, fails or is left
+          final LoadOperation networkOperation = operation;
+          final Runnable done = onDone, failed = onError;
+          final boolean[] finished = {false};
+          operation.setCallbacks(() -> {
+            finished[0] = true;
+            xgramShowBusy(null);
+            if (done != null) {
+              done.run();
+            }
+          }, () -> {
+            finished[0] = true;
+            xgramShowBusy(null);
+            if (failed != null) {
+              failed.run();
+            }
+          });
+          final String busyText = xgramBusyText(currentPath, data);
+          UI.post(() -> {
+            if (!finished[0] && currentLoadOperation == networkOperation && !networkOperation.isCancelled() && !isDestroyed()) {
+              xgramShowBusy(busyText);
+            }
+          }, 250);
+        } else {
+          operation.setCallbacks(onDone, onError);
+        }
         this.currentLoadOperation = operation;
         if (before != null) {
           before.runWithData(() -> xgramQueue(currentPath).execute(operation));
@@ -923,6 +950,17 @@ public class MediaBottomFilesController extends MediaBottomBaseController<Void> 
       currentLoadOperation.cancel();
       currentLoadOperation = null;
     }
+    xgramShowBusy(null); // XGram: a server that didn't answer was left
+  }
+
+  /** XGram: "Connecting to Server…" for a server itself, "Opening Photos…" for a folder, "Loading…" going back up. */
+  private String xgramBusyText (String path, @Nullable InlineResultCommon data) {
+    final String title = data != null ? data.xgramTitle() : null;
+    if (StringUtils.isEmpty(title) || "..".equals(title)) {
+      return Lang.getString(R.string.XgramFilesLoading);
+    }
+    final boolean serverRoot = path.startsWith(KEY_SFTP) && path.endsWith("\n");
+    return Lang.getString(serverRoot ? R.string.XgramFilesConnecting : R.string.XgramFilesOpening, title);
   }
 
   private void openAlert (final LoadOperation context, final int title, final int content) {

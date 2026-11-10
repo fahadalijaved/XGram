@@ -18,4 +18,7 @@
   <string name="XgramArrangeUp">Move up</string>
   <string name="XgramArrangeDown">Move down</string>
   <string name="XgramArrangeReset">Reset</string>
+  <string name="XgramFilesConnecting">Connecting to %1$s…</string>
+  <string name="XgramFilesOpening">Opening %1$s…</string>
+  <string name="XgramFilesLoading">Loading…</string>
 </resources>
