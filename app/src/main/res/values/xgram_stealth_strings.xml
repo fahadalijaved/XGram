@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: story stealth mode (Telegram Premium) -->
+<resources>
+  <item name="btn_xgramStoriesStealth" type="id"/>
+  <item name="btn_xgramPremiumStealth" type="id"/>
+  <string name="XgramStoriesStealth">Stories in stealth mode</string>
+  <string name="XgramStealthTitle">Story stealth mode</string>
+  <string name="XgramStealthActiveUntil">On until %1$s</string>
+  <string name="XgramStealthReady">Hides that you viewed stories, from a few minutes ago until a while from now</string>
+  <string name="XgramStealthCooldown">Available again at %1$s</string>
+  <string name="XgramStealthOnUntil">Stealth mode is on until %1$s: people won\'t see you viewed their stories</string>
+  <string name="XgramStealthOn">Stealth mode is on: people won\'t see you viewed their stories for a while</string>
+</resources>

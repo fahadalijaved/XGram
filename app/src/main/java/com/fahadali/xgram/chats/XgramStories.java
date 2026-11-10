@@ -19,6 +19,7 @@ import org.thunderdog.challegram.mediaview.MediaViewController;
 import org.thunderdog.challegram.mediaview.data.MediaItem;
 import org.thunderdog.challegram.mediaview.data.MediaStack;
 import org.thunderdog.challegram.navigation.ViewController;
+import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.tool.UI;
 
@@ -69,6 +70,47 @@ public final class XgramStories {
         UI.showToast(R.string.XgramStoriesNone, android.widget.Toast.LENGTH_SHORT);
       }
     });
+  }
+
+  // XGram: story stealth mode (Telegram Premium): the account's story views stay hidden, from a few minutes back until a
+  // while ahead (Telegram's periods), then it rests for a while before it can be turned on again
+
+  /** Turns stealth mode on (or finds it on) and opens the chat's stories. */
+  public static void openStealth (ViewController<?> c, long chatId) {
+    activateStealth(c.tdlib(), () -> c.runOnUiThreadOptional(() -> open(c, chatId)));
+  }
+
+  /** Turns stealth mode on; {@code after} runs once it's on (also when it already was). During the rest, says when. */
+  public static void activateStealth (Tdlib tdlib, @Nullable Runnable after) {
+    final int now = (int) tdlib.currentTime(java.util.concurrent.TimeUnit.SECONDS);
+    final int activeUntil = tdlib.storyStealthModeActiveUntilDate();
+    if (activeUntil > now) {
+      UI.showToast(Lang.getString(R.string.XgramStealthOnUntil, Lang.time(activeUntil, java.util.concurrent.TimeUnit.SECONDS)), android.widget.Toast.LENGTH_SHORT);
+      if (after != null) {
+        after.run();
+      }
+      return;
+    }
+    final int cooldownUntil = tdlib.storyStealthModeCooldownUntilDate();
+    if (cooldownUntil > now) {
+      UI.showToast(Lang.getString(R.string.XgramStealthCooldown, Lang.time(cooldownUntil, java.util.concurrent.TimeUnit.SECONDS)), android.widget.Toast.LENGTH_SHORT);
+      return;
+    }
+    tdlib.send(new TdApi.ActivateStoryStealthMode(), (ok, error) -> UI.post(() -> {
+      if (error != null) {
+        UI.showError(error);
+        return;
+      }
+      final int until = tdlib.storyStealthModeActiveUntilDate();
+      if (until > (int) tdlib.currentTime(java.util.concurrent.TimeUnit.SECONDS)) {
+        UI.showToast(Lang.getString(R.string.XgramStealthOnUntil, Lang.time(until, java.util.concurrent.TimeUnit.SECONDS)), android.widget.Toast.LENGTH_SHORT);
+      } else {
+        UI.showToast(R.string.XgramStealthOn, android.widget.Toast.LENGTH_SHORT);
+      }
+      if (after != null) {
+        after.run();
+      }
+    }));
   }
 
   private static void load (ViewController<?> c, long chatId, TdApi.ChatActiveStories active) {

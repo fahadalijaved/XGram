@@ -761,6 +761,10 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     if (com.fahadali.xgram.chats.XgramStories.hasStories(tdlib, getChatId())) {
       ids.append(R.id.btn_xgramStories); // XGram: the chat's active stories, like official Telegram
       strings.append(R.string.XgramStories);
+      if (tdlib.hasPremium() && !tdlib.isSelfChat(getChatId())) { // XGram: story stealth mode, only with Premium
+        ids.append(R.id.btn_xgramStoriesStealth);
+        strings.append(R.string.XgramStoriesStealth);
+      }
     }
     if (mode == Mode.USER || mode == Mode.SECRET || mode == Mode.CHANNEL) { // XGram: gifts, like official Telegram
       if (!tdlib.isSelfChat(getChatId())) {
@@ -919,6 +923,8 @@ public class ProfileController extends ViewController<ProfileController.Args> im
           manageChat();
         } else if (id == R.id.btn_xgramStories) {
           com.fahadali.xgram.chats.XgramStories.open(this, getChatId());
+        } else if (id == R.id.btn_xgramStoriesStealth) {
+          com.fahadali.xgram.chats.XgramStories.openStealth(this, getChatId()); // XGram: stealth on, then the stories
         } else if (id == R.id.btn_xgramSendGift || id == R.id.btn_xgramShowGifts) {
           final long giftChatId = getChatId();
           final long giftUserId = tdlib.chatUserId(giftChatId);

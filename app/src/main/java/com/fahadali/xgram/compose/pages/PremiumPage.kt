@@ -129,6 +129,19 @@ fun PremiumPage() {
           }
         }
       }
+      // Story stealth mode: a tap turns it on, then stories can be viewed anywhere without being seen
+      val nowSeconds = tdlib.currentTime(TimeUnit.SECONDS)
+      val stealthUntil = tdlib.storyStealthModeActiveUntilDate()
+      val stealthRest = tdlib.storyStealthModeCooldownUntilDate()
+      val stealthText = when {
+        !premium -> needs
+        stealthUntil > nowSeconds -> s(R.string.XgramStealthActiveUntil, Lang.time(stealthUntil.toLong(), TimeUnit.SECONDS))
+        stealthRest > nowSeconds -> s(R.string.XgramStealthCooldown, Lang.time(stealthRest.toLong(), TimeUnit.SECONDS))
+        else -> s(R.string.XgramStealthReady)
+      }
+      value(15, s(R.string.XgramStealthTitle), stealthText, icon = R.drawable.baseline_eye_off_24, enabled = premium) {
+        com.fahadali.xgram.chats.XgramStories.activateStealth(tdlib) { host.changed() }
+      }
     }
 
     header(R.string.XgramPremiumProfile)

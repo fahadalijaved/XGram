@@ -8880,6 +8880,20 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     listeners.updateStoryPostFailed(update);
   }
 
+  /** XGram: until when story stealth mode hides this account's story views (unix seconds), 0 if it isn't on. */
+  public int storyStealthModeActiveUntilDate () {
+    synchronized (dataLock) {
+      return storyStealthModeActiveUntilDate;
+    }
+  }
+
+  /** XGram: until when story stealth mode can't be turned on again (unix seconds), 0 if it can. */
+  public int storyStealthModeCooldownUntilDate () {
+    synchronized (dataLock) {
+      return storyStealthModeCooldownUntilDate;
+    }
+  }
+
   @TdlibThread
   private void updateStoryStealthMode (TdApi.UpdateStoryStealthMode update) {
     synchronized (dataLock) {
