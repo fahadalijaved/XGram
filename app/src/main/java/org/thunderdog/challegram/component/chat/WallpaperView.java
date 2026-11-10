@@ -102,6 +102,21 @@ public class WallpaperView extends View implements ThemeChangeListener, ChatStyl
   private TGBackground scheduledWallpaper;
   private boolean scheduledWallpaperAnimated;
 
+  /** XGram: the open chat's own wallpaper (Telegram's chat background), drawn instead of the app's; null: none. */
+  private @Nullable TGBackground xgramChatWallpaper;
+
+  /** XGram: shows {@code wallpaper} for this chat, or the app's wallpaper again with null. */
+  public void xgramSetChatWallpaper (@Nullable TGBackground wallpaper) {
+    if (wallpaper == null && xgramChatWallpaper == null) {
+      return;
+    }
+    if (wallpaper != null && xgramChatWallpaper != null && TGBackground.compare(wallpaper, xgramChatWallpaper, false)) {
+      return;
+    }
+    xgramChatWallpaper = wallpaper;
+    setWallpaper(wallpaper != null ? wallpaper : tdlib.settings().getWallpaper(Theme.getWallpaperIdentifier()), false);
+  }
+
   private void setWallpaper (TGBackground wallpaper, boolean animated) {
     if (wallpaper != null && wallpaper.isEmpty()) {
       wallpaper = null;
@@ -148,6 +163,9 @@ public class WallpaperView extends View implements ThemeChangeListener, ChatStyl
 
   @Override
   public void onThemeChanged (ThemeDelegate oldTheme, ThemeDelegate newTheme) {
+    if (xgramChatWallpaper != null) {
+      return; // XGram: the chat's own wallpaper stays
+    }
     int newUsageIdentifier = Theme.getWallpaperIdentifier(newTheme);
     if (Theme.getWallpaperIdentifier(oldTheme) != newUsageIdentifier) {
       setWallpaper(tdlib.settings().getWallpaper(newUsageIdentifier), true);
@@ -158,6 +176,9 @@ public class WallpaperView extends View implements ThemeChangeListener, ChatStyl
   public void onThemePropertyChanged (int themeId, @PropertyId int propertyId, float value, boolean isDefault) {
     switch (propertyId) {
       case PropertyId.WALLPAPER_USAGE_ID:
+        if (xgramChatWallpaper != null) {
+          break; // XGram: the chat's own wallpaper stays
+        }
         setWallpaper(tdlib.settings().getWallpaper(Theme.getWallpaperIdentifier(themeId)), true);
         break;
     }
@@ -188,7 +209,7 @@ public class WallpaperView extends View implements ThemeChangeListener, ChatStyl
 
   @Override
   public void onChatWallpaperChanged (Tdlib tdlib, TGBackground wallpaper, int usageIdentifier) {
-    if (this.tdlib == tdlib && usageIdentifier == Theme.getWallpaperIdentifier()) {
+    if (this.tdlib == tdlib && usageIdentifier == Theme.getWallpaperIdentifier() && xgramChatWallpaper == null) { // XGram: not over a chat's own
       if (inSelfBlurMode) {
         wallpaper = TGBackground.newBlurredWallpaper(tdlib, wallpaper, selfBlurValue);
       }

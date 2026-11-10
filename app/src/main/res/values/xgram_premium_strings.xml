@@ -104,7 +104,7 @@
   <string name="XgramPremiumFeatureEmojiStatus">Emoji status</string>
   <string name="XgramPremiumFeatureEmojiStatusWhere">Emoji status, above</string>
   <string name="XgramPremiumFeatureAnimatedProfilePhoto">Video profile photos</string>
-  <string name="XgramPremiumFeatureAnimatedProfilePhotoWhere">Others\' play in XGram. Setting yours: official apps for now</string>
+  <string name="XgramPremiumFeatureAnimatedProfilePhotoWhere">Tap your photo in Settings → Use a video (or Use an emoji)</string>
   <string name="XgramPremiumFeatureForumTopicIcon">Topic icons</string>
   <string name="XgramPremiumFeatureForumTopicIconWhere">When you create or edit a topic</string>
   <string name="XgramPremiumFeatureAppIcons">App icons</string>
@@ -117,6 +117,7 @@
   <string name="XgramPremiumFeatureAccentColor">Name and profile colors</string>
   <string name="XgramPremiumFeatureAccentColorWhere">Name and profile color, above</string>
   <string name="XgramPremiumFeatureBackgroundForBoth">Wallpapers for both sides</string>
+  <string name="XgramPremiumFeatureBackgroundForBothWhere">A person\'s profile → More → Set wallpaper → Set for me and them</string>
   <string name="XgramPremiumFeatureSavedMessagesTags">Saved Messages tags</string>
   <string name="XgramPremiumFeatureSavedMessagesTagsWhere">Saved Messages tags, above</string>
   <string name="XgramPremiumFeatureMessagePrivacy">Message privacy</string>
@@ -124,6 +125,7 @@
   <string name="XgramPremiumFeatureLastSeenTimes">Last seen times</string>
   <string name="XgramPremiumFeatureLastSeenTimesWhere">Last seen and read time, above</string>
   <string name="XgramPremiumFeatureBusiness">Telegram Business</string>
+  <string name="XgramPremiumFeatureBusinessWhere">Telegram Business, above</string>
   <string name="XgramPremiumFeatureMessageEffects">Message effects</string>
   <string name="XgramPremiumFeatureMessageEffectsWhere">In a private chat, long-press Send → Send with effect</string>
   <string name="XgramPremiumFeatureChecklists">Checklists</string>

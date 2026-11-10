@@ -45,6 +45,7 @@ import tgx.td.TdConstants;
 public class TGBackground {
   private final int accountId;
   private final String name;
+  private long xgramRemoteId; // XGram: Telegram's id of the background (0: local or a fill), for setting it in one chat
   private TdApi.BackgroundType type;
   private final String customPath;
   private final boolean isVector;
@@ -213,6 +214,7 @@ public class TGBackground {
   public TGBackground (Tdlib tdlib, TdApi.Background background, boolean blur) {
     this.accountId = tdlib.id();
     this.name = background.name;
+    this.xgramRemoteId = background.id;
     this.type = background.type;
     this.customPath = null;
     this.isVector = background.document != null && TdConstants.BACKGROUND_PATTERN_MIME_TYPE.equals(background.document.mimeType);
@@ -331,6 +333,11 @@ public class TGBackground {
 
   public String getName () {
     return name;
+  }
+
+  /** XGram: Telegram's id of the background, 0 when it is local or a fill made here. */
+  public long xgramRemoteId () {
+    return xgramRemoteId;
   }
 
   public boolean isFill () {

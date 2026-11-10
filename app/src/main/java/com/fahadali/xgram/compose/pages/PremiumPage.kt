@@ -397,11 +397,11 @@ private fun describeFeature(feature: TdApi.PremiumFeature): Pair<String, String>
     is TdApi.PremiumFeatureUpgradedStories -> R.string.XgramPremiumFeatureUpgradedStories to official
     is TdApi.PremiumFeatureChatBoost -> R.string.XgramPremiumFeatureChatBoost to R.string.XgramPremiumFeatureChatBoostWhere
     is TdApi.PremiumFeatureAccentColor -> R.string.XgramPremiumFeatureAccentColor to R.string.XgramPremiumFeatureAccentColorWhere
-    is TdApi.PremiumFeatureBackgroundForBoth -> R.string.XgramPremiumFeatureBackgroundForBoth to official
+    is TdApi.PremiumFeatureBackgroundForBoth -> R.string.XgramPremiumFeatureBackgroundForBoth to R.string.XgramPremiumFeatureBackgroundForBothWhere
     is TdApi.PremiumFeatureSavedMessagesTags -> R.string.XgramPremiumFeatureSavedMessagesTags to R.string.XgramPremiumFeatureSavedMessagesTagsWhere
     is TdApi.PremiumFeatureMessagePrivacy -> R.string.XgramPremiumFeatureMessagePrivacy to R.string.XgramPremiumFeatureMessagePrivacyWhere
     is TdApi.PremiumFeatureLastSeenTimes -> R.string.XgramPremiumFeatureLastSeenTimes to R.string.XgramPremiumFeatureLastSeenTimesWhere
-    is TdApi.PremiumFeatureBusiness -> R.string.XgramPremiumFeatureBusiness to official
+    is TdApi.PremiumFeatureBusiness -> R.string.XgramPremiumFeatureBusiness to R.string.XgramPremiumFeatureBusinessWhere
     is TdApi.PremiumFeatureMessageEffects -> R.string.XgramPremiumFeatureMessageEffects to R.string.XgramPremiumFeatureMessageEffectsWhere
     is TdApi.PremiumFeatureChecklists -> R.string.XgramPremiumFeatureChecklists to R.string.XgramPremiumFeatureChecklistsWhere
     is TdApi.PremiumFeaturePaidMessages -> R.string.XgramPremiumFeaturePaidMessages to R.string.XgramPremiumFeaturePaidMessagesWhere

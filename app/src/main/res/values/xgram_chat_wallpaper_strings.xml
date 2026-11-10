@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: a wallpaper for one chat (Telegram's chat background), see MessagesController.xgramPickChatWallpaper -->
+<resources>
+  <item name="btn_xgramChatWallpaper" type="id"/>
+  <item name="btn_xgramChatWallpaperReset" type="id"/>
+  <item name="btn_xgramWallpaperForMe" type="id"/>
+  <item name="btn_xgramWallpaperForBoth" type="id"/>
+  <string name="XgramChatWallpaper">Set wallpaper</string>
+  <string name="XgramChatWallpaperReset">Reset wallpaper</string>
+  <string name="XgramChatWallpaperResetInfo">This chat shows your app wallpaper again.</string>
+  <string name="XgramChatWallpaperAsk">Use this wallpaper in your chat with %1$s?</string>
+  <string name="XgramChatWallpaperForMe">Set for me</string>
+  <string name="XgramChatWallpaperForBoth">Set for me and %1$s</string>
+  <string name="XgramChatWallpaperSet">Wallpaper set</string>
+  <string name="XgramChatWallpaperFailed">The wallpaper couldn\'t be changed. Try again later.</string>
+  <string name="XgramChatWallpaperNoPhoto">Pick one of these wallpapers for a chat.</string>
+</resources>

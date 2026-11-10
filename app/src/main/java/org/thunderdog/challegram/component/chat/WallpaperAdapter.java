@@ -528,6 +528,16 @@ public class WallpaperAdapter extends RecyclerView.Adapter<WallpaperAdapter.View
     }
 
     TGBackground wallpaper = ((WallpaperView) v).getWallpaper();
+    if (wallpaper != null && context instanceof org.thunderdog.challegram.ui.MessagesController && ((org.thunderdog.challegram.ui.MessagesController) context).xgramWallpaperChatId() != 0) {
+      // XGram: the wallpaper screen of one chat: a tile is for that chat (not a photo from the gallery yet)
+      if (wallpaper.isCustom()) {
+        org.thunderdog.challegram.tool.UI.showToast(R.string.XgramChatWallpaperNoPhoto, android.widget.Toast.LENGTH_SHORT);
+      } else {
+        setSelected(wallpaper);
+        ((org.thunderdog.challegram.ui.MessagesController) context).xgramPickChatWallpaper(wallpaper);
+      }
+      return;
+    }
     if (wallpaper != null) {
       if (wallpaper.isCustom()) {
         Intents.openGallery(context.context(), false);

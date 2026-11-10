@@ -3005,6 +3005,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
     public long eventLogUserId;
 
     public @Nullable TdApi.Background wallpaperObject;
+    /** XGram: the wallpaper screen (PREVIEW_MODE_WALLPAPER) sets the wallpaper of this chat instead of the app's. */
+    public long xgramWallpaperChatId;
 
     public Arguments (Tdlib tdlib, TdApi.ChatList chatList, TdApi.Chat chat, @Nullable ThreadInfo messageThread, @Nullable TdApi.MessageTopic messageTopicId, TdApi.SearchMessagesFilter filter) {
       this.constructor = 0;
@@ -13240,9 +13242,75 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
   }
 
+  // XGram: a chat's own wallpaper
+
+  /** The chat whose wallpaper this wallpaper screen sets, or 0 (the app's wallpaper). */
+  public long xgramWallpaperChatId () {
+    final Arguments args = getArguments();
+    return args != null && inPreviewMode && previewMode == PREVIEW_MODE_WALLPAPER ? args.xgramWallpaperChatId : 0;
+  }
+
+  /** Telegram's background of the open chat (set by you, or by them for both of you) over the app's wallpaper. */
+  private void xgramUpdateChatWallpaper (long chatId) {
+    if (wallpaperView == null || inPreviewMode) {
+      return;
+    }
+    final TdApi.Chat target = chatId != 0 ? tdlib.chat(chatId) : null;
+    final TdApi.ChatBackground background = target != null ? target.background : null;
+    final boolean usable = background != null && background.background != null && !(background.background.type instanceof TdApi.BackgroundTypeChatTheme);
+    wallpaperView.xgramSetChatWallpaper(usable ? new TGBackground(tdlib, background.background) : null);
+  }
+
+  @Override
+  public void onChatBackgroundChanged (long chatId, @Nullable TdApi.ChatBackground background) {
+    runOnUiThreadOptional(() -> {
+      if (getChatId() == chatId) {
+        xgramUpdateChatWallpaper(chatId);
+      }
+    });
+  }
+
+  /** A tile was picked in a chat's wallpaper screen: shown at once, then set for you, or for both of you (Premium). */
+  public void xgramPickChatWallpaper (TGBackground wallpaper) {
+    final long chatId = xgramWallpaperChatId();
+    if (chatId == 0) {
+      return;
+    }
+    if (wallpaperView != null) {
+      wallpaperView.xgramSetChatWallpaper(wallpaper);
+    }
+    if (wallpaper.xgramRemoteId() == 0 && !wallpaper.isFill()) {
+      UI.showToast(R.string.XgramChatWallpaperNoPhoto, Toast.LENGTH_SHORT);
+      return;
+    }
+    final boolean both = tdlib.hasPremium() && !tdlib.isSelfChat(chatId) && ChatId.isPrivate(chatId);
+    final String name = tdlib.chatTitle(chatId);
+    final int[] ids = both ? new int[] {R.id.btn_xgramWallpaperForMe, R.id.btn_xgramWallpaperForBoth, R.id.btn_cancel} : new int[] {R.id.btn_xgramWallpaperForMe, R.id.btn_cancel};
+    final String[] titles = both ?
+      new String[] {Lang.getString(R.string.XgramChatWallpaperForMe), Lang.getString(R.string.XgramChatWallpaperForBoth, name), Lang.getString(R.string.Cancel)} :
+      new String[] {Lang.getString(R.string.XgramChatWallpaperForMe), Lang.getString(R.string.Cancel)};
+    final int[] icons = both ? new int[] {R.drawable.baseline_person_24, R.drawable.baseline_group_24, R.drawable.baseline_cancel_24} : new int[] {R.drawable.baseline_person_24, R.drawable.baseline_cancel_24};
+    showOptions(Lang.getString(R.string.XgramChatWallpaperAsk, name), ids, titles, null, icons, (itemView, id) -> {
+      if (id == R.id.btn_xgramWallpaperForMe || id == R.id.btn_xgramWallpaperForBoth) {
+        final TdApi.InputBackground input = wallpaper.xgramRemoteId() != 0 ? new TdApi.InputBackgroundRemote(wallpaper.xgramRemoteId()) : null;
+        tdlib.send(new TdApi.SetChatBackground(chatId, input, wallpaper.getType(), 0, id == R.id.btn_xgramWallpaperForMe), (ok, error) -> runOnUiThreadOptional(() -> {
+          if (error != null) {
+            android.util.Log.w("XgramChatWallpaper", "SetChatBackground: " + error.code + " " + error.message);
+            UI.showToast(Lang.getString("PREMIUM_ACCOUNT_REQUIRED".equals(error.message) ? R.string.XgramPremiumNeeds : R.string.XgramChatWallpaperFailed), Toast.LENGTH_LONG);
+          } else {
+            UI.showToast(R.string.XgramChatWallpaperSet, Toast.LENGTH_SHORT);
+            navigateBack();
+          }
+        }));
+      }
+      return true;
+    });
+  }
+
   // Updates (new)
 
   public void subscribeToUpdates (long chatId) {
+    xgramUpdateChatWallpaper(chatId);
     tdlib.listeners().subscribeToChatUpdates(chatId, this);
     tdlib.singleUnreadReactionsManager().subscribeToUnreadSingleReactionUpdates(chatId, this);
     if (chatId != getHeaderChatId()) {
