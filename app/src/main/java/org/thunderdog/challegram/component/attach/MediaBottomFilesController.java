@@ -181,6 +181,11 @@ public class MediaBottomFilesController extends MediaBottomBaseController<Void> 
   private static final String KEY_FOLDER = "dir://";
   private static final String KEY_FILE = "file://";
   private static final String KEY_UPPER = "..";
+  // XGram: a folder of another storage app: "tree://" + its tree URI + "\n" + the document id inside it
+  private static final String KEY_TREE = "tree://";
+  private static final String KEY_OTHER_APPS = "xgram_other_apps";
+  private static final String KEY_ADD_FOLDER = "xgram_add_folder";
+  private static final int REQUEST_STORAGE_FOLDER = 10095;
 
   private int initialItemsCount;
 
@@ -218,6 +223,8 @@ public class MediaBottomFilesController extends MediaBottomBaseController<Void> 
           }
           return true;
         });
+      } else if (currentPath.startsWith(KEY_TREE)) {
+        operation = xgramBuildTree(currentPath, parentPath); // XGram: a folder of another storage app
       } else if (currentPath.startsWith(KEY_FOLDER)) {
         String path = currentPath.substring(KEY_FOLDER.length());
         operation = buildFolder(path, parentPath);
@@ -297,6 +304,8 @@ public class MediaBottomFilesController extends MediaBottomBaseController<Void> 
       InlineResultCommon downloadsItem = createItem(context, tdlib, KEY_DOWNLOADS, R.drawable.baseline_file_download_24, Lang.getString(R.string.Downloads), Lang.getString(R.string.Files));
       items.add(createItem(downloadsItem, R.id.btn_downloads));
     }
+
+    xgramAddStorageItems(items); // XGram: Other apps, the pinned folders, Add a folder
 
     boolean hasRoot = false;
     try {
@@ -1094,6 +1103,12 @@ public class MediaBottomFilesController extends MediaBottomBaseController<Void> 
         }
       } else if (itemId == R.id.btn_bucket) {
         navigateInside(v, KEY_BUCKET, result);
+      } else if (KEY_OTHER_APPS.equals(result.getId())) {
+        if (!mediaLayout.getFilesControllerDelegate().showRestriction(v, RightId.SEND_DOCS)) {
+          showSystemPicker(false); // XGram: Android's picker: Drive, OneDrive, Dropbox and any other storage app
+        }
+      } else if (KEY_ADD_FOLDER.equals(result.getId())) {
+        xgramPickFolder();
       } else {
         String path = result.getId();
         boolean isMusic = KEY_MUSIC.equals(path);
@@ -1161,6 +1176,7 @@ public class MediaBottomFilesController extends MediaBottomBaseController<Void> 
         KEY_DOWNLOADS.equals(path) ||
         KEY_BUCKET.equals(path) ||
         KEY_SNAPSHOT.equals(path) ||
+        path.startsWith(KEY_TREE) ||
         path.startsWith(KEY_FOLDER)) {
         navigateInside(view, path, result);
       } else if (KEY_UPPER.equals(path)) {
@@ -1181,6 +1197,14 @@ public class MediaBottomFilesController extends MediaBottomBaseController<Void> 
     }
 
     Object tag = v.getTag();
+    if (tag instanceof ListItem && stack.isEmpty() && ((ListItem) tag).getData() instanceof InlineResultCommon) {
+      // XGram: a long press on a pinned folder offers to remove it
+      final String id = ((InlineResultCommon) ((ListItem) tag).getData()).getId();
+      if (id != null && id.startsWith(KEY_TREE)) {
+        xgramOfferUnpin(id);
+        return true;
+      }
+    }
     if (tag != null && tag instanceof ListItem) {
       ListItem item = (ListItem) tag;
       if (item.getViewType() == ListItem.TYPE_CUSTOM_INLINE && (item.getId() == R.id.btn_file || item.getId() == R.id.btn_music)) {
@@ -1355,6 +1379,98 @@ public class MediaBottomFilesController extends MediaBottomBaseController<Void> 
   @Override
   protected int getRecyclerHeaderOffset () {
     return Screen.dp(101f);
+  }
+
+  // XGram: other storage apps. "Other apps" opens Android's picker (Drive, OneDrive, Dropbox, file managers with SFTP
+  // or SMB…); a folder picked with Android's folder picker is pinned here and browsed like the phone's own folders
+
+  private static String xgramTreePath (Uri tree, String documentId) {
+    return KEY_TREE + tree + "\n" + documentId;
+  }
+
+  private void xgramAddStorageItems (ArrayList<ListItem> items) {
+    items.add(createItem(createItem(context, tdlib, KEY_OTHER_APPS, R.drawable.baseline_cloud_24, Lang.getString(R.string.XgramFilesOtherApps), Lang.getString(R.string.XgramFilesOtherAppsInfo)), R.id.btn_folder));
+    for (com.fahadali.xgram.files.XgramStorageFolders.Pinned folder : com.fahadali.xgram.files.XgramStorageFolders.list(context)) {
+      final String path = xgramTreePath(folder.tree, com.fahadali.xgram.files.XgramStorageFolders.rootDocumentId(folder.tree));
+      items.add(createItem(createItem(context, tdlib, path, R.drawable.baseline_folder_24, folder.name, folder.app != null ? folder.app : Lang.getString(R.string.XgramFilesPinned)), R.id.btn_folder));
+    }
+    items.add(createItem(createItem(context, tdlib, KEY_ADD_FOLDER, R.drawable.baseline_create_new_folder_24, Lang.getString(R.string.XgramFilesAddFolder), Lang.getString(R.string.XgramFilesAddFolderInfo)), R.id.btn_folder));
+  }
+
+  private void xgramPickFolder () {
+    final Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+      .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+      .putExtra("android.content.extra.SHOW_ADVANCED", true);
+    context.putActivityResultHandler(REQUEST_STORAGE_FOLDER, (requestCode, resultCode, data) -> {
+      final Uri tree = resultCode == Activity.RESULT_OK && data != null ? data.getData() : null;
+      if (tree == null) {
+        return;
+      }
+      Background.instance().post(() -> {
+        com.fahadali.xgram.files.XgramStorageFolders.add(context, tree);
+        UI.post(() -> {
+          if (!isDestroyed() && stack.isEmpty()) {
+            buildCells(); // the list with the new folder
+          }
+        });
+      });
+    });
+    try {
+      context.startActivityForResult(intent, REQUEST_STORAGE_FOLDER);
+    } catch (ActivityNotFoundException e) {
+      UI.showToast(R.string.NoFilePicker, Toast.LENGTH_SHORT);
+    }
+  }
+
+  private void xgramOfferUnpin (String path) {
+    final int split = path.indexOf('\n');
+    if (split == -1) {
+      return;
+    }
+    final Uri tree = Uri.parse(path.substring(KEY_TREE.length(), split));
+    showOptions(null, new int[] {R.id.btn_delete, R.id.btn_cancel}, new String[] {Lang.getString(R.string.XgramFilesUnpin), Lang.getString(R.string.Cancel)},
+      new int[] {OptionColor.RED, OptionColor.NORMAL}, new int[] {R.drawable.baseline_delete_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
+        if (id == R.id.btn_delete) {
+          com.fahadali.xgram.files.XgramStorageFolders.remove(context, tree);
+          buildCells();
+        }
+        return true;
+      });
+  }
+
+  private LoadOperation xgramBuildTree (final String path, final String parent) {
+    return new LoadOperation(this) {
+      @Override
+      public Result act () {
+        final int split = path.indexOf('\n');
+        if (split == -1) {
+          return null;
+        }
+        final Uri tree = Uri.parse(path.substring(KEY_TREE.length(), split));
+        final String documentId = path.substring(split + 1);
+        final java.util.List<com.fahadali.xgram.files.XgramStorageFolders.Entry> entries = com.fahadali.xgram.files.XgramStorageFolders.children(context, tree, documentId);
+        if (entries == null) {
+          openAlert(this, R.string.AppName, R.string.XgramFilesFolderUnavailable);
+          return null;
+        }
+        final ArrayList<ListItem> items = new ArrayList<>(entries.size() + 1);
+        final String upper = parent != null && parent.startsWith(KEY_TREE) ? com.fahadali.xgram.files.XgramStorageFolders.folderName(context, tree, parent.substring(parent.indexOf('\n') + 1)) : null;
+        items.add(createItem(createItem(context, tdlib, KEY_UPPER, R.drawable.baseline_folder_24, "..", StringUtils.isEmpty(upper) ? Lang.getString(R.string.AttachFolderHome) : upper), R.id.btn_folder_upper));
+        if (entries.isEmpty()) {
+          openAlert(this, R.string.AppName, R.string.FolderEmpty);
+          return null;
+        }
+        for (com.fahadali.xgram.files.XgramStorageFolders.Entry entry : entries) {
+          if (entry.isFolder()) {
+            items.add(createItem(createItem(context, tdlib, xgramTreePath(tree, entry.documentId), R.drawable.baseline_folder_24, entry.name, Lang.getString(R.string.Folder)), R.id.btn_folder));
+          } else {
+            final String size = entry.size >= 0 ? Strings.buildSize(entry.size) : "";
+            items.add(createItem(createItem(context, tdlib, com.fahadali.xgram.files.XgramStorageFolders.documentUri(tree, entry.documentId).toString(), R.drawable.baseline_insert_drive_file_24, entry.name, size), R.id.btn_file));
+          }
+        }
+        return new Result(items, true);
+      }
+    };
   }
 
   public interface Delegate {

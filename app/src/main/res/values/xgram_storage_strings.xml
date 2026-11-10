@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: other storage apps in the attach menu's File tab, see XgramStorageFolders -->
+<resources>
+  <string name="XgramFilesOtherApps">Other apps</string>
+  <string name="XgramFilesOtherAppsInfo">Drive, OneDrive, Dropbox, file managers…</string>
+  <string name="XgramFilesAddFolder">Add a folder</string>
+  <string name="XgramFilesAddFolderInfo">From OneDrive, a file manager with SFTP, and more</string>
+  <string name="XgramFilesPinned">Pinned folder</string>
+  <string name="XgramFilesUnpin">Remove from this list</string>
+  <string name="XgramFilesFolderUnavailable">This folder can\'t be opened now. Its app may be signed out or offline.</string>
+</resources>
