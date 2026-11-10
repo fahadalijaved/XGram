@@ -755,14 +755,19 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         case TdApi.MessageSchedulingStateSendWhenOnline.CONSTRUCTOR:
           return Lang.getString(R.string.ScheduledUntilOnline);
         case TdApi.MessageSchedulingStateSendAtDate.CONSTRUCTOR: {
-          int date = ((TdApi.MessageSchedulingStateSendAtDate) msg.schedulingState).sendDate;
+          TdApi.MessageSchedulingStateSendAtDate sendAt = (TdApi.MessageSchedulingStateSendAtDate) msg.schedulingState;
+          int date = sendAt.sendDate;
+          String text;
           if (DateUtils.isToday(date, TimeUnit.SECONDS)) {
-            return Lang.getString(R.string.ScheduledToday);
+            text = Lang.getString(R.string.ScheduledToday);
           } else if (DateUtils.isTomorrow(date, TimeUnit.SECONDS)) {
-            return Lang.getString(R.string.ScheduledTomorrow);
+            text = Lang.getString(R.string.ScheduledTomorrow);
           } else {
-            return Lang.getString(R.string.ScheduledDate, Lang.getDate(date, TimeUnit.SECONDS));
+            text = Lang.getString(R.string.ScheduledDate, Lang.getDate(date, TimeUnit.SECONDS));
           }
+          // XGram: a repeating message (Telegram Premium) says how often it comes back
+          String repeat = com.fahadali.xgram.chats.XgramRepeat.name(sendAt.repeatPeriod);
+          return repeat != null ? Lang.getString(R.string.XgramScheduledRepeats, text, repeat) : text;
         }
       }
     }

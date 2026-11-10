@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: repeating scheduled messages (Telegram Premium) -->
+<resources>
+  <item name="btn_xgramSendScheduledRepeat" type="id"/>
+  <item name="btn_xgramRepeatDaily" type="id"/>
+  <item name="btn_xgramRepeatWeekly" type="id"/>
+  <item name="btn_xgramRepeatBiweekly" type="id"/>
+  <item name="btn_xgramRepeatMonthly" type="id"/>
+  <item name="btn_xgramRepeat3Months" type="id"/>
+  <item name="btn_xgramRepeat6Months" type="id"/>
+  <item name="btn_xgramRepeatYearly" type="id"/>
+  <string name="XgramScheduleRepeating">Schedule repeating…</string>
+  <string name="XgramRemindRepeating">Repeating reminder…</string>
+  <string name="XgramScheduleRepeatingTitle">First send</string>
+  <string name="XgramRemindRepeatingTitle">First reminder</string>
+  <string name="XgramRepeatTitle">Repeat</string>
+  <string name="XgramRepeatDaily">Every day</string>
+  <string name="XgramRepeatWeekly">Every week</string>
+  <string name="XgramRepeatBiweekly">Every 2 weeks</string>
+  <string name="XgramRepeatMonthly">Every month</string>
+  <string name="XgramRepeat3Months">Every 3 months</string>
+  <string name="XgramRepeat6Months">Every 6 months</string>
+  <string name="XgramRepeatYearly">Every year</string>
+  <string name="XgramRepeatEvery">Every %1$s</string>
+  <string name="XgramScheduledRepeats">%1$s · %2$s</string>
+  <string name="XgramDetailsRepeats">Repeats</string>
+</resources>

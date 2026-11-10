@@ -68,6 +68,10 @@ public final class XgramMessageTime {
 
     if (message.schedulingState instanceof TdApi.MessageSchedulingStateSendAtDate) {
       row(b, R.string.XgramDetailsScheduledFor, formatExact(((TdApi.MessageSchedulingStateSendAtDate) message.schedulingState).sendDate));
+      String repeat = XgramRepeat.name(((TdApi.MessageSchedulingStateSendAtDate) message.schedulingState).repeatPeriod);
+      if (repeat != null) {
+        row(b, R.string.XgramDetailsRepeats, repeat);
+      }
     } else if (message.date != 0) {
       row(b, R.string.XgramDetailsSent, formatExact(message.date));
     }
@@ -136,6 +140,10 @@ public final class XgramMessageTime {
     StringBuilder b = new StringBuilder();
     if (message.schedulingState instanceof TdApi.MessageSchedulingStateSendAtDate) {
       row(b, R.string.XgramDetailsScheduledFor, formatExact(((TdApi.MessageSchedulingStateSendAtDate) message.schedulingState).sendDate));
+      String repeat = XgramRepeat.name(((TdApi.MessageSchedulingStateSendAtDate) message.schedulingState).repeatPeriod);
+      if (repeat != null) {
+        row(b, R.string.XgramDetailsRepeats, repeat);
+      }
     } else if (message.date != 0) {
       row(b, R.string.XgramDetailsSent, formatExact(message.date));
     }
@@ -197,6 +205,10 @@ public final class XgramMessageTime {
     StringBuilder b = new StringBuilder();
     if (message.schedulingState instanceof TdApi.MessageSchedulingStateSendAtDate) {
       m3Row(rows, b, R.string.XgramDetailsScheduledFor, formatExact(((TdApi.MessageSchedulingStateSendAtDate) message.schedulingState).sendDate));
+      String repeat = XgramRepeat.name(((TdApi.MessageSchedulingStateSendAtDate) message.schedulingState).repeatPeriod);
+      if (repeat != null) {
+        m3Row(rows, b, R.string.XgramDetailsRepeats, repeat);
+      }
     } else if (message.date != 0) {
       m3Row(rows, b, R.string.XgramDetailsSent, formatExact(message.date));
     }

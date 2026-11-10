@@ -6746,9 +6746,16 @@ public class MessagesController extends ViewController<MessagesController.Argume
         return true;
       } else if (id == R.id.btn_messageReschedule) {
         cancelSheduledKeyboardOpeningAndHideAllKeyboards();
+        final TdApi.MessageSchedulingState xgramOldState = selectedMessage.getMessage().schedulingState;
         tdlib.ui().showScheduleOptions(this, getChatId(), false, (sendOptions, disableMarkdown) -> {
           if (sendOptions.schedulingState != null) {
-            tdlib.send(new TdApi.EditMessageSchedulingState(getChatId(), selectedMessage.getId(), sendOptions.schedulingState), tdlib.typedOkHandler());
+            TdApi.MessageSchedulingState state = sendOptions.schedulingState;
+            // XGram: a repeating message keeps its period when only its time is changed
+            if (state instanceof TdApi.MessageSchedulingStateSendAtDate && ((TdApi.MessageSchedulingStateSendAtDate) state).repeatPeriod == 0 &&
+              xgramOldState instanceof TdApi.MessageSchedulingStateSendAtDate && ((TdApi.MessageSchedulingStateSendAtDate) xgramOldState).repeatPeriod > 0) {
+              state = new TdApi.MessageSchedulingStateSendAtDate(((TdApi.MessageSchedulingStateSendAtDate) state).sendDate, ((TdApi.MessageSchedulingStateSendAtDate) xgramOldState).repeatPeriod);
+            }
+            tdlib.send(new TdApi.EditMessageSchedulingState(getChatId(), selectedMessage.getId(), state), tdlib.typedOkHandler());
           }
         }, null, null);
         return true;

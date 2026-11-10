@@ -7588,6 +7588,13 @@ public class TdlibUi extends Handler {
     strings.append(Lang.getString(isSelfChat ? R.string.RemindAtCustomTime : R.string.SendAtCustomTime));
     icons.append(R.drawable.baseline_date_range_24);
 
+    // XGram: repeating scheduled messages (Telegram Premium), only offered with Premium (read at use)
+    if (tdlib.hasPremium()) {
+      ids.append(R.id.btn_xgramSendScheduledRepeat);
+      strings.append(Lang.getString(isSelfChat ? R.string.XgramRemindRepeating : R.string.XgramScheduleRepeating));
+      icons.append(R.drawable.baseline_repeat_24);
+    }
+
     context.showOptions(null, ids.get(), strings.get(), null, icons.get(), (v, optionId) -> {
       long seconds = 0;
       if (optionId == R.id.btn_sendNoSound) {
@@ -7608,6 +7615,19 @@ public class TdlibUi extends Handler {
         c.add(Calendar.YEAR, 1);
         long elapsedMs = c.getTimeInMillis() - tdlibTimeMs;
         seconds = TimeUnit.MILLISECONDS.toSeconds(elapsedMs);
+      } else if (optionId == R.id.btn_xgramSendScheduledRepeat) {
+        // XGram: the first send, then how often it comes back (the periods Telegram accepts)
+        context.showDateTimePicker(Lang.getString(isSelfChat ? R.string.XgramRemindRepeatingTitle : R.string.XgramScheduleRepeatingTitle),
+          isSelfChat ? R.string.RemindTodayAt : R.string.SendTodayAt,
+          isSelfChat ? R.string.RemindTomorrowAt : R.string.SendTomorrowAt,
+          isSelfChat ? R.string.RemindDateAt : R.string.SendDateAt,
+          millis -> {
+            final int sendDate = (int) TimeUnit.MILLISECONDS.toSeconds(millis);
+            com.fahadali.xgram.chats.XgramRepeat.pick(context, forcedTheme, period ->
+              callback.runWithData(Td.newSendOptions(defaultSendOptions, new TdApi.MessageSchedulingStateSendAtDate(sendDate, period)))
+            );
+          }, forcedTheme);
+        return true;
       } else if (optionId == R.id.btn_sendScheduledCustom) {
         int titleRes, todayRes, tomorrowRes, futureRes;
         if (isSelfChat) {
