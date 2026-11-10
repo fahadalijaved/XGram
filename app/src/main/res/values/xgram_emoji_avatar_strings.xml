@@ -8,4 +8,13 @@
   <string name="XgramEmojiAvatarSet">Your profile photo is set</string>
   <string name="XgramEmojiAvatarFailed">The photo couldn\'t be set. Try again later.</string>
   <string name="XgramEmojiAvatarPremium">This emoji needs Telegram Premium.</string>
+  <item name="btn_xgramVideoAvatar" type="id"/>
+  <string name="XgramVideoAvatar">Use a video</string>
+  <string name="XgramVideoAvatarTitle">Video profile photo</string>
+  <string name="XgramVideoAvatarPreparing">Opening the video…</string>
+  <string name="XgramVideoAvatarUnreadable">This video can\'t be read.</string>
+  <string name="XgramVideoAvatarRange">%1$s – %2$s</string>
+  <string name="XgramVideoAvatarSlide">Slide to pick which 10 seconds play. The centre square is used.</string>
+  <string name="XgramVideoAvatarUploading">Making your video photo…</string>
+  <string name="XgramVideoAvatarFailed">The video photo couldn\'t be set. Try a shorter or smaller video.</string>
 </resources>
