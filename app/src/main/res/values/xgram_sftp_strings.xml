@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: SFTP servers in the attach menu's File tab, see XgramSftp and XgramSftpDialog -->
+<resources>
+  <string name="XgramSftpAdd">Add an SFTP server</string>
+  <string name="XgramSftpAddInfo">Browse a server and attach its files</string>
+  <string name="XgramSftpEdit">Edit server</string>
+  <string name="XgramSftpHost">Server address</string>
+  <string name="XgramSftpPort">Port</string>
+  <string name="XgramSftpUser">User name</string>
+  <string name="XgramSftpPassword">Password</string>
+  <string name="XgramSftpPasswordKept">Saved: leave empty to keep it</string>
+  <string name="XgramSftpKeyNone">No private key</string>
+  <string name="XgramSftpKeySet">Private key added</string>
+  <string name="XgramSftpKeyChoose">Choose key file</string>
+  <string name="XgramSftpKeyRemove">Remove</string>
+  <string name="XgramSftpKeyInvalid">That isn\'t a private key file (an OpenSSH, RSA or ECDSA key without a passphrase).</string>
+  <string name="XgramSftpFolder">Folder to open</string>
+  <string name="XgramSftpFolderHint">Your home folder</string>
+  <string name="XgramSftpName">Name</string>
+  <string name="XgramSftpNameHint">Shown in the list</string>
+  <string name="XgramSftpTrust">First connection to %1$s.\n\nIts %2$s key fingerprint is\n%3$s\n\nTrust it only if it matches your server\'s.</string>
+  <string name="XgramSftpTrustConfirm">Trust this server</string>
+  <string name="XgramSftpKeyChanged">The server\'s key isn\'t the one you trusted, so XGram didn\'t connect. If you changed the server, remove it here and add it again.</string>
+  <string name="XgramSftpSignInFailed">Couldn\'t sign in. Check the user name, password or key.</string>
+  <string name="XgramSftpUnreachable">Couldn\'t reach the server. Check the address, port and your connection.</string>
+  <string name="XgramSftpConnected">Connected to %1$s</string>
+</resources>

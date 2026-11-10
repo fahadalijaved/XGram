@@ -103,3 +103,13 @@
 -keep public class com.fahadali.xgram.appearance.XgramScrollThumbDrawable {
   public <init>();
 }
+
+# XGram: JSch (SFTP) makes its ciphers, key exchanges and signatures from class names in its config; its optional
+# parts (Bouncy Castle, Kerberos, SLF4J, Log4j, JNA, unix sockets) are not in the app
+-keep class com.jcraft.jsch.** { *; }
+-dontwarn org.bouncycastle.**
+-dontwarn org.ietf.jgss.**
+-dontwarn org.slf4j.**
+-dontwarn org.apache.logging.log4j.**
+-dontwarn com.sun.jna.**
+-dontwarn org.newsclub.**

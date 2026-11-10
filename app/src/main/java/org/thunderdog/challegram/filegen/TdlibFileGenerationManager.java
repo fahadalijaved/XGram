@@ -358,6 +358,7 @@ public final class TdlibFileGenerationManager {
   private final HashMap<Long, Call> downloadingHttpFiles = new HashMap<>();
 
   private void cancelGeneration (long generationId) {
+    com.fahadali.xgram.files.XgramSftp.cancel(generationId); // XGram: an SFTP download stops at its next chunk
     Call call = downloadingHttpFiles.remove(generationId);
     if (call != null) {
       call.cancel();
@@ -414,6 +415,17 @@ public final class TdlibFileGenerationManager {
     }
     if (conversion.startsWith("content://")) {
       copyContentStream(originalPath, conversion, generationId, destinationPath);
+      return;
+    }
+    if (com.fahadali.xgram.files.XgramSftp.isConversion(conversion)) {
+      // XGram: a file on an SFTP server: downloaded now, as TDLib uploads it
+      com.fahadali.xgram.files.XgramSftp.generate(tdlib, originalPath, generationId, destinationPath, error -> {
+        if (error == null) {
+          finishGeneration(originalPath, conversion, generationId);
+        } else {
+          failGeneration(originalPath, conversion, generationId, ERROR_APP_FAILURE, error);
+        }
+      });
       return;
     }
     // XGram: a photo edit with GIFs or animated stickers on it, sent as a GIF (XgramAnimatedEdit)

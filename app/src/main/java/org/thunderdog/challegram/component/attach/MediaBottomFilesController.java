@@ -186,6 +186,18 @@ public class MediaBottomFilesController extends MediaBottomBaseController<Void> 
   private static final String KEY_OTHER_APPS = "xgram_other_apps";
   private static final String KEY_ADD_FOLDER = "xgram_add_folder";
   private static final int REQUEST_STORAGE_FOLDER = 10095;
+  // XGram: a folder of an SFTP server: "sftp://" + the server's id + "\n" + the folder (empty: where it opens)
+  private static final String KEY_SFTP = "sftp://";
+  private static final String KEY_ADD_SFTP = "xgram_add_sftp";
+  private static final int REQUEST_SFTP_KEY = 10096;
+  private View xgramLastView;
+  private InlineResultCommon xgramLastResult;
+  /** XGram: SFTP servers and other apps' folders may wait on the network: their own thread, not the shared one. */
+  private static final java.util.concurrent.ExecutorService xgramNetworkQueue = java.util.concurrent.Executors.newSingleThreadExecutor(r -> new Thread(r, "XgramFilesNetwork"));
+
+  private static java.util.concurrent.Executor xgramQueue (String path) {
+    return path != null && (path.startsWith(KEY_SFTP) || path.startsWith(KEY_TREE)) ? xgramNetworkQueue : runnable -> Background.instance().post(runnable);
+  }
 
   private int initialItemsCount;
 
@@ -225,6 +237,8 @@ public class MediaBottomFilesController extends MediaBottomBaseController<Void> 
         });
       } else if (currentPath.startsWith(KEY_TREE)) {
         operation = xgramBuildTree(currentPath, parentPath); // XGram: a folder of another storage app
+      } else if (currentPath.startsWith(KEY_SFTP)) {
+        operation = xgramBuildSftp(currentPath); // XGram: a folder of an SFTP server
       } else if (currentPath.startsWith(KEY_FOLDER)) {
         String path = currentPath.substring(KEY_FOLDER.length());
         operation = buildFolder(path, parentPath);
@@ -246,9 +260,9 @@ public class MediaBottomFilesController extends MediaBottomBaseController<Void> 
         operation.setCallbacks(onDone, onError);
         this.currentLoadOperation = operation;
         if (before != null) {
-          before.runWithData(() -> Background.instance().post(operation));
+          before.runWithData(() -> xgramQueue(currentPath).execute(operation));
         } else {
-          Background.instance().post(operation);
+          xgramQueue(currentPath).execute(operation);
         }
       }
       return;
@@ -1109,6 +1123,8 @@ public class MediaBottomFilesController extends MediaBottomBaseController<Void> 
         }
       } else if (KEY_ADD_FOLDER.equals(result.getId())) {
         xgramPickFolder();
+      } else if (KEY_ADD_SFTP.equals(result.getId())) {
+        xgramEditServer(null);
       } else {
         String path = result.getId();
         boolean isMusic = KEY_MUSIC.equals(path);
@@ -1177,6 +1193,7 @@ public class MediaBottomFilesController extends MediaBottomBaseController<Void> 
         KEY_BUCKET.equals(path) ||
         KEY_SNAPSHOT.equals(path) ||
         path.startsWith(KEY_TREE) ||
+        path.startsWith(KEY_SFTP) ||
         path.startsWith(KEY_FOLDER)) {
         navigateInside(view, path, result);
       } else if (KEY_UPPER.equals(path)) {
@@ -1202,6 +1219,10 @@ public class MediaBottomFilesController extends MediaBottomBaseController<Void> 
       final String id = ((InlineResultCommon) ((ListItem) tag).getData()).getId();
       if (id != null && id.startsWith(KEY_TREE)) {
         xgramOfferUnpin(id);
+        return true;
+      }
+      if (id != null && id.startsWith(KEY_SFTP)) {
+        xgramServerOptions(id.substring(KEY_SFTP.length(), id.indexOf('\n')));
         return true;
       }
     }
@@ -1355,6 +1376,8 @@ public class MediaBottomFilesController extends MediaBottomBaseController<Void> 
   }
 
   private void navigateInside (final View view, final String path, final InlineResultCommon data) {
+    xgramLastView = view; // XGram: to open it again once a server's key is trusted
+    xgramLastResult = data;
     if (inFileSelectMode) {
       mediaLayout.cancelMultiSelection();
     }
@@ -1395,6 +1418,10 @@ public class MediaBottomFilesController extends MediaBottomBaseController<Void> 
       items.add(createItem(createItem(context, tdlib, path, R.drawable.baseline_folder_24, folder.name, folder.app != null ? folder.app : Lang.getString(R.string.XgramFilesPinned)), R.id.btn_folder));
     }
     items.add(createItem(createItem(context, tdlib, KEY_ADD_FOLDER, R.drawable.baseline_create_new_folder_24, Lang.getString(R.string.XgramFilesAddFolder), Lang.getString(R.string.XgramFilesAddFolderInfo)), R.id.btn_folder));
+    for (com.fahadali.xgram.files.XgramSftp.Server server : com.fahadali.xgram.files.XgramSftp.servers()) {
+      items.add(createItem(createItem(context, tdlib, KEY_SFTP + server.id + "\n", R.drawable.baseline_router_24, server.label(), "SFTP · " + server.address()), R.id.btn_folder));
+    }
+    items.add(createItem(createItem(context, tdlib, KEY_ADD_SFTP, R.drawable.baseline_router_24, Lang.getString(R.string.XgramSftpAdd), Lang.getString(R.string.XgramSftpAddInfo)), R.id.btn_folder));
   }
 
   private void xgramPickFolder () {
@@ -1471,6 +1498,164 @@ public class MediaBottomFilesController extends MediaBottomBaseController<Void> 
         return new Result(items, true);
       }
     };
+  }
+
+  // XGram: SFTP servers (XgramSftp). A server folder lists like the phone's; a file is sent as one XGram downloads
+  // when Telegram uploads it. The first connection shows the server's key fingerprint to trust; a changed key is refused
+
+  private LoadOperation xgramBuildSftp (final String path) {
+    return new LoadOperation(this) {
+      @Override
+      public Result act () {
+        final int split = path.indexOf('\n');
+        final String serverId = path.substring(KEY_SFTP.length(), split);
+        final com.fahadali.xgram.files.XgramSftp.Server server = com.fahadali.xgram.files.XgramSftp.server(serverId);
+        if (server == null) {
+          openAlert(this, R.string.AppName, R.string.FolderDoesNotExist);
+          return null;
+        }
+        final String requested = path.substring(split + 1);
+        try {
+          final String folder = requested.isEmpty() ? com.fahadali.xgram.files.XgramSftp.startFolder(server) : requested;
+          final java.util.List<com.fahadali.xgram.files.XgramSftp.Entry> entries = com.fahadali.xgram.files.XgramSftp.list(server, folder);
+          final ArrayList<ListItem> items = new ArrayList<>(entries.size() + 1);
+          items.add(createItem(createItem(context, tdlib, KEY_UPPER, R.drawable.baseline_folder_24, "..", folder), R.id.btn_folder_upper));
+          if (entries.isEmpty()) {
+            openAlert(this, R.string.AppName, R.string.FolderEmpty);
+            return null;
+          }
+          for (com.fahadali.xgram.files.XgramSftp.Entry entry : entries) {
+            if (entry.folder) {
+              items.add(createItem(createItem(context, tdlib, KEY_SFTP + server.id + "\n" + entry.path, R.drawable.baseline_folder_24, entry.name, Lang.getString(R.string.Folder)), R.id.btn_folder));
+            } else {
+              items.add(createItem(createItem(context, tdlib, com.fahadali.xgram.files.XgramSftp.path(server, entry), R.drawable.baseline_insert_drive_file_24, entry.name, Strings.buildSize(entry.size)), R.id.btn_file));
+            }
+          }
+          return new Result(items, true);
+        } catch (com.fahadali.xgram.files.XgramSftp.UnknownHostKeyException e) {
+          final LoadOperation operation = this;
+          UI.post(() -> {
+            if (!isDestroyed() && currentLoadOperation == operation) {
+              xgramAskTrust(server, e, () -> navigateInside(xgramLastView, path, xgramLastResult));
+            }
+          });
+        } catch (com.fahadali.xgram.files.XgramSftp.ChangedHostKeyException e) {
+          openAlert(this, R.string.AppName, R.string.XgramSftpKeyChanged);
+        } catch (Throwable t) {
+          android.util.Log.w("XgramSftp", "list", t);
+          final String message = t.getMessage() != null ? t.getMessage() : "";
+          openAlert(this, R.string.AppName, message.contains("Auth") ? R.string.XgramSftpSignInFailed : R.string.XgramSftpUnreachable);
+        }
+        return null;
+      }
+    };
+  }
+
+  private void xgramAskTrust (com.fahadali.xgram.files.XgramSftp.Server server, com.fahadali.xgram.files.XgramSftp.UnknownHostKeyException key, Runnable after) {
+    showOptions(Lang.getString(R.string.XgramSftpTrust, server.address(), key.type, key.fingerprint),
+      new int[] {R.id.btn_done, R.id.btn_cancel}, new String[] {Lang.getString(R.string.XgramSftpTrustConfirm), Lang.getString(R.string.Cancel)},
+      new int[] {OptionColor.NORMAL, OptionColor.NORMAL}, new int[] {R.drawable.baseline_vpn_key_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
+        if (id == R.id.btn_done) {
+          com.fahadali.xgram.files.XgramSftp.trust(server.id, key);
+          after.run();
+        }
+        return true;
+      });
+  }
+
+  private void xgramServerOptions (String serverId) {
+    final com.fahadali.xgram.files.XgramSftp.Server server = com.fahadali.xgram.files.XgramSftp.server(serverId);
+    if (server == null) {
+      return;
+    }
+    showOptions(server.label() + "\n" + server.address(), new int[] {R.id.btn_edit, R.id.btn_delete, R.id.btn_cancel},
+      new String[] {Lang.getString(R.string.XgramSftpEdit), Lang.getString(R.string.XgramFilesUnpin), Lang.getString(R.string.Cancel)},
+      new int[] {OptionColor.NORMAL, OptionColor.RED, OptionColor.NORMAL}, new int[] {R.drawable.baseline_edit_24, R.drawable.baseline_delete_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
+        if (id == R.id.btn_edit) {
+          xgramEditServer(server);
+        } else if (id == R.id.btn_delete) {
+          com.fahadali.xgram.files.XgramSftp.remove(server.id);
+          buildCells();
+        }
+        return true;
+      });
+  }
+
+  /** Adds ({@code server} null) or edits a server, then connects once: the key to trust, or what went wrong. */
+  private void xgramEditServer (@Nullable com.fahadali.xgram.files.XgramSftp.Server server) {
+    com.fahadali.xgram.compose.XgramSftpDialog.show(context, server, this::xgramPickKey, (name, host, port, user, folder, password, privateKey) ->
+      xgramNetworkQueue.execute(() -> {
+        final com.fahadali.xgram.files.XgramSftp.Server saved = com.fahadali.xgram.files.XgramSftp.save(server != null ? server.id : null, name, host, port, user, folder, password, privateKey);
+        UI.post(() -> {
+          if (!isDestroyed() && stack.isEmpty()) {
+            buildCells();
+          }
+        });
+        xgramTestServer(saved.id);
+      })
+    );
+  }
+
+  private void xgramTestServer (String serverId) {
+    final com.fahadali.xgram.files.XgramSftp.Server server = com.fahadali.xgram.files.XgramSftp.server(serverId);
+    if (server == null) {
+      return;
+    }
+    try {
+      com.fahadali.xgram.files.XgramSftp.startFolder(server);
+      UI.post(() -> UI.showToast(Lang.getString(R.string.XgramSftpConnected, server.label()), Toast.LENGTH_SHORT));
+    } catch (com.fahadali.xgram.files.XgramSftp.UnknownHostKeyException e) {
+      UI.post(() -> {
+        if (!isDestroyed()) {
+          xgramAskTrust(server, e, () -> xgramNetworkQueue.execute(() -> xgramTestServer(serverId)));
+        }
+      });
+    } catch (com.fahadali.xgram.files.XgramSftp.ChangedHostKeyException e) {
+      UI.post(() -> UI.showToast(R.string.XgramSftpKeyChanged, Toast.LENGTH_LONG));
+    } catch (Throwable t) {
+      android.util.Log.w("XgramSftp", "test", t);
+      final String message = t.getMessage() != null ? t.getMessage() : "";
+      UI.post(() -> UI.showToast(message.contains("Auth") ? R.string.XgramSftpSignInFailed : R.string.XgramSftpUnreachable, Toast.LENGTH_LONG));
+    }
+  }
+
+  /** A private key file picked with Android's picker, read as text (keys are small). */
+  private void xgramPickKey (kotlin.jvm.functions.Function1<? super String, kotlin.Unit> onKey) {
+    final Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*");
+    context.putActivityResultHandler(REQUEST_SFTP_KEY, (requestCode, resultCode, data) -> {
+      final Uri uri = resultCode == Activity.RESULT_OK && data != null ? data.getData() : null;
+      if (uri == null) {
+        return;
+      }
+      Background.instance().post(() -> {
+        String text = null;
+        try (java.io.InputStream in = context.getContentResolver().openInputStream(uri)) {
+          if (in != null) {
+            final byte[] buffer = new byte[64 * 1024];
+            int total = 0, read;
+            while (total < buffer.length && (read = in.read(buffer, total, buffer.length - total)) > 0) {
+              total += read;
+            }
+            text = new String(buffer, 0, total, java.nio.charset.StandardCharsets.UTF_8);
+          }
+        } catch (Throwable t) {
+          android.util.Log.w("XgramSftp", "key", t);
+        }
+        final String key = text;
+        UI.post(() -> {
+          if (key != null && key.contains("PRIVATE KEY")) {
+            onKey.invoke(key);
+          } else {
+            UI.showToast(R.string.XgramSftpKeyInvalid, Toast.LENGTH_LONG);
+          }
+        });
+      });
+    });
+    try {
+      context.startActivityForResult(intent, REQUEST_SFTP_KEY);
+    } catch (ActivityNotFoundException e) {
+      UI.showToast(R.string.NoFilePicker, Toast.LENGTH_SHORT);
+    }
   }
 
   public interface Delegate {

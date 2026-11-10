@@ -1478,6 +1478,9 @@ public class TD {
 
   public static TdApi.InputFile createInputFile (String path, @Nullable String type, @Nullable FileInfo out) {
     if (path != null) {
+      if (com.fahadali.xgram.files.XgramSftp.isPath(path)) {
+        return com.fahadali.xgram.files.XgramSftp.inputFile(path, out); // XGram: a file on an SFTP server, fetched when sent
+      }
       if (path.startsWith("http://") || path.startsWith("https://")) {
         return new TdApi.InputFileRemote(path);
       }

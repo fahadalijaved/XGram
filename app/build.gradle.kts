@@ -1226,6 +1226,8 @@ dependencies {
   preMarshmallowImplementation(libs.relinker)
   // Konfetti: https://github.com/DanielMartinus/Konfetti/blob/main/README.md
   implementation(libs.konfetti)
+  // JSch (mwiede fork): https://github.com/mwiede/jsch/releases (XGram: SFTP servers in the File tab)
+  implementation(libs.jsch)
   // Transcoder: https://github.com/natario1/Transcoder/blob/master/docs/_about/changelog.md
   legacyImplementation(libs.transcoder)
   // https://github.com/mikereedell/sunrisesunsetlib-java
