@@ -386,7 +386,7 @@ public class CountryController extends TelegramViewController<CountryController.
 
     // Header
 
-    headerCell = new BubbleHeaderView(context, tdlib);
+    headerCell = new BubbleHeaderView(context, tdlib, xgramBubbleLines());
     headerCell.setHint(bindLocaleChanger(R.string.SearchCountry, headerCell.getInput(), true, false));
     headerCell.setCallback(new BubbleHeaderView.Callback() {
       @Override
@@ -545,9 +545,20 @@ public class CountryController extends TelegramViewController<CountryController.
     return Size.getHeaderPortraitSize() + headerOffset;
   }
 
+  // XGram: rows of picked chats before they scroll (BubbleHeaderView.xgramPickerLines), fixed per screen
+  private int xgramBubbleLines;
+
+  private int xgramBubbleLines () {
+    if (xgramBubbleLines == 0) {
+      xgramBubbleLines = BubbleHeaderView.xgramPickerLines();
+    }
+    return xgramBubbleLines;
+  }
+
   @Override
   protected int getMaximumHeaderHeight () {
-    return Size.getHeaderBigPortraitSize(false);
+    // XGram: tall enough for all the rows of picked countries the header shows
+    return Math.max(Size.getHeaderBigPortraitSize(false), Size.getHeaderPortraitSize() + BubbleHeaderView.maxBubbleHeight(xgramBubbleLines()));
   }
 
   @Override

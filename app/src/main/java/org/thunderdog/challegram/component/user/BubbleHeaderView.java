@@ -61,6 +61,15 @@ public class BubbleHeaderView extends FrameLayoutFix implements RtlCheckListener
     this(context, tdlib, DEFAULT_MAX_BUBBLE_LINES);
   }
 
+  /**
+   * XGram: how many rows of picked chats a picker shows before they scroll: 4 on tall screens, 3 on medium, 2 when
+   * short (the cover screen in landscape). Telegram X's 2 rows showed 3 of 13 picked people.
+   */
+  public static int xgramPickerLines () {
+    final int height = Screen.currentHeight();
+    return height >= Screen.dp(700f) ? 4 : height >= Screen.dp(480f) ? 3 : 2;
+  }
+
   public static int maxBubbleHeight (int maxBubbleLines) {
     int bubbleHeight = Screen.dp(BubbleView.RADIUS) * 2;
     return Screen.dp(BubbleWrapView.START_Y) + Screen.dp(BubbleWrapView.SPACING) * (maxBubbleLines - 1) + bubbleHeight * maxBubbleLines;
@@ -98,6 +107,10 @@ public class BubbleHeaderView extends FrameLayoutFix implements RtlCheckListener
     // were drawn under the status bar, which is see-through edge to edge (the Remove Fee picker with 5+ people)
     scrollView.setClipToPadding(true);
     scrollView.setVerticalScrollBarEnabled(false);
+    // XGram: a soft fade at the edge with more picked chats beyond it, so the area reads as scrollable (none when
+    // everything fits). The fade starts at the padding: START_Y of it is clipped away, the rest softens the first row.
+    scrollView.setVerticalFadingEdgeEnabled(true);
+    scrollView.setFadingEdgeLength(Screen.dp(BubbleWrapView.START_Y + 16f));
     scrollView.addView(bubbleWrap);
     scrollView.setLayoutParams(params);
     scrollView.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> xgramUpdateScrollClip());

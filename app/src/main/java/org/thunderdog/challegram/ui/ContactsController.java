@@ -313,7 +313,7 @@ public class ContactsController extends TelegramViewController<ContactsControlle
       addMemberHeaderView.setTitle(titleRes);
       addMemberHeaderView.setSubtitle(chatTitle);
     } else if (hasBubbles()) {
-      headerCell = new BubbleHeaderView(context, tdlib);
+      headerCell = new BubbleHeaderView(context, tdlib, xgramBubbleLines());
       headerCell.setHint(bindLocaleChanger(mode == MODE_MULTI_PICK ? multiDelegate.provideMultiUserPickerHint() : R.string.SendMessageTo, headerCell.getInput(), true, false));
       headerCell.setCallback(this);
       if (pickedBubbles != null && !pickedBubbles.isEmpty()) {
@@ -771,9 +771,20 @@ public class ContactsController extends TelegramViewController<ContactsControlle
     return Size.getHeaderPortraitSize() + headerOffset;
   }
 
+  // XGram: rows of picked chats before they scroll (BubbleHeaderView.xgramPickerLines), fixed per screen
+  private int xgramBubbleLines;
+
+  private int xgramBubbleLines () {
+    if (xgramBubbleLines == 0) {
+      xgramBubbleLines = BubbleHeaderView.xgramPickerLines();
+    }
+    return xgramBubbleLines;
+  }
+
   @Override
   protected int getMaximumHeaderHeight () {
-    return Size.getHeaderBigPortraitSize(false);
+    // XGram: tall enough for all the rows of picked chats the header shows
+    return hasBubbles() ? Math.max(Size.getHeaderBigPortraitSize(false), Size.getHeaderPortraitSize() + BubbleHeaderView.maxBubbleHeight(xgramBubbleLines())) : Size.getHeaderBigPortraitSize(false);
   }
 
   @Override

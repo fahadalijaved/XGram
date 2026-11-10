@@ -296,13 +296,21 @@ public class SelectChatsController extends RecyclerViewController<SelectChatsCon
     return ResourcesCompat.ID_NULL;
   }
 
-  private static final int MAX_BUBBLE_LINES = 3;
+  // XGram: 4 rows on tall screens (was 3), fixed per screen once it's first asked for
+  private int xgramBubbleLines;
+
+  private int maxBubbleLines () {
+    if (xgramBubbleLines == 0) {
+      xgramBubbleLines = BubbleHeaderView.xgramPickerLines();
+    }
+    return xgramBubbleLines;
+  }
 
   @Override
   protected View onCreateView (Context context) {
     View view = super.onCreateView(context);
     if (hasBubbles()) {
-      headerCell = new BubbleHeaderView(context, tdlib, MAX_BUBBLE_LINES);
+      headerCell = new BubbleHeaderView(context, tdlib, maxBubbleLines());
       if (mode == MODE_FOLDER_INCLUDE_CHATS) {
         headerCell.setHint(bindLocaleChanger(R.string.IncludeChatsHint, headerCell.getInput(), /* isHint */ true, /* isMedium */ false));
       } else if (mode == MODE_FOLDER_EXCLUDE_CHATS) {
@@ -814,7 +822,7 @@ public class SelectChatsController extends RecyclerViewController<SelectChatsCon
 
   @Override
   protected int getMaximumHeaderHeight () {
-    return hasBubbles() ? Size.getHeaderPortraitSize() + BubbleHeaderView.maxBubbleHeight(MAX_BUBBLE_LINES) : super.getMaximumHeaderHeight();
+    return hasBubbles() ? Size.getHeaderPortraitSize() + BubbleHeaderView.maxBubbleHeight(maxBubbleLines()) : super.getMaximumHeaderHeight();
   }
 
   @Override
