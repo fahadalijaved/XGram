@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: sharing in a private chat (disable with Telegram Premium, enable, answer a request), see XgramProtectedChat -->
+<resources>
+  <item name="btn_xgramDisableSharing" type="id"/>
+  <item name="btn_xgramEnableSharing" type="id"/>
+  <item name="btn_xgramSharingAllow" type="id"/>
+  <item name="btn_xgramSharingKeep" type="id"/>
+
+  <string name="XgramDisableSharing">Disable sharing</string>
+  <string name="XgramEnableSharing">Enable sharing</string>
+  <string name="XgramDisableSharingTitle">Disable sharing in this chat?</string>
+  <string name="XgramDisableSharingInfo">Neither you nor %1$s will be able to forward, save or copy messages, photos and videos from this chat, or take screenshots of it.</string>
+  <string name="XgramEnableSharingTitle">Enable sharing in this chat?</string>
+  <string name="XgramEnableSharingInfo">You and %1$s will be able to forward, save and copy messages again. If %1$s disabled sharing, Telegram asks them first.</string>
+  <string name="XgramSharingNeedsPremium">Disabling sharing in a private chat needs Telegram Premium.</string>
+  <string name="XgramSharingFailed">Sharing in this chat couldn\'t be changed. Try again later.</string>
+  <string name="XgramSharingRequestTitle">Enable sharing?</string>
+  <string name="XgramSharingRequestInfo">%1$s would like to forward, save and copy messages in this chat again.</string>
+  <string name="XgramSharingKeepDisabled">Keep it disabled</string>
+  <string name="XgramSharingRequestTap">%1$s would like to enable sharing in this chat. Tap to answer</string>
+  <string name="XgramSharingRequestGone">This request has already been answered or has expired.</string>
+</resources>

@@ -88,7 +88,7 @@
   <string name="XgramPremiumFeatureImprovedDownloadSpeed">Faster downloads</string>
   <string name="XgramPremiumFeatureImprovedDownloadSpeedWhere">Works by itself</string>
   <string name="XgramPremiumFeatureVoiceRecognition">Voice-to-text</string>
-  <string name="XgramPremiumFeatureVoiceRecognitionWhere">Long-press a voice or video message → Transcribe</string>
+  <string name="XgramPremiumFeatureVoiceRecognitionWhere">The →A button on a voice message (or long-press a video message → Transcribe)</string>
   <string name="XgramPremiumFeatureDisabledAds">No ads</string>
   <string name="XgramPremiumFeatureDisabledAdsWhere">No ads, above</string>
   <string name="XgramPremiumFeatureUniqueReactions">More reactions</string>
@@ -125,12 +125,13 @@
   <string name="XgramPremiumFeatureLastSeenTimesWhere">Last seen and read time, above</string>
   <string name="XgramPremiumFeatureBusiness">Telegram Business</string>
   <string name="XgramPremiumFeatureMessageEffects">Message effects</string>
-  <string name="XgramPremiumFeatureMessageEffectsWhere">Others\' effects play in XGram. Sending them: official apps for now</string>
+  <string name="XgramPremiumFeatureMessageEffectsWhere">In a private chat, long-press Send → Send with effect</string>
   <string name="XgramPremiumFeatureChecklists">Checklists</string>
-  <string name="XgramPremiumFeatureChecklistsWhere">Tick and add tasks in XGram. Making a checklist: official apps for now</string>
+  <string name="XgramPremiumFeatureChecklistsWhere">Attach → Poll → Checklist</string>
   <string name="XgramPremiumFeaturePaidMessages">Paid messages</string>
   <string name="XgramPremiumFeaturePaidMessagesWhere">Who can message you → Charge for Messages, above</string>
   <string name="XgramPremiumFeatureProtectPrivateChatContent">Protected private chats</string>
+  <string name="XgramPremiumFeatureProtectPrivateChatContentWhere">A person\'s profile → More → Disable sharing</string>
   <string name="XgramPremiumFeatureTextComposition">AI writing</string>
   <string name="XgramPremiumFeatureTextCompositionWhere">Long-press Send → AI editor</string>
   <string name="XgramPremiumFeatureRichMessages">Rich messages</string>

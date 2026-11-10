@@ -389,7 +389,7 @@ private fun describeFeature(feature: TdApi.PremiumFeature): Pair<String, String>
     is TdApi.PremiumFeatureMessageEffects -> R.string.XgramPremiumFeatureMessageEffects to R.string.XgramPremiumFeatureMessageEffectsWhere
     is TdApi.PremiumFeatureChecklists -> R.string.XgramPremiumFeatureChecklists to R.string.XgramPremiumFeatureChecklistsWhere
     is TdApi.PremiumFeaturePaidMessages -> R.string.XgramPremiumFeaturePaidMessages to R.string.XgramPremiumFeaturePaidMessagesWhere
-    is TdApi.PremiumFeatureProtectPrivateChatContent -> R.string.XgramPremiumFeatureProtectPrivateChatContent to official
+    is TdApi.PremiumFeatureProtectPrivateChatContent -> R.string.XgramPremiumFeatureProtectPrivateChatContent to R.string.XgramPremiumFeatureProtectPrivateChatContentWhere
     is TdApi.PremiumFeatureTextComposition -> R.string.XgramPremiumFeatureTextComposition to R.string.XgramPremiumFeatureTextCompositionWhere
     is TdApi.PremiumFeatureRichMessages -> R.string.XgramPremiumFeatureRichMessages to official
     else -> return humanize(feature, "PremiumFeature") to s(official)

@@ -685,6 +685,14 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       strings.append(com.fahadali.xgram.chats.XgramAutoTranslate.isEnabled(tdlib, getChatId()) ? R.string.XgramStopTranslating : R.string.XgramTranslateChat);
     }
 
+    if (mode == Mode.USER) {
+      final int sharingItem = com.fahadali.xgram.chats.XgramProtectedChat.menuItem(tdlib, chat); // XGram: Disable sharing (Premium) or Enable sharing
+      if (sharingItem != 0) {
+        ids.append(sharingItem);
+        strings.append(com.fahadali.xgram.chats.XgramProtectedChat.menuTitle(sharingItem));
+      }
+    }
+
     if (tdlib.canSetPasscode(chat)) {
       ids.append(R.id.btn_setPasscode);
       strings.append(R.string.PasscodeTitle);
@@ -847,6 +855,10 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       boolean enabled = !com.fahadali.xgram.chats.XgramAutoTranslate.isEnabled(tdlib, chatId);
       com.fahadali.xgram.chats.XgramAutoTranslate.setEnabled(tdlib, chatId, enabled);
       UI.showToast(enabled ? Lang.getString(R.string.XgramTranslateChatOn, com.fahadali.xgram.chats.XgramAutoTranslate.languageName(com.fahadali.xgram.chats.XgramAutoTranslate.targetLanguage())) : Lang.getString(R.string.XgramTranslateChatOff), Toast.LENGTH_SHORT);
+      return;
+    }
+    if ((id == R.id.btn_xgramDisableSharing || id == R.id.btn_xgramEnableSharing) && chat != null) {
+      com.fahadali.xgram.chats.XgramProtectedChat.toggle(this, chat.id, id); // XGram: sharing in a private chat
       return;
     }
     if (tdlib.ui().processLeaveButton(this, null, getChatId(), id, null)) {

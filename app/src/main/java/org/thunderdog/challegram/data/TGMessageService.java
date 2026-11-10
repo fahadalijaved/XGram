@@ -892,11 +892,20 @@ public final class TGMessageService extends TGMessageServiceImpl {
         );
       } else {
         return getText(
-          R.string.ActionSharingRequest,
+          com.fahadali.xgram.chats.XgramProtectedChat.canAnswer(msg) ? R.string.XgramSharingRequestTap : R.string.ActionSharingRequest, // XGram: it can be answered
           new SenderArgument(sender)
         );
       }
     });
+    if (com.fahadali.xgram.chats.XgramProtectedChat.canAnswer(msg)) {
+      // XGram: a tap answers the request (Enable sharing, or keep it disabled), like official Telegram's buttons
+      setOnClickListener(() ->
+        com.fahadali.xgram.chats.XgramProtectedChat.answer(controller(), msg, () -> {
+          setOnClickListener(null); // answered: the text loses "Tap to answer"
+          rebuildAndUpdateContent();
+        })
+      );
+    }
   }
 
   public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageChatHasProtectedContentToggled chatHasProtectedContentToggled) {
