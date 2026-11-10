@@ -193,6 +193,12 @@ public class EmojiStatusSelectorEmojiPage extends BottomSheetViewController.Bott
 
   @Override
   public boolean onSetEmojiStatus (@Nullable View view, TGStickerObj sticker, TdApi.EmojiStatus emojiStatus) {
+    if (parent.xgramOnPick != null) {
+      // XGram: picking an emoji for something else (an emoji profile photo): no status is set
+      parent.hidePopupWindow(true);
+      parent.xgramOnPick.runWithData(sticker);
+      return true;
+    }
     tdlib.send(new TdApi.SetEmojiStatus(emojiStatus), tdlib.typedOkHandler());
     parent.hidePopupWindow(true);
     if (view == null) return true;
@@ -661,6 +667,13 @@ public class EmojiStatusSelectorEmojiPage extends BottomSheetViewController.Bott
     private final ViewController<?> parent;
     private final FrameLayout foregroundView;
     private final AnimationsEmojiStatusSetDelegate animationDelegate;
+    private @Nullable me.vkryl.core.lambda.RunnableData<TGStickerObj> xgramOnPick;
+
+    /** XGram: a tap only hands the emoji to {@code onPick} (no emoji status is set), e.g. for an emoji profile photo. */
+    public Wrapper xgramPickOnly (me.vkryl.core.lambda.RunnableData<TGStickerObj> onPick) {
+      this.xgramOnPick = onPick;
+      return this;
+    }
 
     public Wrapper (Context context, Tdlib tdlib, ViewController<?> parent, AnimationsEmojiStatusSetDelegate delegate) {
       super(context, tdlib);

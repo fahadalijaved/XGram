@@ -405,7 +405,7 @@ object XgramR5ChatPickers {
    * for the keyboard, so a dialog with text fields stays centred above it. It is edge to edge ([XgramDialogWindow]):
    * transparent system bars over the dimmed app, the dialog inside the safe area.
    */
-  private fun show(context: Context, forceDark: Boolean = false, content: @Composable (dismiss: () -> Unit) -> Unit): Boolean {
+  internal fun show(context: Context, forceDark: Boolean = false, content: @Composable (dismiss: () -> Unit) -> Unit): Boolean {
     return try {
       val owner = XgramComposeOwner()
       val dialog = Dialog(context)

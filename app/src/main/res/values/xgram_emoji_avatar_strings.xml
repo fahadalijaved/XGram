@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: an emoji as your profile photo, see XgramEmojiAvatar -->
+<resources>
+  <item name="btn_xgramEmojiAvatar" type="id"/>
+  <string name="XgramEmojiAvatar">Use an emoji</string>
+  <string name="XgramEmojiAvatarTitle">Emoji profile photo</string>
+  <string name="XgramEmojiAvatarSave">Set as photo</string>
+  <string name="XgramEmojiAvatarSet">Your profile photo is set</string>
+  <string name="XgramEmojiAvatarFailed">The photo couldn\'t be set. Try again later.</string>
+  <string name="XgramEmojiAvatarPremium">This emoji needs Telegram Premium.</string>
+</resources>

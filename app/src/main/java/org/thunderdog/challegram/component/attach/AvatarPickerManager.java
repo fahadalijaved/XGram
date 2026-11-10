@@ -81,6 +81,11 @@ public class AvatarPickerManager extends MediaLayoutManager {
 
     b.item(new ViewController.OptionItem(R.id.btn_changePhotoGallery, Lang.getString(isPublic ? R.string.SetPublicPhoto : R.string.SetProfilePhoto),
       ViewController.OptionColor.NORMAL, R.drawable.baseline_image_24));
+    if (!isPublic) {
+      // XGram: an emoji on a gradient as the photo, like official Telegram
+      b.item(new ViewController.OptionItem(R.id.btn_xgramEmojiAvatar, Lang.getString(R.string.XgramEmojiAvatar),
+        ViewController.OptionColor.NORMAL, R.drawable.baseline_emoticon_outline_24));
+    }
 
     final Runnable deleteRunnable = () -> showDeletePhotoConfirm(() -> deleteProfilePhoto(profilePhotoToDelete));
     if (profilePhotoToDelete != 0 && !isPublic) {
@@ -97,6 +102,8 @@ public class AvatarPickerManager extends MediaLayoutManager {
           ColorId.textNegative, deleteRunnable);
       } else if (id == R.id.btn_changePhotoDelete) {
         deleteRunnable.run();
+      } else if (id == R.id.btn_xgramEmojiAvatar) {
+        com.fahadali.xgram.compose.XgramEmojiAvatar.start(context);
       }
       return true;
     });
