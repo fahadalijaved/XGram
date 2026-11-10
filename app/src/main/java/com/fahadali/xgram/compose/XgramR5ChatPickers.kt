@@ -29,6 +29,16 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -227,6 +237,72 @@ object XgramR5ChatPickers {
     }
     return show(context) { dismiss ->
       TimePickerContent(title, hourOfDay, minute, is24Hour, dismiss) { h, m -> onPick.onTimePicked(h, m) }
+    }
+  }
+
+  fun interface EffectCallback {
+    fun onEffectPicked(effectId: Long)
+  }
+
+  /**
+   * XGram: message effects (Telegram): the effects that can be sent, as a grid of their emoji in an M3E dialog; a tap
+   * picks one and closes it. Expressive only (Telegram X's option list stands in without it).
+   */
+  @JvmStatic
+  fun showEffectPicker(context: Context, title: String, effects: List<org.drinkless.tdlib.TdApi.MessageEffect>, onPick: EffectCallback): Boolean {
+    if (!XgramExpressive.isEnabled()) {
+      return false
+    }
+    return show(context) { dismiss ->
+      EffectPickerContent(title, effects, dismiss) { onPick.onEffectPicked(it) }
+    }
+  }
+
+  @OptIn(ExperimentalLayoutApi::class)
+  @Composable
+  private fun EffectPickerContent(title: String, effects: List<org.drinkless.tdlib.TdApi.MessageEffect>, dismiss: () -> Unit, onPick: (Long) -> Unit) {
+    Surface(
+      modifier = Modifier
+        .widthIn(max = 420.dp)
+        .padding(horizontal = 24.dp)
+        // taps between the emoji stay in the dialog instead of reaching the scrim behind it
+        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { },
+      shape = MaterialTheme.shapes.extraLarge,
+      color = MaterialTheme.colorScheme.surfaceContainerHigh
+    ) {
+      Column(modifier = Modifier.padding(top = 24.dp, bottom = 8.dp)) {
+        Text(title, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(horizontal = 24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+        FlowRow(
+          modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 360.dp)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp),
+          horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+          verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+          effects.forEach { effect ->
+            Box(
+              modifier = Modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .clickable {
+                  dismiss()
+                  onPick(effect.id)
+                },
+              contentAlignment = Alignment.Center
+            ) {
+              Text(effect.emoji, fontSize = 30.sp)
+            }
+          }
+        }
+        DialogButtons(neutral = null) {
+          TextButton(onClick = dismiss) {
+            Text(Lang.getString(R.string.Cancel))
+          }
+        }
+      }
     }
   }
 

@@ -414,6 +414,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
       items.add(0, createHapticSenderItem(R.id.btn_openSendersMenu, chat.messageSenderId, false, false));
     }
     com.fahadali.xgram.chats.XgramAiTools.addSendMenuItem(this, items); // XGram: Telegram's AI editor
+    if (!isEditingMessage() && chat != null && ChatId.isPrivate(chat.id) && !tdlib.isSelfChat(chat.id) && tdlib.availableMessageEffectIds().length > 0) {
+      // XGram: message effects (official Telegram's), private chats only
+      items.add(new HapticMenuHelper.MenuItem(R.id.btn_xgramSendWithEffect, Lang.getString(R.string.XgramSendWithEffect), R.drawable.baseline_auto_awesome_24));
+    }
     if (com.fahadali.xgram.chats.XgramUndoSend.wouldHold(this)) {
       // XGram: Undo send: what waits goes first, then this message, without waiting
       items.add(new HapticMenuHelper.MenuItem(R.id.btn_xgramUndoSendNow, Lang.getString(R.string.XgramUndoSendNow), R.drawable.baseline_send_24));
@@ -468,6 +472,20 @@ public class MessagesController extends ViewController<MessagesController.Argume
       });
     } else if (viewId == R.id.btn_debugLtrEmoji) {
       pickDateOrProceed(Td.newSendOptions(), (sendOptions, disableMarkdown) -> send(new TdApi.InputMessageText(new TdApi.FormattedText(Text.bidiGenerateTestMessage(), new TdApi.TextEntity[0]), null, false), false, sendOptions, null));
+    } else if (viewId == R.id.btn_xgramSendWithEffect) { // XGram: message effects
+      com.fahadali.xgram.chats.XgramMessageEffects.pick(this, effectId -> {
+        ReplyInfo replyInfo = getCurrentReplyId();
+        TdApi.MessageSendOptions sendOptions = Td.newSendOptions(getInputSuggestedPostInfo(replyInfo), false);
+        pickDateOrProceed(sendOptions, (modifiedSendOptions, disableMarkdown) -> {
+          modifiedSendOptions.effectId = effectId; // the send paths carry it over their own copies (xgramKeepEffect)
+          xgramUndoBypass = true; // the effect plays as the message goes out: it doesn't wait (Undo send)
+          try {
+            send(modifiedSendOptions, true);
+          } finally {
+            xgramUndoBypass = false;
+          }
+        });
+      });
     } else if (viewId == R.id.btn_xgramAiEditor) { // XGram: Telegram's AI editor
       com.fahadali.xgram.chats.XgramAiTools.openEditor(this);
     } else if (viewId == R.id.btn_xgramUndoSendNow) { // XGram: Undo send
@@ -12153,13 +12171,14 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
 
     boolean forceUpdateOrderOfInstalledStickerSets = Settings.instance().getNewSetting(Settings.SETTING_FLAG_DYNAMIC_ORDER_EMOJI_PACKS);
-    final TdApi.MessageSendOptions finalSendOptions = Td.newSendOptions(
+    final TdApi.MessageSendOptions finalSendOptions = xgramKeepEffect(initialSendOptions, Td.newSendOptions(
       initialSendOptions,
       getInputSuggestedPostInfo(replyInfo),
       obtainSilentMode(),
       forceUpdateOrderOfInstalledStickerSets
-    );
+    ));
     List<TdApi.Function<?>> functions = (List<TdApi.Function<?>>) (List<?>) TD.sendMessageText(chatId, topicId, replyTo, finalSendOptions, content, tdlib.maxMessageTextLength());
+    xgramEffectOnFirstOnly(functions); // XGram: a long text split in parts plays its effect once
 
     if (showSlowModeRestriction(sendButton != null ? sendButton : inputView, finalSendOptions)) {
       return;
@@ -12212,12 +12231,43 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
   }
 
+  // XGram: message effects. Td.newSendOptions(options, ...) rebuilds the options without effectId, so the send paths
+  // carry it over themselves; when one send becomes several messages, only the first plays the effect.
+
+  private static TdApi.MessageSendOptions xgramKeepEffect (@Nullable TdApi.MessageSendOptions from, TdApi.MessageSendOptions to) {
+    if (from != null && from.effectId != 0) {
+      to.effectId = from.effectId;
+    }
+    return to;
+  }
+
+  private static void xgramEffectOnFirstOnly (@Nullable List<TdApi.Function<?>> functions) {
+    if (functions == null || functions.size() < 2) {
+      return;
+    }
+    for (int i = 1; i < functions.size(); i++) {
+      final TdApi.Function<?> function = functions.get(i);
+      if (function instanceof TdApi.SendMessage && ((TdApi.SendMessage) function).options != null && ((TdApi.SendMessage) function).options.effectId != 0) {
+        ((TdApi.SendMessage) function).options = xgramWithoutEffect(((TdApi.SendMessage) function).options);
+      } else if (function instanceof TdApi.SendMessageAlbum && ((TdApi.SendMessageAlbum) function).options != null && ((TdApi.SendMessageAlbum) function).options.effectId != 0) {
+        ((TdApi.SendMessageAlbum) function).options = xgramWithoutEffect(((TdApi.SendMessageAlbum) function).options);
+      }
+    }
+  }
+
+  /** A copy without the effect: the parts share one options object, which the first keeps. */
+  private static TdApi.MessageSendOptions xgramWithoutEffect (TdApi.MessageSendOptions o) {
+    return new TdApi.MessageSendOptions(o.suggestedPostInfo, o.disableNotification, o.fromBackground, o.protectContent,
+      o.allowPaidBroadcast, o.paidMessageStarCount, o.updateOrderOfInstalledStickerSets, o.schedulingState, 0, o.sendingId, o.onlyPreview);
+  }
+
   private void executeSendMessageFunctions (List<TdApi.Function<?>> functions, List<TdApi.Message> sentMessages, final boolean isSchedule, RunnableBool onDone) {
     if (functions.isEmpty()) {
       tdlib.ui().post(() -> onDone.runWithBool(false)); // XGram: nothing to send (functions.get(0) below would throw)
       return;
     }
     com.fahadali.xgram.chats.XgramUndoSend.flushBefore(tdlib, functions.isEmpty() ? null : functions.get(0)); // XGram: what waits in this chat goes first
+    xgramEffectOnFirstOnly(functions); // XGram: several files or an album and music play the effect once
     final int expectedCount = functions.size();
     final int[] sentFunctionsCount = new int[1];
 
@@ -12441,11 +12491,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
       ReplyInfo replyInfo = allowReply ? obtainReplyTo() : null;
       TdApi.InputMessageReplyTo replyTo = replyInfo != null ? replyInfo.toInputMessageReply() : null;
       TdApi.MessageTopic topicId = getMessageTopicId(replyInfo);
-      TdApi.MessageSendOptions finalSendOptions = Td.newSendOptions(
+      TdApi.MessageSendOptions finalSendOptions = xgramKeepEffect(initialSendOptions, Td.newSendOptions(
         initialSendOptions,
         getInputSuggestedPostInfo(replyInfo),
         obtainSilentMode()
-      );
+      ));
       return TD.toFunctions(chat.id, topicId, replyTo, finalSendOptions, content, needGroupMedia);
     }
     return null;
@@ -12672,11 +12722,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
     ReplyInfo replyInfo = allowReply ? obtainReplyTo() : null;
     TdApi.InputMessageReplyTo replyTo = replyInfo != null ? replyInfo.toInputMessageReply() : null;
     TdApi.MessageTopic topicId = getMessageTopicId(replyInfo);
-    final TdApi.MessageSendOptions finalSendOptions = Td.newSendOptions(
+    final TdApi.MessageSendOptions finalSendOptions = xgramKeepEffect(initialSendOptions, Td.newSendOptions(
       initialSendOptions,
       getInputSuggestedPostInfo(replyInfo),
       obtainSilentMode()
-    );
+    ));
     boolean allowAudio = tdlib.getRestrictionStatus(chat, RightId.SEND_AUDIO) == null;
     boolean allowDocs = tdlib.getRestrictionStatus(chat, RightId.SEND_DOCS) == null;
     boolean allowVideos = tdlib.getRestrictionStatus(chat, RightId.SEND_VIDEOS) == null;

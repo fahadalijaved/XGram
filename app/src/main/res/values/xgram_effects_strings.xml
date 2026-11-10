@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: sending a message with an effect (private chats), like official Telegram -->
+<resources>
+  <item name="btn_xgramSendWithEffect" type="id"/>
+  <string name="XgramSendWithEffect">Send with effect…</string>
+  <string name="XgramSendWithEffectTitle">Send with effect</string>
+  <string name="XgramEffectsNone">No effects to send right now</string>
+</resources>

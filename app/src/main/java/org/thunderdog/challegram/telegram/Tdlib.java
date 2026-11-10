@@ -10043,9 +10043,25 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     }
   }
 
+  // XGram: the message effects Telegram offers for sending (reaction-like ones first, then sticker ones)
+  private long[] xgramReactionEffectIds = new long[0], xgramStickerEffectIds = new long[0];
+
   @TdlibThread
   private void updateAvailableMessageEffects (TdApi.UpdateAvailableMessageEffects update) {
-    // TODO(message-effects)
+    synchronized (dataLock) {
+      this.xgramReactionEffectIds = update.reactionEffectIds != null ? update.reactionEffectIds : new long[0];
+      this.xgramStickerEffectIds = update.stickerEffectIds != null ? update.stickerEffectIds : new long[0];
+    }
+  }
+
+  /** XGram: the ids of the message effects that can be sent now, in Telegram's order. */
+  public long[] availableMessageEffectIds () {
+    synchronized (dataLock) {
+      long[] all = new long[xgramReactionEffectIds.length + xgramStickerEffectIds.length];
+      System.arraycopy(xgramReactionEffectIds, 0, all, 0, xgramReactionEffectIds.length);
+      System.arraycopy(xgramStickerEffectIds, 0, all, xgramReactionEffectIds.length, xgramStickerEffectIds.length);
+      return all;
+    }
   }
 
   @TdlibThread

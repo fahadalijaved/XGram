@@ -106,6 +106,80 @@ public final class XgramMessageEffects {
     }
   }
 
+  // Sending with an effect (private chats): the effects Telegram offers, as a picker
+
+  /** The effects that can be sent now, in Telegram's order, on the UI thread; without Premium only the free ones. */
+  public static void loadAvailable (Tdlib tdlib, java.util.function.Consumer<java.util.List<TdApi.MessageEffect>> callback) {
+    final long[] ids = tdlib.availableMessageEffectIds();
+    if (ids.length == 0) {
+      callback.accept(java.util.Collections.emptyList());
+      return;
+    }
+    final TdApi.MessageEffect[] found = new TdApi.MessageEffect[ids.length];
+    final java.util.concurrent.atomic.AtomicInteger left = new java.util.concurrent.atomic.AtomicInteger(ids.length);
+    for (int i = 0; i < ids.length; i++) {
+      final int index = i;
+      final long id = ids[i];
+      final TdApi.MessageEffect known = effects.get(id);
+      if (known != null) {
+        found[index] = known;
+        if (left.decrementAndGet() == 0) {
+          deliver(tdlib, found, callback);
+        }
+        continue;
+      }
+      tdlib.send(new TdApi.GetMessageEffect(id), (effect, error) -> UI.post(() -> {
+        if (effect != null) {
+          effects.put(id, effect);
+          found[index] = effect;
+        }
+        if (left.decrementAndGet() == 0) {
+          deliver(tdlib, found, callback);
+        }
+      }));
+    }
+  }
+
+  private static void deliver (Tdlib tdlib, TdApi.MessageEffect[] found, java.util.function.Consumer<java.util.List<TdApi.MessageEffect>> callback) {
+    final boolean premium = tdlib.hasPremium();
+    final java.util.ArrayList<TdApi.MessageEffect> list = new java.util.ArrayList<>(found.length);
+    for (TdApi.MessageEffect effect : found) {
+      if (effect != null && (premium || !effect.isPremium) && effect.emoji != null && !effect.emoji.isEmpty()) {
+        list.add(effect);
+      }
+    }
+    callback.accept(list);
+  }
+
+  /** Picks an effect to send with: the M3E grid with Expressive, Telegram X's option list without it. */
+  public static void pick (org.thunderdog.challegram.navigation.ViewController<?> c, java.util.function.LongConsumer onPicked) {
+    loadAvailable(c.tdlib(), list -> {
+      if (c.isDestroyed()) {
+        return; // the chat closed while the effects loaded
+      }
+      if (list.isEmpty()) {
+        UI.showToast(org.thunderdog.challegram.R.string.XgramEffectsNone, android.widget.Toast.LENGTH_SHORT);
+        return;
+      }
+      final String title = org.thunderdog.challegram.core.Lang.getString(org.thunderdog.challegram.R.string.XgramSendWithEffectTitle);
+      if (com.fahadali.xgram.compose.XgramR5ChatPickers.showEffectPicker(c.context(), title, list, onPicked::accept)) {
+        return;
+      }
+      final int[] ids = new int[list.size()];
+      final String[] titles = new String[list.size()];
+      for (int i = 0; i < ids.length; i++) {
+        ids[i] = i + 1;
+        titles[i] = list.get(i).emoji;
+      }
+      c.showOptions(title, ids, titles, (itemView, id) -> {
+        if (id >= 1 && id <= list.size()) {
+          onPicked.accept(list.get(id - 1).id);
+        }
+        return true;
+      });
+    });
+  }
+
   private interface EffectCallback {
     void onEffect (TdApi.MessageEffect effect);
   }
