@@ -1155,7 +1155,22 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
   public void collapseToStart () {
     int scrollY = getRecyclerScrollY();
     if (scrollY != 0) {
-      com.fahadali.xgram.appearance.XgramMotion.sheetScrollByOr(recyclerView, 0, -scrollY);
+      // XGram: from far down a list (the gallery after Back), a smooth scroll to the top bound every row on the way
+      // in a few frames and their pictures flashed blank: jump to a short way from the top, the spring does the rest
+      final int near = Math.max(Screen.dp(240f), recyclerView != null ? recyclerView.getMeasuredHeight() / 2 : 0);
+      final RecyclerView.LayoutManager manager = getLayoutManager();
+      if (scrollY > near * 2 && manager instanceof LinearLayoutManager && recyclerView != null) {
+        recyclerView.stopScroll();
+        ((LinearLayoutManager) manager).scrollToPositionWithOffset(0, -near);
+        recyclerView.post(() -> {
+          final int left = getRecyclerScrollY();
+          if (left > 0) {
+            com.fahadali.xgram.appearance.XgramMotion.sheetScrollByOr(recyclerView, 0, -left);
+          }
+        });
+      } else {
+        com.fahadali.xgram.appearance.XgramMotion.sheetScrollByOr(recyclerView, 0, -scrollY);
+      }
     }
     animateCurrentHeight(startHeight, false);
   }
