@@ -1022,6 +1022,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     TGLegacyManager.instance().addEmojiListener(this);
     tdlib.context().dateManager().addListener(this);
     tdlib.listeners().addChatFolderListener(chatFolderId(), this);
+    tdlib.listeners().subscribeToChatFoldersUpdates(xgramFolderTagsListener); // XGram
 
     tdlib.awaitMyUserOrUnauthorizedState(() -> {
       executeOnUiThreadOptional(() -> {
@@ -3676,7 +3677,23 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     tdlib.contacts().removeListener(this);
     tdlib.context().dateManager().removeListener(this);
     tdlib.listeners().removeChatFolderListener(chatFolderId(), this);
+    tdlib.listeners().unsubscribeFromChatFoldersUpdates(xgramFolderTagsListener); // XGram
   }
+
+  // XGram: a folder's tag color or name changed, or folder tags were turned on or off (Telegram's updateChatFolders):
+  // the rows build their tags only with their text, so without this they kept the old ones until the app restarted
+  private final org.thunderdog.challegram.telegram.ChatFoldersListener xgramFolderTagsListener = new org.thunderdog.challegram.telegram.ChatFoldersListener() {
+    @Override
+    public void onChatFoldersChanged (TdApi.ChatFolderInfo[] chatFolders, int mainChatListPosition) {
+      runOnUiThreadOptional(() -> {
+        if (adapter != null) {
+          for (TGChat chat : adapter.getChats()) {
+            chat.xgramUpdateFolderTags();
+          }
+        }
+      });
+    }
+  };
 
   // Updates
 

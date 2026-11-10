@@ -1660,6 +1660,14 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
     return xgramFolderTags;
   }
 
+  /** XGram: a folder's tag color or name changed, or folder tags were turned on or off: this row's tags again. */
+  public void xgramUpdateFolderTags () {
+    if (currentWidth > 0) {
+      layoutText(); // builds the tags and gives the preview the room they leave
+      currentViews.invalidate();
+    }
+  }
+
   private void xgramBuildFolderTags () {
     xgramFolderTags.clear();
     xgramFolderTagsWidth = 0;
