@@ -3,6 +3,9 @@
      still and animated sticker packs go to WhatsApp through its third-party sticker API -->
 <resources>
   <string name="XgramWaAddToWhatsApp">Add to WhatsApp</string>
+  <string name="XgramWaNameTitle">Name the sticker pack</string>
+  <string name="XgramWaNameHint">Pack name</string>
+  <string name="XgramWaPublisherHint">Publisher (shown under the name)</string>
   <!-- With WhatsApp and WhatsApp Business both installed -->
   <string name="XgramWaChooseApp">Which WhatsApp should get this pack?</string>
   <string name="XgramWaWhatsApp">WhatsApp</string>

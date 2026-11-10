@@ -146,16 +146,44 @@ public final class XgramWaStickerExport {
         new int[] {R.drawable.baseline_chat_bubble_24, R.drawable.baseline_work_24},
         (itemView, id) -> {
           if (id == R.id.btn_xgramWhatsApp) {
-            begin(c.tdlib(), info, WHATSAPP, hideSheet);
+            askName(c, info, WHATSAPP, hideSheet);
           } else if (id == R.id.btn_xgramWhatsAppBusiness) {
-            begin(c.tdlib(), info, WHATSAPP_BUSINESS, hideSheet);
+            askName(c, info, WHATSAPP_BUSINESS, hideSheet);
           }
           return true;
         }
       );
     } else {
-      begin(c.tdlib(), info, consumer ? WHATSAPP : WHATSAPP_BUSINESS, hideSheet);
+      askName(c, info, consumer ? WHATSAPP : WHATSAPP_BUSINESS, hideSheet);
     }
+  }
+
+  /**
+   * The pack's name and publisher as WhatsApp shows them, the user's to choose: the Telegram pack's title and its
+   * t.me link to start with (both fields in one dialog). An empty name keeps the dialog; an empty publisher is the link.
+   */
+  @UiThread
+  private static void askName (@NonNull ViewController<?> c, @NonNull TdApi.StickerSetInfo info, String targetPackage, @NonNull Runnable hideSheet) {
+    final String defaultName = StringUtils.isEmpty(info.title) ? info.name : info.title;
+    final String defaultPublisher = clip(c.tdlib().tMeStickerSetUrl(info.name).replaceFirst("^https?://", ""));
+    final org.thunderdog.challegram.widget.MaterialEditTextGroup[] publisherField = new org.thunderdog.challegram.widget.MaterialEditTextGroup[1];
+    c.openInputAlert(Lang.getString(R.string.XgramWaNameTitle), Lang.getString(R.string.XgramWaNameHint), R.string.XgramWaAddToWhatsApp, R.string.Cancel, defaultName, null, (inputView, result) -> {
+      final String name = result != null ? result.trim() : "";
+      if (name.isEmpty()) {
+        return false; // a pack needs a name
+      }
+      final String publisher = publisherField[0] != null ? publisherField[0].getText().toString().trim() : "";
+      begin(c.tdlib(), info, targetPackage, hideSheet, clip(name), publisher.isEmpty() ? defaultPublisher : clip(publisher));
+      return true;
+    }, true, layout -> {
+      final org.thunderdog.challegram.widget.MaterialEditTextGroup field = new org.thunderdog.challegram.widget.MaterialEditTextGroup(c.context(), c.tdlib());
+      field.setHint(Lang.getString(R.string.XgramWaPublisherHint));
+      field.setText(defaultPublisher);
+      final android.widget.LinearLayout.LayoutParams params = new android.widget.LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+      params.topMargin = org.thunderdog.challegram.tool.Screen.dp(8f);
+      layout.addView(field, params);
+      publisherField[0] = field;
+    }, null);
   }
 
   private static final int KIND_UNKNOWN = 0, KIND_STILL = 1, KIND_LOTTIE = 2, KIND_VIDEO = 3;
@@ -246,13 +274,13 @@ public final class XgramWaStickerExport {
   }
 
   @UiThread
-  private static void begin (Tdlib tdlib, TdApi.StickerSetInfo info, String targetPackage, Runnable hideSheet) {
+  private static void begin (Tdlib tdlib, TdApi.StickerSetInfo info, String targetPackage, Runnable hideSheet, String customName, String customPublisher) {
     endLostExport();
     if (current != null) {
       UI.showToast(R.string.XgramWaBusy, Toast.LENGTH_SHORT);
       return;
     }
-    XgramWaStickerExport export = new XgramWaStickerExport(tdlib, info, targetPackage);
+    XgramWaStickerExport export = new XgramWaStickerExport(tdlib, info, targetPackage, customName, customPublisher);
     current = export;
     hideSheet.run();
     export.showProgress(Lang.getString(R.string.XgramWaPreparing));
@@ -319,10 +347,15 @@ public final class XgramWaStickerExport {
   /** Held here: UI keeps its state listeners weakly. */
   private final UI.StateListener resumeListener = this::onUiStateChanged;
 
-  private XgramWaStickerExport (Tdlib tdlib, TdApi.StickerSetInfo info, String targetPackage) {
+  /** The pack's name and publisher the user chose (askName); null: the Telegram pack's. */
+  @Nullable private final String customName, customPublisher;
+
+  private XgramWaStickerExport (Tdlib tdlib, TdApi.StickerSetInfo info, String targetPackage, @Nullable String customName, @Nullable String customPublisher) {
     this.tdlib = tdlib;
     this.setId = info.id;
     this.targetPackage = targetPackage;
+    this.customName = customName;
+    this.customPublisher = customPublisher;
   }
 
   /** XGram came back while a pack waits for WhatsApp's sheet; the listener goes after UI's loop over listeners. */
@@ -666,8 +699,8 @@ public final class XgramWaStickerExport {
         packCount += partsFor(group.stickers.size());
       }
       final byte[] setTray = trayFromThumbnail(set);
-      final String title = StringUtils.isEmpty(set.title) ? set.name : set.title;
-      final String publisher = clip(tdlib.tMeStickerSetUrl(set.name).replaceFirst("^https?://", ""));
+      final String title = !StringUtils.isEmpty(customName) ? customName : StringUtils.isEmpty(set.title) ? set.name : set.title; // XGram: the user's name
+      final String publisher = !StringUtils.isEmpty(customPublisher) ? customPublisher : clip(tdlib.tMeStickerSetUrl(set.name).replaceFirst("^https?://", ""));
       final List<XgramWaStickerStore.Pack> newPacks = new ArrayList<>(packCount);
       final List<File> dirs = new ArrayList<>(packCount);
       for (Group group : groups) {
