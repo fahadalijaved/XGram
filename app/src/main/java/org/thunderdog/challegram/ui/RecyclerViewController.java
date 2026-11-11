@@ -121,6 +121,18 @@ public abstract class RecyclerViewController<T> extends TelegramViewController<T
     }
   }
 
+  protected void applySavedRecyclerPosition (int removedAtStart) {
+    if (savedRecyclerPosition != RecyclerView.NO_POSITION) {
+      if (savedRecyclerPosition >= removedAtStart) {
+        savedRecyclerPosition -= removedAtStart;
+      } else {
+        savedRecyclerPosition = 0;
+        savedRecyclerPositionOffset = 0;
+      }
+    }
+    applySavedRecyclerPosition();
+  }
+
   @Override
   public boolean supportsBottomInset () {
     return true;
