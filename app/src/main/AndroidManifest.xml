@@ -442,6 +442,11 @@
       android:windowSoftInputMode="stateHidden|adjustPan"
       android:exported="true">
       <!-- XGram: the launcher entry is one of the activity-alias icons below. -->
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.NOTIFICATION_PREFERENCES" />
+      </intent-filter>
 
       <!-- Share from other apps -->
       <intent-filter>
