@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: the composer's selection toolbar, see InputView -->
+<resources>
+  <item name="btn_xgramTextFormatting" type="id"/>
+  <string name="XgramTextFormatting">Formatting</string>
+</resources>

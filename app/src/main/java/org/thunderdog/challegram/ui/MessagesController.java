@@ -16265,40 +16265,20 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (!emojiShown) {
       emojiButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(getTargetIcon(true)));
     }
-    xgramMakeRoomForHandle(hasSelection);
   }
 
   /**
-   * XGram: Android hangs the start selection handle before the selection, so with the text selected from its start the
-   * handle lay over the T (formatting) button beside the field and took its taps. While a selection is on, the text
-   * moves over by the handle's overhang; it moves back when the selection goes (unless something re-padded it meanwhile).
+   * XGram: the selection toolbar's Formatting: the same panel as the T button beside the field, which Android's start
+   * selection handle can lie over when the selection starts at the beginning of the text.
    */
-  private int xgramHandleRoom, xgramHandleBase;
-
-  private void xgramMakeRoomForHandle (boolean hasSelection) {
-    if (inputView == null) {
+  public void xgramOpenTextFormatting () {
+    if (!textInputHasSelection || inputView == null) {
       return;
     }
-    final boolean rtl = Lang.rtl();
-    final int start = rtl ? inputView.getPaddingRight() : inputView.getPaddingLeft();
-    int newStart;
-    if (hasSelection && xgramHandleRoom == 0) {
-      android.graphics.drawable.Drawable handle = null;
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        handle = rtl ? inputView.getTextSelectHandleRight() : inputView.getTextSelectHandleLeft();
-      }
-      final int width = handle != null && handle.getIntrinsicWidth() > 0 ? handle.getIntrinsicWidth() : Screen.dp(22f);
-      xgramHandleRoom = width * 3 / 4; // how far Android draws the start handle before the selection
-      xgramHandleBase = start;
-      newStart = start + xgramHandleRoom;
-    } else if (!hasSelection && xgramHandleRoom != 0) {
-      newStart = start == xgramHandleBase + xgramHandleRoom ? xgramHandleBase : start;
-      xgramHandleRoom = 0;
-    } else {
-      return;
-    }
-    if (newStart != start) {
-      inputView.setPadding(rtl ? inputView.getPaddingLeft() : newStart, inputView.getPaddingTop(), rtl ? newStart : inputView.getPaddingRight(), inputView.getPaddingBottom());
+    if (!emojiShown) {
+      openEmojiKeyboard(); // with a selection it opens on the formatting panel
+    } else if (!textFormattingVisible) {
+      setTextFormattingLayoutVisible(true);
     }
   }
 

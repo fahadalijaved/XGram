@@ -314,6 +314,10 @@ public class InputView extends NoClipEditText implements InlineSearchContext.Cal
         if (!canClearTextFormat()) {
           menu.removeItem(R.id.btn_plain);
         }
+        if (controller != null) {
+          // XGram: Formatting first in the bar: the panel the T button opens, reachable whatever covers that button
+          menu.add(Menu.NONE, R.id.btn_xgramTextFormatting, 1, Lang.getString(R.string.XgramTextFormatting)).setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
+        }
         return true;
       }
 
@@ -325,6 +329,12 @@ public class InputView extends NoClipEditText implements InlineSearchContext.Cal
 
       @Override
       public boolean onActionItemClicked (ActionMode mode, MenuItem item) {
+        if (item.getItemId() == R.id.btn_xgramTextFormatting) {
+          if (controller != null) {
+            controller.xgramOpenTextFormatting(); // the bar stays: finishing it would drop the selection
+          }
+          return true;
+        }
         return setSpan(item.getItemId());
       }
 
