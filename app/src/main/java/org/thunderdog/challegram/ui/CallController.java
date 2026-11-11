@@ -40,6 +40,7 @@ import androidx.annotation.Nullable;
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.BaseActivity;
 import org.thunderdog.challegram.BuildConfig;
+import org.thunderdog.challegram.CallActivity;
 import org.thunderdog.challegram.Log;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.U;
@@ -286,6 +287,10 @@ public class CallController extends ViewController<CallController.Arguments> imp
   private static final int ANIMATOR_XGRAM_AVATAR = 7;
 
   private float lastHeaderFactor;
+
+  public void showWithoutTransition () {
+    applyCustomHeaderAnimations(1f);
+  }
 
   @Override
   protected void applyCustomHeaderAnimations (float factor) {
@@ -1202,8 +1207,12 @@ public class CallController extends ViewController<CallController.Arguments> imp
         callSettings.setMicMuted(((ButtonView) v).toggleActive());
       }
     } else if (viewId == R.id.btn_openChat) {
-      // XGram: over the lock screen it asks to unlock first
-      context().xgramCallOverLock().leave(this, () -> tdlib.ui().openPrivateChat(this, call.userId, null));
+      if (context() instanceof CallActivity) {
+        ((CallActivity) context()).openApp(true);
+      } else {
+        // XGram: over the lock screen it asks to unlock first
+        context().xgramCallOverLock().leave(this, () -> tdlib.ui().openPrivateChat(this, call.userId, null));
+      }
     } else if (viewId == R.id.btn_speaker) {
       if (xgramVideo != null && xgramVideo.isCameraOn()) {
         xgramVideo.flipCamera(); // XGram: the cell flips the camera while it is on
@@ -1237,8 +1246,14 @@ public class CallController extends ViewController<CallController.Arguments> imp
   private void closeCall () {
     isClosed = true;
     tdlib.cache().unsubscribeFromCallUpdates(call.id, this);
-    // XGram: over the lock screen the lock screen comes back first and the screen closes behind it
-    context().xgramCallOverLock().closeBehindLock(this, this::navigateBack);
+    if (context() instanceof CallActivity) {
+      if (!navigateBack()) {
+        context().finish();
+      }
+    } else {
+      // XGram: over the lock screen the lock screen comes back first and the screen closes behind it
+      context().xgramCallOverLock().closeBehindLock(this, this::navigateBack);
+    }
   }
 
   private TdApi.CallState previousCallState;
@@ -1562,6 +1577,13 @@ public class CallController extends ViewController<CallController.Arguments> imp
     }
     tdlib.context().calls().acknowledgeCurrentCall(call.id);
     xgramCheckAnswerIntent(); // XGram: "Answer" in the notification of a video call
+    TGCallService.checkIncomingNotification();
+  }
+
+  @Override
+  public void onBlur () {
+    super.onBlur();
+    TGCallService.checkIncomingNotification();
   }
 
   @Override
@@ -1633,6 +1655,7 @@ public class CallController extends ViewController<CallController.Arguments> imp
     } else {
       avatarView.performDestroy();
     }
+    TGCallService.checkIncomingNotification();
   }
 
   @Override

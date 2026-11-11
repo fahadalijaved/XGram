@@ -1279,9 +1279,16 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
     }
   }
 
+  protected boolean needPasscode () {
+    return true;
+  }
+
   public final void checkPasscode (boolean byUserLock) {
     if (byUserLock) {
       // TODO FIXME
+      return;
+    }
+    if (!needPasscode()) {
       return;
     }
     if (Passcode.instance().isLocked()) {
@@ -3168,6 +3175,11 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
   }*/
 
   private ActivityPermissionResult requestMicPermissionCallback;
+  private boolean isRequestingMicForCall;
+
+  public boolean isRequestingMicForCall () {
+    return isRequestingMicForCall;
+  }
 
   public void requestMicPermissionForCall (@Nullable ActivityPermissionResult after) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
