@@ -1075,6 +1075,12 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
     if (Intents.ACTION_OPEN_CALL.equals(action)) {
       openCallController(intent.getBooleanExtra(Intents.KEY_OPEN_CHAT, false));
       if (intent.getBooleanExtra(Intents.KEY_ANSWER_CALL, false)) {
+        // Only a resumed activity asks for the microphone, and an intent comes before onResume
+        if (getActivityState() == UI.State.RESUMED) {
+          answerIncomingCall(intent);
+        } else {
+          pendingAnswerIntent = intent;
+        }
       }
       return true;
     }
@@ -1770,6 +1776,8 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
     }
   }
 
+  private @Nullable Intent pendingAnswerIntent;
+
   private void answerIncomingCall (Intent intent) {
     if (Passcode.instance().isLockedForIncomingCalls()) {
       return;
@@ -1885,6 +1893,11 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
     CallProblems.refresh(this);
     super.onResume();
     Log.i("MainActivity.onResume");
+    if (pendingAnswerIntent != null) {
+      Intent intent = pendingAnswerIntent;
+      pendingAnswerIntent = null;
+      answerIncomingCall(intent);
+    }
     // CallManager can't show a call that came while the app was in background: it opens under
     // the passcode, so that it's there at once after it
     if (isPasscodeShowing()) {
