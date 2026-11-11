@@ -27,6 +27,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.util.SparseIntArray;
 
+import androidx.annotation.DrawableRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
@@ -618,7 +619,7 @@ public class TdlibNotificationStyle implements TdlibNotificationStyleDelegate, F
 
     builder
       .setContentTitle(visualChatTitle)
-      .setSmallIcon(com.fahadali.xgram.XgramSettings.notificationSmallIcon()) // XGram: Appearance > Notification icon
+      .setSmallIcon(smallIcon(helper, group)) // XGram: Appearance > Notification icon (a missed call keeps its icon)
       .setContentText(textContent)
       .setTicker(tickerText)
       .setAutoCancel(Config.NOTIFICATION_AUTO_CANCEL)
@@ -1071,6 +1072,21 @@ public class TdlibNotificationStyle implements TdlibNotificationStyleDelegate, F
     return style;
   }
 
+  private static boolean isShownCall (@NonNull TdlibNotificationHelper helper,
+    TdlibNotification notification) {
+    return notification.isCall() && helper.needPreview(notification.group());
+  }
+
+  private static @DrawableRes int smallIcon (@NonNull TdlibNotificationHelper helper,
+    Iterable<TdlibNotification> notifications) {
+    for (TdlibNotification notification : notifications) {
+      if (isShownCall(helper, notification)) {
+        return R.drawable.baseline_call_missed_24_white;
+      }
+    }
+    return com.fahadali.xgram.XgramSettings.notificationSmallIcon(); // XGram: Appearance > Notification icon
+  }
+
   private NotificationCompat.Builder buildCommonNotification (Context context, @NonNull TdlibNotificationHelper helper, int badgeCount, boolean allowPreview, @Nullable TdlibNotificationSettings settings, final List<TdlibNotification> notifications, final int category, boolean isRebuild) {
     TdlibNotification lastNotification = notifications.get(notifications.size() - 1);
     long singleChatId = helper.findSingleChatId();
@@ -1111,7 +1127,7 @@ public class TdlibNotificationStyle implements TdlibNotificationStyleDelegate, F
     }
 
     b.setAutoCancel(Config.NOTIFICATION_AUTO_CANCEL_SPECIFIC);
-    b.setSmallIcon(com.fahadali.xgram.XgramSettings.notificationSmallIcon()); // XGram: Appearance > Notification icon
+    b.setSmallIcon(allowPreview ? smallIcon(helper, notifications) : com.fahadali.xgram.XgramSettings.notificationSmallIcon()); // XGram: Appearance > Notification icon (a missed call keeps its icon)
     b.setWhen(timeMs);
     if (!Device.FLYME) {
       b.setNumber(badgeCount);

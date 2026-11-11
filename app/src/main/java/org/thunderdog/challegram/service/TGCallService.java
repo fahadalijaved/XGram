@@ -15,6 +15,7 @@
 package org.thunderdog.challegram.service;
 
 import android.Manifest;
+import android.app.KeyguardManager;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -52,6 +53,7 @@ import android.view.KeyEvent;
 import androidx.annotation.DrawableRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
 
@@ -67,12 +69,12 @@ import org.thunderdog.challegram.data.TD;
 import org.thunderdog.challegram.navigation.ViewController;
 import org.thunderdog.challegram.player.TGPlayerController;
 import org.thunderdog.challegram.receiver.VoIPMediaButtonReceiver;
+import org.thunderdog.challegram.telegram.CallManager;
 import org.thunderdog.challegram.telegram.PrivateCallListener;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.telegram.TdlibAccount;
 import org.thunderdog.challegram.telegram.TdlibCache;
 import org.thunderdog.challegram.telegram.TdlibManager;
-import org.thunderdog.challegram.telegram.TdlibNotificationChannelGroup;
 import org.thunderdog.challegram.telegram.TdlibNotificationManager;
 import org.thunderdog.challegram.telegram.TdlibNotificationUtils;
 import org.thunderdog.challegram.theme.ColorId;
@@ -116,7 +118,6 @@ public class TGCallService extends Service implements
 
   private @Nullable Tdlib tdlib;
   private @Nullable TdApi.Call call;
-  private @Nullable String callChannelId;
   private TdApi.User user;
 
   private boolean callInitialized;
@@ -466,12 +467,7 @@ public class TGCallService extends Service implements
   }
 
   private void setCall (TdApi.Call call) {
-    boolean sameCall = this.call != null && call != null && this.call.id == call.id;
     this.call = call;
-    this.callChannelId = sameCall && this.callChannelId != null ? this.callChannelId : this.call != null ? "call_" + this.call.id + "_" + System.currentTimeMillis() : null;
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-      cleanupChannels((NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE));
-    }
   }
 
   @Override
@@ -654,9 +650,9 @@ public class TGCallService extends Service implements
 
   @Override
   public void onCallStateChanged (int callId, int newState) {
-    // XGram: the call is connected (tgcalls set its start time), so the ongoing notification gets its timer now,
-    // not on the next UI state change (TDLib sends no updateCall between Ready and Discarded). On the UI thread.
-    if (newState == CallState.ESTABLISHED && !isDestroyed && call != null && call.id == callId) {
+    if (newState == CallState.ESTABLISHED && !isDestroyed && call != null && call.id == callId &&
+      ongoingCallNotification != null) {
+      ongoingCallNotification = null;
       showNotification();
     }
   }
@@ -1053,34 +1049,27 @@ public class TGCallService extends Service implements
     Notification.Builder builder;
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-      NotificationManager m = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-      cleanupChannels(m);
-      // final String channelId = "call_" + call.id + "_" + System.currentTimeMillis();
-      // XGram: IMPORTANCE_DEFAULT (no sound, vibration or lights, as Telegram's call channel), not Telegram X's LOW: a
-      // LOW notification is silent, and a silent notification's icon is kept out of the status bar (NotificationManager
-      // .shouldHideSilentStatusBarIcons; One UI does it), so a voice or video call left only Samsung's "•" there.
-      // For an answered call this is the ringing channel (IMPORTANCE_HIGH, same id): lowered to DEFAULT here, so the
-      // ongoing notification posts without a heads-up.
-      android.app.NotificationChannel channel = new android.app.NotificationChannel(callChannelId, Lang.getString(R.string.NotificationChannelOutgoingCall), NotificationManager.IMPORTANCE_DEFAULT);
-      channel.enableVibration(false);
-      channel.enableLights(false);
-      channel.setSound(null, null);
-      try {
-        m.createNotificationChannel(channel);
-      } catch (Throwable t) {
-        Log.v("Unable to create notification channel for call", new TdlibNotificationChannelGroup.ChannelCreationFailureException(t));
-      }
-      builder = new Notification.Builder(this, callChannelId);
+      builder = new Notification.Builder(this, U.getOngoingCallsNotificationChannel());
     } else {
       builder = new Notification.Builder(this);
     }
 
+    int titleRes = call.isOutgoing ? R.string.CallOngoingOutgoing : R.string.CallOngoingIncoming;
+    boolean isCallStyle = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S;
+    String microphoneOff = isMicrophoneOff ? Lang.getString(R.string.VoipMicrophoneOff) : null;
+    if (isCallStyle) {
+      builder
+        .setContentTitle(TD.getUserName(user))
+        .setContentText(microphoneOff != null ? microphoneOff : Lang.getString(titleRes));
+    } else {
+      builder
+        .setContentTitle(Lang.getString(titleRes))
+        .setContentText(microphoneOff != null ? microphoneOff : TD.getUserName(user));
+    }
     builder
-      .setContentTitle(Lang.getString(R.string.OutgoingCall))
-      .setContentText(TD.getUserName(user))
       // XGram: a camera in the status bar for a video call (an alpha mask from Android 5, so the black vector works there)
       .setSmallIcon(xgramIsVideoCall() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP ? R.drawable.baseline_videocam_24 : CALL_ICON_RES)
-      .setOnlyAlertOnce(true) // XGram: rebuilt on connect and on video (same id): no alert again on the DEFAULT channel
+      .setOnlyAlertOnce(true) // XGram: rebuilt on connect and on video (same id): no alert again
       .setContentIntent(newCallScreenIntent());
     if (tdlib.context().isMultiUser()) {
       String shortName = tdlib.accountShortName();
@@ -1088,21 +1077,29 @@ public class TGCallService extends Service implements
         builder.setSubText(shortName);
       }
     }
-    final boolean xgramStyle = xgramOngoingCallStyle();
-    PendingIntent xgramHangUp = null;
+    PendingIntent endCall = null;
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
       Intent endIntent = new Intent();
       Intents.secureIntent(endIntent, false);
       endIntent.setAction(Intents.ACTION_END_CALL);
-      if (xgramStyle) {
-        xgramHangUp = PendingIntent.getBroadcast(this, 0, endIntent, Intents.mutabilityFlags(false)); // the CallStyle's own button
-      } else {
-        builder.addAction(R.drawable.round_call_end_24_white, Lang.getString(R.string.VoipEndCall), PendingIntent.getBroadcast(this, 0, endIntent, Intents.mutabilityFlags(false)));
+      endCall = PendingIntent.getBroadcast(this, Intents.REQUEST_CODE_CALL_END, endIntent,
+        Intents.mutabilityFlags(false));
+      if (!isCallStyle) {
+        builder.addAction(R.drawable.round_call_end_24_white, Lang.getString(R.string.VoipEndCall),
+          endCall);
       }
       builder.setPriority(Notification.PRIORITY_MAX);
     }
+    long duration = getCallDuration();
+    boolean isConnected = duration != VoIPInstance.DURATION_UNKNOWN;
+    if (isConnected) {
+      builder.setWhen(System.currentTimeMillis() - duration);
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
+        builder.setUsesChronometer(true);
+      }
+    }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
-      builder.setShowWhen(false);
+      builder.setShowWhen(isConnected);
     }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
       builder.setColor(tdlib.accountColor());
@@ -1113,15 +1110,10 @@ public class TGCallService extends Service implements
     if (bitmap != null) {
       builder.setLargeIcon(bitmap);
     }
-    if (xgramStyle && xgramHangUp != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-      builder.setStyle(Notification.CallStyle.forOngoingCall(xgramPerson(bitmap), xgramHangUp).setIsVideo(xgramIsVideoCall()));
-      builder.setCategory(Notification.CATEGORY_CALL);
-      builder.setOngoing(true);
-      if (xgramConnected) {
-        builder.setWhen(System.currentTimeMillis() - getCallDuration());
-        builder.setShowWhen(true);
-        builder.setUsesChronometer(true);
-      }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      android.app.Person caller = TdlibNotificationUtils.newCallPerson(tdlib, user, false, bitmap);
+      builder.setStyle(Notification.CallStyle.forOngoingCall(caller, endCall)
+        .setIsVideo(xgramIsVideoCall())); // XGram: also once a voice call turned to video
     }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
       ongoingCallNotification = builder.build();
@@ -1217,6 +1209,7 @@ public class TGCallService extends Service implements
 
   private MediaPlayer ringtonePlayer;
   private Vibrator vibrator;
+  private @Nullable String ringChannelId;
   private boolean isAppRinging, isNotificationRinging, isShownByCallManager;
   private Notification incomingNotification;
   private boolean isIncomingNotificationQuiet;
@@ -1229,6 +1222,11 @@ public class TGCallService extends Service implements
    * straight back (XgramCallOverLock).
    */
   private int xgramShownCallId;
+
+  private boolean isPhoneLocked () {
+    KeyguardManager keyguard = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
+    return keyguard != null && keyguard.isKeyguardLocked();
+  }
 
   private boolean showIncomingNotification () {
     return showIncomingNotification(false);
@@ -1267,27 +1265,38 @@ public class TGCallService extends Service implements
 
     Notification.Builder builder;
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-      NotificationManager m = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-      cleanupChannels(m);
-      // final String channelId = "call_" + call.id + "_" + System.currentTimeMillis();
-      android.app.NotificationChannel channel = new android.app.NotificationChannel(callChannelId, Lang.getString(R.string.NotificationChannelCall), NotificationManager.IMPORTANCE_HIGH);
-      channel.enableVibration(false);
-      channel.enableLights(false);
-      channel.setSound(null, null);
-      try {
-        m.createNotificationChannel(channel);
-      } catch (Throwable t) {
-        Log.v("Unable to create notification channel for call", new TdlibNotificationChannelGroup.ChannelCreationFailureException(t));
+      String channelId;
+      if (isIncomingNotificationQuiet) {
+        channelId = U.getOngoingCallsNotificationChannel();
+      } else if (isNotificationRinging) {
+        channelId = ringChannelId;
+      } else {
+        channelId = U.getIncomingCallsInAppNotificationChannel();
       }
-      builder = new Notification.Builder(this, callChannelId);
+      builder = new Notification.Builder(this, channelId);
+      // An update that only alerts once stops the system's insistent ringtone, e.g. on screen off
+      builder.setOnlyAlertOnce(!isNotificationRinging);
     } else {
       builder = new Notification.Builder(this);
     }
 
     boolean isLocked = Passcode.instance().isLockedForIncomingCalls();
+    boolean isPhoneLocked = isLocked && isPhoneLocked();
+    boolean isCallStyle = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S;
+    String lockedText = isPhoneLocked ? Lang.getString(R.string.CallTapToSeeCaller) :
+      isLocked ? Lang.getString(R.string.CallUnlockToAnswer) : null;
+    if (isCallStyle) {
+      builder.setContentText(
+        lockedText != null ? lockedText : Lang.getString(R.string.CallBrandingIncoming)
+      );
+    } else {
+      builder
+        .setContentTitle(Lang.getString(
+          isLocked ? R.string.IncomingCall : R.string.CallBrandingIncoming
+        ))
+        .setContentText(lockedText != null ? lockedText : TD.getUserName(user));
+    }
     builder
-      .setContentTitle(Lang.getString(call.isVideo && com.fahadali.xgram.call.XgramCallVideo.isAvailable() ? R.string.XgramVideoIncoming : R.string.CallBrandingIncoming))
-      .setContentText(TD.getUserName(user))
       .setSmallIcon(CALL_ICON_RES)
       .setContentIntent(newCallScreenIntent());
     if (tdlib.context().isMultiUser()) {
@@ -1296,8 +1305,7 @@ public class TGCallService extends Service implements
         builder.setSubText(shortName);
       }
     }
-    final boolean xgramStyle = xgramCallStyle();
-    PendingIntent xgramDecline = null, xgramAnswer = null;
+    PendingIntent declineAction = null, answerAction = null;
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
       Intent endIntent = new Intent();
       Intents.secureIntent(endIntent, false);
@@ -1306,10 +1314,24 @@ public class TGCallService extends Service implements
         endIntent.putExtra(Intents.KEY_ACCOUNT_ID, tdlib.id());
         endIntent.putExtra(Intents.KEY_CALL_ID, call.id);
       }
+      CharSequence endTitle = Lang.getString(R.string.DeclineCall);
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        endTitle = new SpannableString(endTitle);
+        ((SpannableString) endTitle).setSpan(new ForegroundColorSpan(Theme.getColor(ColorId.circleButtonNegative)), 0, endTitle.length(), 0);
+      }
+      declineAction = PendingIntent.getBroadcast(this, Intents.REQUEST_CODE_CALL_DECLINE, endIntent,
+        PendingIntent.FLAG_ONE_SHOT | Intents.mutabilityFlags(false));
+      if (!isCallStyle) {
+        builder.addAction(R.drawable.round_call_end_24_white, endTitle, declineAction);
+      }
       Intent answerIntent = new Intent();
       Intents.secureIntent(answerIntent, false);
       answerIntent.setAction(Intents.ACTION_ANSWER_CALL);
-      PendingIntent answerAction;
+      CharSequence answerTitle = Lang.getString(R.string.AnswerCall);
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        answerTitle = new SpannableString(answerTitle);
+        ((SpannableString) answerTitle).setSpan(new ForegroundColorSpan(Theme.getColor(ColorId.circleButtonPositive)), 0, answerTitle.length(), 0);
+      }
       boolean hasMicrophone = ContextCompat.checkSelfPermission(this,
         Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
       if (isLocked) {
@@ -1328,22 +1350,7 @@ public class TGCallService extends Service implements
       if (xgramVideoAnswer != null) {
         answerAction = xgramVideoAnswer; // XGram: a video call answers on the call screen
       }
-      if (xgramStyle) {
-        // XGram M3E: the CallStyle's own decline and answer buttons, no coloured spans
-        xgramDecline = PendingIntent.getBroadcast(this, 0, endIntent, PendingIntent.FLAG_ONE_SHOT | Intents.mutabilityFlags(false));
-        xgramAnswer = answerAction;
-      } else {
-        CharSequence endTitle = Lang.getString(R.string.DeclineCall);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-          endTitle = new SpannableString(endTitle);
-          ((SpannableString) endTitle).setSpan(new ForegroundColorSpan(Theme.getColor(ColorId.circleButtonNegative)), 0, endTitle.length(), 0);
-        }
-        builder.addAction(R.drawable.round_call_end_24_white, endTitle, PendingIntent.getBroadcast(this, 0, endIntent, PendingIntent.FLAG_ONE_SHOT | Intents.mutabilityFlags(false)));
-        CharSequence answerTitle = Lang.getString(R.string.AnswerCall);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-          answerTitle = new SpannableString(answerTitle);
-          ((SpannableString) answerTitle).setSpan(new ForegroundColorSpan(Theme.getColor(ColorId.circleButtonPositive)), 0, answerTitle.length(), 0);
-        }
+      if (!isCallStyle && !isPhoneLocked) {
         builder.addAction(R.drawable.round_call_24_white, answerTitle, answerAction);
       }
       builder.setPriority(
@@ -1381,13 +1388,24 @@ public class TGCallService extends Service implements
     if (bitmap != null) {
       builder.setLargeIcon(bitmap);
     }
-    if (xgramStyle && xgramDecline != null && xgramAnswer != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-      builder.setStyle(Notification.CallStyle.forIncomingCall(xgramPerson(bitmap), xgramDecline, xgramAnswer).setIsVideo(call.isVideo));
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      // Only this style rings at the volume of calls, others at that of notifications whatever
+      // their channel says (restrict_audio_attributes_call of AOSP)
+      android.app.Person caller =
+        TdlibNotificationUtils.newCallPerson(tdlib, user, isLocked, bitmap);
+      // Also its title, for watches that show only the title and the text
+      builder
+        .setContentTitle(caller.getName())
+        .setStyle(Notification.CallStyle.forIncomingCall(caller, declineAction, answerAction)
+          .setIsVideo(call != null && call.isVideo));
     }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
       incomingNotification = builder.build();
     } else {
       incomingNotification = builder.getNotification();
+    }
+    if (isNotificationRinging) {
+      incomingNotification.flags |= Notification.FLAG_INSISTENT;
     }
     U.startForeground(this, TdlibNotificationManager.ID_FOREGROUND_INCOMING_CALL_NOTIFICATION, incomingNotification, false);
     cancelForegroundPlaceholder();
@@ -1419,13 +1437,161 @@ public class TGCallService extends Service implements
   private void startRinging () {
     Log.i(Log.TAG_VOIP, "startRinging");
     TdlibManager.instance().player().pauseWithReason(TGPlayerController.PAUSE_REASON_TELEGRAM_CALL);
+    isAppRinging = true;
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      ringChannelId = tdlib.notifications().ensureCallChannel(ChatId.fromUserId(user.id));
+      CallManager calls = tdlib.context().calls();
+      if (calls.isShownWithoutService(tdlib, call.id)) {
+        isAppRinging = false;
+        isShownByCallManager = true;
+      } else if (isDoNotDisturbOn()) {
+        // Only Android knows whether Do not disturb lets the caller through, e.g. a repeat caller
+        isAppRinging = false;
+        isNotificationRinging = canRingOnChannel();
+      } else if (isPlayerMutedInBackground() && canRingOnChannel()) {
+        // Without the channel the app rings itself: Android 17 mutes its sound, not its vibration
+        isAppRinging = false;
+        isNotificationRinging = true;
+      }
+    }
+    isIncomingNotificationQuiet = !isNotificationRinging && isCallScreenShown();
+    if (!showIncomingNotification()) {
+      Log.v(Log.TAG_VOIP, "Starting incall activity for incoming call");
+      if (UI.getUiState() != UI.State.RESUMED) {
+        bringCallToFront();
+      }
+    }
+    if (isAppRinging) {
+      startAppRinging();
+    }
+  }
+
+  private boolean isPlayerMutedInBackground () {
+    // Android 17 mutes a service started while no screen of the app is shown: on a phone in use
+    // the full-screen intent is only a heads-up, a locked or sleeping one shows the call at once
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.CINNAMON_BUN ||
+      UI.getUiState() == UI.State.RESUMED || isPhoneLocked()) {
+      return false;
+    }
+    PowerManager power = (PowerManager) getSystemService(Context.POWER_SERVICE);
+    return power == null || power.isInteractive();
+  }
+
+  @RequiresApi(Build.VERSION_CODES.O)
+  private boolean canRingOnChannel () {
+    return ringChannelId != null && tdlib.notifications().canShowOnCallChannel(ringChannelId);
+  }
+
+  @RequiresApi(Build.VERSION_CODES.O)
+  private boolean isDoNotDisturbOn () {
+    NotificationManager m = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+    int filter = m.getCurrentInterruptionFilter();
+    return filter != NotificationManager.INTERRUPTION_FILTER_ALL &&
+      filter != NotificationManager.INTERRUPTION_FILTER_UNKNOWN;
+  }
+
+  private void startAppRinging () {
+    long chatId = ChatId.fromUserId(user.id);
+    int ringerMode = tdlib.notifications().getRingerMode();
+    Uri ringtone = null;
+    long[] vibratePattern = null;
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && ringChannelId != null) {
+      NotificationManager m = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+      android.app.NotificationChannel channel = m.getNotificationChannel(ringChannelId);
+      if (channel != null && channel.getImportance() >= NotificationManager.IMPORTANCE_DEFAULT) {
+        Uri sound = channel.getSound();
+        ringtone = Uri.EMPTY.equals(sound) ? null : sound;
+        if (channel.shouldVibrate()) {
+          vibratePattern = channel.getVibrationPattern();
+          if (vibratePattern == null) {
+            // As AOSP vibrates a channel without a pattern, e.g. one of an earlier version
+            vibratePattern = TdlibNotificationManager.getDefaultVibrationPattern();
+          }
+        } else if (ringtone != null && ringerMode == AudioManager.RINGER_MODE_VIBRATE) {
+          vibratePattern = TdlibNotificationManager.getFallbackVibrationPattern();
+        }
+      }
+    } else {
+      String sound = tdlib.notifications().getCallRingtone(chatId);
+      ringtone = sound.isEmpty() ? null : Uri.parse(sound);
+      vibratePattern = tdlib.notifications().getCallVibratePattern(chatId);
+    }
+
+    // As a call of the system: no vibration in silent mode, whatever the vibration of calls says
+    if (ringerMode == AudioManager.RINGER_MODE_SILENT) {
+      vibratePattern = null;
+    }
+    if (ringtone != null && ringerMode == AudioManager.RINGER_MODE_NORMAL) {
+      Uri telegramCall = TdlibNotificationManager.getTelegramCallRingtone();
+      playRingtone(ringtone, !ringtone.equals(telegramCall), vibratePattern);
+    } else if (vibratePattern != null) {
+      startVibration(vibratePattern);
+    }
+  }
+
+  private void startVibration (long[] pattern) {
+    vibrator = (Vibrator) getSystemService(VIBRATOR_SERVICE);
+    if (vibrator != null) {
+      vibrateAsRingtone(vibrator, pattern);
+    }
+  }
+
+  @SuppressWarnings("deprecation")
+  private static void vibrateAsRingtone (Vibrator vibrator, long[] pattern) {
+    // As the vibration of a ringtone: one of an unknown usage takes the intensity of touches,
+    // which One UI may have off; the versions before 13 have only the deprecated forms of it
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      vibrator.vibrate(android.os.VibrationEffect.createWaveform(pattern, 0),
+        android.os.VibrationAttributes.createForUsage(
+          android.os.VibrationAttributes.USAGE_RINGTONE));
+      return;
+    }
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+      vibrator.vibrate(pattern, 0);
+      return;
+    }
+    android.media.AudioAttributes attributes = new android.media.AudioAttributes.Builder()
+      .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+      .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+      .build();
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      vibrator.vibrate(android.os.VibrationEffect.createWaveform(pattern, 0), attributes);
+    } else {
+      vibrator.vibrate(pattern, 0, attributes);
+    }
+  }
+
+  @SuppressWarnings("deprecation")
+  private void playRingtone (Uri ringtone, boolean fallBackToDefault,
+    @Nullable long[] vibratePattern) {
+    if (vibratePattern != null) {
+      startVibration(vibratePattern);
+    }
     ringtonePlayer = new MediaPlayer();
-    ringtonePlayer.setOnPreparedListener(mediaPlayer -> ringtonePlayer.start());
+    ringtonePlayer.setOnPreparedListener(MediaPlayer::start);
     ringtonePlayer.setLooping(true);
-    ringtonePlayer.setAudioStreamType(AudioManager.STREAM_RING);
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+      // Unlike STREAM_RING, these attributes keep the player from taking over the vibration
+      ringtonePlayer.setAudioAttributes(new android.media.AudioAttributes.Builder()
+        .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+        .setHapticChannelsMuted(true)
+        .build());
+    } else {
+      ringtonePlayer.setAudioStreamType(AudioManager.STREAM_RING);
+    }
+    if (fallBackToDefault) {
+      ringtonePlayer.setOnErrorListener((mediaPlayer, what, extra) -> {
+        if (ringtonePlayer == mediaPlayer) {
+          mediaPlayer.release();
+          playRingtone(TdlibNotificationManager.getTelegramCallRingtone(), false,
+            vibratePattern);
+        }
+        return true;
+      });
+    }
     try {
-      String notificationUri = tdlib.notifications().getCallRingtone(ChatId.fromUserId(user.id));
-      ringtonePlayer.setDataSource(this, Uri.parse(notificationUri));
+      ringtonePlayer.setDataSource(this, ringtone);
       ringtonePlayer.prepareAsync();
     } catch (Throwable t) {
       Log.e(Log.TAG_VOIP, "Failed to start ringing", t);
@@ -1433,34 +1599,8 @@ public class TGCallService extends Service implements
         ringtonePlayer.release();
         ringtonePlayer = null;
       }
-    }
-
-    int vibrateMode = tdlib.notifications().getCallVibrateMode(ChatId.fromUserId(user.id));
-    boolean needVibrate = vibrateMode != TdlibNotificationManager.VIBRATE_MODE_DISABLED;
-    // Like a call of the system, none in silent mode, whatever the vibration of calls is set to
-    if (needVibrate && !tdlib.notifications().isRingerSilent()) {
-      vibrator = (Vibrator) getSystemService(VIBRATOR_SERVICE);
-      if (vibrator != null) {
-        switch (vibrateMode) {
-          case TdlibNotificationManager.VIBRATE_MODE_SHORT:
-            vibrator.vibrate(TdlibNotificationManager.VIBRATE_CALL_SHORT_PATTERN, 0);
-            break;
-          case TdlibNotificationManager.VIBRATE_MODE_LONG:
-            vibrator.vibrate(TdlibNotificationManager.VIBRATE_CALL_LONG_PATTERN, 0);
-            break;
-          default:
-            if (tdlib.notifications().needVibrateWhenRinging()) {
-              vibrator.vibrate(TdlibNotificationManager.VIBRATE_CALL_LONG_PATTERN, 0);
-            }
-            break;
-        }
-      }
-    }
-
-    if (!showIncomingNotification()) {
-      Log.v(Log.TAG_VOIP, "Starting incall activity for incoming call");
-      if (UI.getUiState() != UI.State.RESUMED) {
-        bringCallToFront();
+      if (fallBackToDefault) {
+        playRingtone(TdlibNotificationManager.getTelegramCallRingtone(), false, vibratePattern);
       }
     }
   }
@@ -1482,20 +1622,20 @@ public class TGCallService extends Service implements
     }*/
   }
 
-  private void cleanupChannels (NotificationManager m) {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && m != null) {
-      List<android.app.NotificationChannel> channels = m.getNotificationChannels();
-      for (android.app.NotificationChannel channel : channels) {
-        String id = channel.getId();
-        if (id.startsWith("call_") && !(callChannelId != null && callChannelId.equals(id))) {
-          try {
-            m.deleteNotificationChannel(channel.getId());
-          } catch (Throwable t) {
-            Log.e("Unable to delete notification channel", t);
-          }
-        }
-      }
+  public boolean silenceAppRinging () {
+    if (!isAppRinging) {
+      return false;
     }
+    isAppRinging = false;
+    if (ringtonePlayer != null) {
+      ringtonePlayer.release();
+      ringtonePlayer = null;
+    }
+    if (vibrator != null) {
+      vibrator.cancel();
+      vibrator = null;
+    }
+    return true;
   }
 
   private void stopRinging () {
@@ -1510,6 +1650,10 @@ public class TGCallService extends Service implements
     if (vibrator != null) {
       vibrator.cancel();
       vibrator = null;
+    }
+    if (ringChannelId != null) {
+      ringChannelId = null;
+      tdlib.notifications().deleteStaleChannels();
     }
   }
 
