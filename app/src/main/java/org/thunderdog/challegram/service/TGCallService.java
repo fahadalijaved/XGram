@@ -110,7 +110,7 @@ import tgx.td.ChatId;
 public class TGCallService extends Service implements
   TdlibCache.CallStateChangeListener,
   AudioManager.OnAudioFocusChangeListener,
-  SensorEventListener, UI.StateListener {
+  SensorEventListener, UI.StateListener, Passcode.LockListener {
   @Override
   public IBinder onBind (Intent intent) {
     return null;
@@ -277,6 +277,15 @@ public class TGCallService extends Service implements
         return;
       }
 
+      if (Intent.ACTION_SCREEN_OFF.equals(action) || Intent.ACTION_SCREEN_ON.equals(action) ||
+        Intent.ACTION_USER_PRESENT.equals(action)) {
+        boolean isPhoneLocked = Passcode.instance().isLockedForIncomingCalls() && isPhoneLocked();
+        if (incomingNotification != null && incomingNotificationPhoneLocked != isPhoneLocked) {
+          showIncomingNotification(true);
+        }
+        return;
+      }
+
       if (Intents.ACTION_DECLINE_CALL.equals(action)) {
         declineIncomingCall();
         return;
@@ -288,6 +297,13 @@ public class TGCallService extends Service implements
       }
 
       if (Intents.ACTION_ANSWER_CALL.equals(action)) {
+        if (Passcode.instance().isLockedForIncomingCalls()) {
+          // E.g. "Answer" of a notification from before the lock on a watch: it asks to unlock
+          if (incomingNotification != null && !incomingNotificationLocked) {
+            showIncomingNotification(true);
+          }
+          return;
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
           if (incomingNotification != null) {
             U.startForeground(TGCallService.this,
@@ -350,6 +366,15 @@ public class TGCallService extends Service implements
     soundPoolMap.prepare(R.raw.voip_connecting, R.raw.voip_ringback, R.raw.voip_fail, R.raw.voip_end, R.raw.voip_busy);
 
     VoIP.initialize(this);
+    Passcode.instance().addLockListener(this);
+  }
+
+  @Override
+  public void onPasscodeLocked (boolean isLocked) {
+    boolean isLockedForCalls = Passcode.instance().isLockedForIncomingCalls();
+    if (incomingNotification != null && incomingNotificationLocked != isLockedForCalls) {
+      showIncomingNotification(true);
+    }
   }
 
   private Object communicationDeviceChangedListener;
@@ -385,6 +410,9 @@ public class TGCallService extends Service implements
         filter.addAction(AudioManager.ACTION_SCO_AUDIO_STATE_UPDATED);
       }
       filter.addAction(TelephonyManager.ACTION_PHONE_STATE_CHANGED);
+      filter.addAction(Intent.ACTION_SCREEN_OFF);
+      filter.addAction(Intent.ACTION_SCREEN_ON);
+      filter.addAction(Intent.ACTION_USER_PRESENT);
       /*filter.addAction(Intents.ACTION_END_CALL);
       filter.addAction(Intents.ACTION_DECLINE_CALL);
       filter.addAction(Intents.ACTION_ANSWER_CALL);*/
@@ -475,6 +503,7 @@ public class TGCallService extends Service implements
     this.isDestroyed = true;
     Log.v(Log.TAG_VOIP, "TGCallService.onDestroy");
     xgramUnbindVideo();
+    Passcode.instance().removeLockListener(this);
     UI.cancel(microphoneCheck);
     if (call != null) {
       tdlib.cache().unsubscribeFromCallUpdates(call.id, this);
@@ -889,6 +918,11 @@ public class TGCallService extends Service implements
       !activity.isRequestingMicForCall())) {
       return false;
     }
+    if (activity.isPasscodeShowing()) {
+      CallManager calls = tdlib.context().calls();
+      return Passcode.instance().requireForIncomingCalls() &&
+        calls.getCurrentCallAccountId() == tdlib.id() && calls.getCurrentCallId() == call.id;
+    }
     ViewController<?> c = activity.navigation().getCurrentStackItem();
     return c instanceof CallController && !c.isDestroyed() && c.tdlibId() == callTdlib() &&
       ((CallController) c).compareUserId(call.userId);
@@ -1213,6 +1247,7 @@ public class TGCallService extends Service implements
   private boolean isAppRinging, isNotificationRinging, isShownByCallManager;
   private Notification incomingNotification;
   private boolean isIncomingNotificationQuiet;
+  private boolean incomingNotificationLocked, incomingNotificationPhoneLocked;
 
   private boolean needShowIncomingNotification;
   /**
@@ -1280,8 +1315,12 @@ public class TGCallService extends Service implements
       builder = new Notification.Builder(this);
     }
 
+    // A locked phone asks for its PIN before an action that opens an activity, so there only a
+    // tap on the notification opens the call, over the lock screen
     boolean isLocked = Passcode.instance().isLockedForIncomingCalls();
     boolean isPhoneLocked = isLocked && isPhoneLocked();
+    incomingNotificationLocked = isLocked;
+    incomingNotificationPhoneLocked = isPhoneLocked;
     boolean isCallStyle = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S;
     String lockedText = isPhoneLocked ? Lang.getString(R.string.CallTapToSeeCaller) :
       isLocked ? Lang.getString(R.string.CallUnlockToAnswer) : null;
@@ -1327,7 +1366,8 @@ public class TGCallService extends Service implements
       Intent answerIntent = new Intent();
       Intents.secureIntent(answerIntent, false);
       answerIntent.setAction(Intents.ACTION_ANSWER_CALL);
-      CharSequence answerTitle = Lang.getString(R.string.AnswerCall);
+      CharSequence answerTitle =
+        Lang.getString(isLocked ? R.string.CallUnlock : R.string.AnswerCall);
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
         answerTitle = new SpannableString(answerTitle);
         ((SpannableString) answerTitle).setSpan(new ForegroundColorSpan(Theme.getColor(ColorId.circleButtonPositive)), 0, answerTitle.length(), 0);
@@ -1381,7 +1421,7 @@ public class TGCallService extends Service implements
         }
       }
     }
-    Bitmap bitmap = user != null ?
+    Bitmap bitmap = user != null && !isLocked ?
       TdlibNotificationUtils.buildLargeIcon(tdlib, ChatId.fromUserId(user.id),
       user.profilePhoto != null ? user.profilePhoto.small : null,
       tdlib.cache().userAccentColor(user), TD.getLetters(user), false, true) : null;

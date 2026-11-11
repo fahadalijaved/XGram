@@ -700,6 +700,11 @@ debugCall id:long debug:string = Ok;
     }
   }
 
+  public boolean checkRecordPermissions (final Context context, final Tdlib tdlib,
+    final @Nullable TdApi.Call call) {
+    return checkRecordPermissions(context, tdlib, call, 0, null); // XGram: Telegram X's form; XGram's calls pass the user and the screen
+  }
+
   public boolean checkRecordPermissions (final Context context, final Tdlib tdlib, final @Nullable TdApi.Call call, final long userId, final @Nullable ViewController<?> makeCallContext) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
       if (AppContext.get().checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -707,14 +712,11 @@ debugCall id:long debug:string = Ok;
         if (activity != null) {
           activity.requestMicPermissionForCall((code, permissions, grantResults, grantCount) -> {
             if (grantCount == permissions.length) {
-              if (makeCallContext != null) {
-                makeCall(makeCallContext, userId, null, false);
-              } else {
-                if (call != null) {
-                  TdApi.Call updatedCall = tdlib.cache().getCall(call.id);
-                  if (updatedCall != null && updatedCall.state.getConstructor() == TdApi.CallStatePending.CONSTRUCTOR) {
-                    acceptCall(context, tdlib, call.id);
-                  }
+              if (call != null) {
+                TdApi.Call updatedCall = tdlib.cache().getCall(call.id);
+                if (updatedCall != null &&
+                  updatedCall.state.getConstructor() == TdApi.CallStatePending.CONSTRUCTOR) {
+                  acceptCall(context, tdlib, call.id);
                 }
               }
             } else {
@@ -974,7 +976,7 @@ debugCall id:long debug:string = Ok;
 
   public void acceptCall (Context context, Tdlib tdlib, final int callId) {
     if (checkConnection(context, tdlib)) {
-      if (!checkRecordPermissions(context, tdlib, tdlib.cache().getCall(callId), 0, null)) {
+      if (!checkRecordPermissions(context, tdlib, tdlib.cache().getCall(callId))) {
         return;
       }
       Log.v(Log.TAG_VOIP, "#%d: AcceptCall requested", callId);

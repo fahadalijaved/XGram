@@ -1333,6 +1333,7 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
         Log.e("TODO", t);
       }
     } else {
+      hidePasscode();
       Passcode.instance().trackUserActivity(false);
     }
   }
@@ -1976,6 +1977,7 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
       for (int i = size - 1; i >= 0; i--) {
         passcodeListeners.get(i).onPasscodeShowing(this, isShowing);
       }
+      TGCallService.checkIncomingNotification();
     }
   }
 
