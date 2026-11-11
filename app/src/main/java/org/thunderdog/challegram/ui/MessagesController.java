@@ -218,6 +218,7 @@ import org.thunderdog.challegram.tool.Strings;
 import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.tool.Views;
 import org.thunderdog.challegram.ui.camera.CameraAccessImageView;
+import org.thunderdog.challegram.unsorted.Passcode;
 import org.thunderdog.challegram.unsorted.Settings;
 import org.thunderdog.challegram.unsorted.Test;
 import org.thunderdog.challegram.util.CancellableResultHandler;
@@ -3012,6 +3013,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     public Referrer referrer;
     public TdApi.InternalLinkTypeVideoChat videoChatOrLiveStreamInvitation;
     public TdApi.FormattedText fillDraft;
+    public boolean startCall;
 
     public long eventLogUserId;
 
@@ -3157,6 +3159,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
       return this;
     }
 
+    public Arguments startCall (boolean startCall) {
+      this.startCall = startCall;
+      return this;
+    }
+
     public Arguments setOpenKeyboard (boolean openKeyboard) {
       this.openKeyboard = openKeyboard;
       return this;
@@ -3202,6 +3209,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   private boolean areScheduled;
   private Referrer referrer;
   private TdApi.InternalLinkTypeVideoChat voiceChatInvitation;
+  private boolean needStartCall;
   private TdApi.FormattedText fillDraft;
   private boolean openKeyboard;
 
@@ -3258,6 +3266,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     this.areScheduled = args.areScheduled;
     this.referrer = args.referrer;
     this.voiceChatInvitation = args.videoChatOrLiveStreamInvitation;
+    this.needStartCall = args.startCall;
     this.previewSearchQuery = args.searchQuery;
     this.previewSearchSender = args.searchSender;
     this.previewSearchFilter = args.searchFilter;
@@ -4810,6 +4819,12 @@ public class MessagesController extends ViewController<MessagesController.Argume
       if (voiceChatInvitation != null) {
         openVoiceChatInvitation(voiceChatInvitation);
         voiceChatInvitation = null;
+      }
+      if (needStartCall) {
+        needStartCall = false;
+        if (!Passcode.instance().isLockedAndVisible()) {
+          tdlib.context().calls().makeCall(this, tdlib.chatUserId(getChatId()), null);
+        }
       }
     }
     showMessageMenuTutorial();

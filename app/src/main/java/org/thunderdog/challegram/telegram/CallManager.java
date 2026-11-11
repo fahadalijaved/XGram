@@ -712,10 +712,11 @@ debugCall id:long debug:string = Ok;
 
   public boolean checkRecordPermissions (final Context context, final Tdlib tdlib,
     final @Nullable TdApi.Call call) {
-    return checkRecordPermissions(context, tdlib, call, 0, null); // XGram: Telegram X's form; XGram's calls pass the user and the screen
+    return checkRecordPermissions(context, tdlib, call, null);
   }
 
-  public boolean checkRecordPermissions (final Context context, final Tdlib tdlib, final @Nullable TdApi.Call call, final long userId, final @Nullable ViewController<?> makeCallContext) {
+  private boolean checkRecordPermissions (final Context context, final Tdlib tdlib,
+    final @Nullable TdApi.Call call, final @Nullable Runnable onOutgoingCallGranted) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
       if (AppContext.get().checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
         BaseActivity activity = UI.getUiContext();
@@ -728,6 +729,8 @@ debugCall id:long debug:string = Ok;
                   updatedCall.state.getConstructor() == TdApi.CallStatePending.CONSTRUCTOR) {
                   acceptCall(context, tdlib, call.id);
                 }
+              } else if (onOutgoingCallGranted != null) {
+                onOutgoingCallGranted.run();
               }
             } else {
               showAlert(AlertType.MICROPHONE_PERMISSION_MISSING);

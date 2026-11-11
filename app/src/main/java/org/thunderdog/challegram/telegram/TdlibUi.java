@@ -1813,6 +1813,7 @@ public class TdlibUi extends Handler {
   private static final int CHAT_OPTION_SCHEDULED_MESSAGES = 1 << 6;
   private static final int CHAT_OPTION_OPEN_PROFILE_IF_DUPLICATE = 1 << 7;
   private static final int CHAT_OPTION_OPEN_DIRECT_MESSAGES_CHAT = 1 << 8;
+  private static final int CHAT_OPTION_START_CALL = 1 << 9;
 
   public static class ChatOpenParameters {
     public int options;
@@ -1998,6 +1999,11 @@ public class TdlibUi extends Handler {
 
     public ChatOpenParameters openDirectMessagesChat () {
       this.options |= CHAT_OPTION_OPEN_DIRECT_MESSAGES_CHAT;
+      return this;
+    }
+
+    public ChatOpenParameters startCall () {
+      this.options |= CHAT_OPTION_START_CALL;
       return this;
     }
 
@@ -2435,6 +2441,7 @@ public class TdlibUi extends Handler {
       .referrer(referrer)
       .voiceChatInvitation(voiceChatInvitation)
       .fillDraft(forceDraft)
+      .startCall(BitwiseUtils.hasFlag(options, CHAT_OPTION_START_CALL))
     );
 
     View view = controller.getValue();

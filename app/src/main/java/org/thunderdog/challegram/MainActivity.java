@@ -155,6 +155,11 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
     com.fahadali.xgram.export.XgramExport.onAppLaunch(); // XGram: chat export, what an export killed with the app left
 
     tempSavedInstanceState = savedInstanceState;
+    Intent intent = getIntent();
+    if (intent != null && (savedInstanceState != null ||
+      (intent.getFlags() & Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0)) {
+      Intents.removeCallBackToken(intent);
+    }
 
     Crash crash = TdlibManager.instance().getRecoveryCrashInfo();
     if (crash != null) {
@@ -1131,6 +1136,20 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
       return true;
     }
 
+    if (action.startsWith(Intents.ACTION_CALL_BACK)) {
+      int accountId = intent.getIntExtra(Intents.KEY_ACCOUNT_ID, TdlibAccount.NO_ID);
+      long userId = intent.getLongExtra(Intents.KEY_USER_ID, 0);
+      if (accountId == TdlibAccount.NO_ID || userId == 0 || !Intents.isCallBackTrusted(intent)) {
+        return false;
+      }
+      if (getActivityState() == UI.State.RESUMED) {
+        callBack(accountId, userId);
+      } else {
+        pendingCallBack = () -> callBack(accountId, userId);
+      }
+      return true;
+    }
+
     // System shit
 
     RunnableData<TdlibAccount> consumer = null;
@@ -1728,6 +1747,10 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
   }
 
   private void openMessagesController (int accountId, long chatId, long specificMessageId, int xgramTopicId) {
+    openMessagesController(accountId, chatId, specificMessageId, xgramTopicId, false);
+  }
+
+  private void openMessagesController (int accountId, long chatId, long specificMessageId, int xgramTopicId, boolean startCall) {
     if (navigation.isEmpty()) {
       xgramNotificationOpenPending = true;
     }
@@ -1745,6 +1768,9 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
         }).xgramFromNotification(xgramTopicId);
         if (specificMessageId != 0)
           params.highlightMessage(new MessageId(chatId, specificMessageId));
+        if (startCall) {
+          params.startCall();
+        }
         if (specificMessageId != 0 && xgramTopicId != 0) {
           // XGram: a mention in a forum topic, known from the notification: the topic, scrolled to the mention (also on a
           // cold start, when the forum isn't loaded yet and isForum below can't tell)
@@ -1770,6 +1796,29 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
       // XGram: the chat opens in a post (and on a fresh TDLib after GetChat, or GetMessage for a forum): the loading
       // indicator until it is set, not the bare header (the intent's action is cleared by now, see above)
       xgramSetStartupLoading(true, true);
+    }
+  }
+
+  private void callBack (int accountId, long userId) {
+    if (isPasscodeShowing()) {
+      addPasscodeListener(new PasscodeListener() {
+        @Override
+        public void onPasscodeShowing (BaseActivity context, boolean isShowing) {
+          if (!isShowing) {
+            removePasscodeListener(this);
+            callBack(accountId, userId);
+          }
+        }
+      });
+      return;
+    }
+    long chatId = ChatId.fromUserId(userId);
+    ViewController<?> current = navigation.getCurrentStackItem();
+    if (current instanceof MessagesController && current.tdlibId() == accountId &&
+      ((MessagesController) current).compareChat(chatId)) {
+      current.tdlib().context().calls().makeCall(current, userId, null);
+    } else {
+      openMessagesController(accountId, chatId, 0, 0, true);
     }
   }
 
@@ -1892,6 +1941,7 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
   }
 
   private @Nullable Intent pendingAnswerIntent;
+  private @Nullable Runnable pendingCallBack;
 
   private void answerIncomingCall (Intent intent) {
     if (Passcode.instance().isLockedForIncomingCalls()) {
@@ -2012,6 +2062,11 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
       Intent intent = pendingAnswerIntent;
       pendingAnswerIntent = null;
       answerIncomingCall(intent);
+    }
+    if (pendingCallBack != null) {
+      Runnable callBack = pendingCallBack;
+      pendingCallBack = null;
+      callBack.run();
     }
     // CallManager can't show a call that came while the app was in background: it opens under
     // the passcode, so that it's there at once after it
