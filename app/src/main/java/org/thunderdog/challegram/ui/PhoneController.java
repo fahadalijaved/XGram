@@ -364,7 +364,11 @@ public class PhoneController extends EditBaseController<Void> implements Setting
       if (countryView.isEmpty()) {
         setInCountryMode(false);
         clearCountry();
-        codeView.setText("");
+        if (codeView != null) {
+          codeView.setText("");
+        } else {
+          selectedCallingCode = "";
+        }
       } else if (xgramFirstResult() != null) { // XGram M3E r6: the results start with their group's top
         ListItem item = xgramFirstResult();
         this.selectedCallingCode = item.getStringValue();
@@ -877,7 +881,7 @@ public class PhoneController extends EditBaseController<Void> implements Setting
     countryView.setText(displayText, isFocused());
     if (dispatch) {
       setInCountryMode(false);
-      Keyboard.show(numberView.getEditText());
+      Keyboard.show(editTextOf(numberView));
     }
     UI.post(() -> setIsCountryDefault(true));
   }
@@ -1276,11 +1280,11 @@ public class PhoneController extends EditBaseController<Void> implements Setting
       if (inCountryMode) {
         updateDoneState();
       } else {
-        Keyboard.show(codeView.isEmpty() ? codeView.getEditText() : numberView.getEditText());
+        Keyboard.show(getPhoneInput());
         UI.post(() -> {
           if (!PhoneController.this.inCountryMode) {
             if (isFocused()) {
-              Keyboard.show(codeView.isEmpty() ? codeView.getEditText() : numberView.getEditText());
+              Keyboard.show(getPhoneInput());
             }
             updateDoneState();
           }
@@ -1288,6 +1292,14 @@ public class PhoneController extends EditBaseController<Void> implements Setting
       }
       searchCountry(inCountryMode ? countryView.getText().toString().trim() : null);
     }
+  }
+
+  private static @Nullable View editTextOf (@Nullable MaterialEditTextGroup view) {
+    return view != null ? view.getEditText() : null;
+  }
+
+  private @Nullable View getPhoneInput () {
+    return codeView != null && codeView.isEmpty() ? codeView.getEditText() : editTextOf(numberView);
   }
 
   private void updateHint (boolean useOffsetLeft, CharSequence text, boolean isError) {
@@ -1300,7 +1312,9 @@ public class PhoneController extends EditBaseController<Void> implements Setting
       if (!inCountryMode) {
         adapter.updateItem(baseItems.indexOf(hintItem));
       }
-      numberView.setInErrorState(isError);
+      if (numberView != null) {
+        numberView.setInErrorState(isError);
+      }
     }
   }
 
@@ -1341,7 +1355,7 @@ public class PhoneController extends EditBaseController<Void> implements Setting
   @Override
   public void hideSoftwareKeyboard () {
     super.hideSoftwareKeyboard();
-    Keyboard.hideList(numberView.getEditText(), codeView.getEditText(), countryView.getEditText());
+    Keyboard.hideList(editTextOf(numberView), editTextOf(codeView), editTextOf(countryView));
   }
 
   private String getFirstName () {
@@ -1598,7 +1612,7 @@ public class PhoneController extends EditBaseController<Void> implements Setting
   private boolean oneShot;
 
   public void onAuthorizationReady () {
-    if (UI.inTestMode() && recyclerView != null && isFocused()) {
+    if (UI.inTestMode() && codeView != null && numberView != null && isFocused()) {
       makeRequest();
     }
   }
@@ -1742,9 +1756,6 @@ public class PhoneController extends EditBaseController<Void> implements Setting
         }
         break;
       }
-    }
-    if (mode == MODE_LOGIN && UI.inTestMode()) {
-      makeRequest();
     }
   }
 }
