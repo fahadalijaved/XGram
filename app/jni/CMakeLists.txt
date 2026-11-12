@@ -168,6 +168,9 @@ endif()
 # lz4
 include("${PROJECT_SOURCE_DIR}/BuildLz4.cmake")
 
+# libprisma
+include("${PROJECT_SOURCE_DIR}/BuildPrisma.cmake")
+
 # webp
 if (${USE_WEBP})
   include("${PROJECT_SOURCE_DIR}/BuildWebp.cmake")
@@ -212,6 +215,7 @@ set(NATIVE_SOURCES
   gif.cpp
   views.c
   bridge.cpp
+  syntax.cpp
 )
 if(EXISTS "${ANDROIDX_MEDIA_DIR}")
   list(APPEND NATIVE_SOURCES
@@ -226,6 +230,12 @@ else()
 endif()
 
 add_library(${NATIVE_LIB} SHARED ${NATIVE_SOURCES})
+# Types of libprisma have virtual functions in headers, so their users need RTTI too
+set_source_files_properties(syntax.cpp PROPERTIES
+  COMPILE_DEFINITIONS "PRISMA_GRAMMARS=\"${PRISMA_GRAMMARS}\""
+  COMPILE_OPTIONS "-frtti"
+  OBJECT_DEPENDS "${PRISMA_GRAMMARS}"
+)
 target_include_directories(${NATIVE_LIB} PRIVATE
   "${THIRDPARTY_DIR}/telegram_intro"
   "${ANDROIDX_MEDIA_DIR}"
@@ -271,6 +281,7 @@ target_link_libraries(${NATIVE_LIB}
   opus
   tlottie
   lz4
+  prisma
 )
 if (${USE_WEBP})
   target_link_libraries(${NATIVE_LIB} webpdecoder_static)
