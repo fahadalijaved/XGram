@@ -129,6 +129,7 @@ public class TextWrapper implements ListAnimator.Measurable, Destroyable, Text.T
       .entities(TextEntity.valueOf(xgramQuoteTdlib, collapsedText, xgramQuoteOpenParameters), listener)
       .viewProvider(viewProvider)
       .lineWidthProvider(lineWidthProvider)
+      .codeBlockSwitches(codeBlockSwitches)
       .textFlags(flags)
       .build();
     full.performDestroy();
@@ -138,10 +139,16 @@ public class TextWrapper implements ListAnimator.Measurable, Destroyable, Text.T
 
   private TextWrapper setTextFlags (int textFlags) {
     if (this.textFlags != textFlags) {
+      final boolean needLayout =
+        BitwiseUtils.hasFlag(this.textFlags ^ textFlags, Text.FLAG_WRAP_CODE_BLOCKS);
       this.textFlags = textFlags;
-      for (Text text : texts) {
-        if (text != null)
-          text.setTextFlags(textFlags);
+      for (int i = 0; i < texts.length; i++) {
+        if (texts[i] != null) {
+          texts[i].setTextFlags(textFlags);
+          if (needLayout) {
+            sizes[i] = 0;
+          }
+        }
       }
     }
     return this;
@@ -172,6 +179,13 @@ public class TextWrapper implements ListAnimator.Measurable, Destroyable, Text.T
 
   public TextWrapper setLineWidthProvider (Text.LineWidthProvider provider) {
     this.lineWidthProvider = provider;
+    return this;
+  }
+
+  private @Nullable CodeBlockSwitches codeBlockSwitches;
+
+  public TextWrapper setCodeBlockSwitches (@Nullable CodeBlockSwitches codeBlockSwitches) {
+    this.codeBlockSwitches = codeBlockSwitches;
     return this;
   }
 
@@ -338,7 +352,8 @@ public class TextWrapper implements ListAnimator.Measurable, Destroyable, Text.T
     }
 
     boolean sizeChanged = textSizes[index] != textSizePx || (texts[index] != null && texts[index].getMaxLineCount() != maxLines);
-    if (sizeChanged || texts[index] == null || sizes[index] != maxWidth) {
+    if (sizeChanged || texts[index] == null || sizes[index] != maxWidth ||
+      texts[index].needLayoutForCodeBlockSwitches()) {
       boolean needBigEmoji = BitwiseUtils.hasFlag(textFlags, Text.FLAG_BIG_EMOJI) && Settings.instance().useBigEmoji();
       final Text oldText = texts[index];
       Text text = oldText;
@@ -372,6 +387,7 @@ public class TextWrapper implements ListAnimator.Measurable, Destroyable, Text.T
       .viewProvider(viewProvider)
       .highlight(highlightText)
       .lineWidthProvider(lineWidthProvider)
+      .codeBlockSwitches(codeBlockSwitches)
       .textFlags(BitwiseUtils.setFlag(textFlags, Text.FLAG_BIG_EMOJI, false));
     Text text = b.build();
     if (xgramQuoteSource != null && maxLines == -1) {
@@ -432,6 +448,11 @@ public class TextWrapper implements ListAnimator.Measurable, Destroyable, Text.T
   public int getLineWidth (int lineIndex) {
     final Text text = getCurrent();
     return text == null ? -1 : text.getLineWidth(lineIndex);
+  }
+
+  public boolean endsWithCodeBlock () {
+    final Text text = getCurrent();
+    return text != null && text.endsWithCodeBlock();
   }
 
   public boolean getLastLineIsRtl () {
