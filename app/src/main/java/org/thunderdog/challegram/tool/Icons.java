@@ -16,11 +16,14 @@ package org.thunderdog.challegram.tool;
 
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Paint;
 import android.graphics.drawable.Drawable;
 
 import androidx.annotation.DrawableRes;
 import androidx.annotation.Nullable;
 import androidx.collection.LongSparseArray;
+import androidx.collection.SparseArrayCompat;
 
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.theme.ColorId;
@@ -36,6 +39,9 @@ public class Icons {
     secureSmallDrawable = null;
     if (sparseDrawables != null)
       sparseDrawables.clear();
+    if (bitmaps != null) {
+      bitmaps.clear();
+    }
     livePinIcon = null;
   }
 
@@ -104,6 +110,39 @@ public class Icons {
       sparseDrawables.put(key, drawable);
     }
     return drawable;
+  }
+
+  // In a display list a VectorDrawable of 18 dp takes about 9 µs, a bitmap less than 1
+  private static SparseArrayCompat<Bitmap> bitmaps;
+
+  public static Bitmap getBitmap (@DrawableRes int res) {
+    if (bitmaps == null) {
+      bitmaps = new SparseArrayCompat<>();
+    }
+    Bitmap bitmap = bitmaps.get(res);
+    if (bitmap == null) {
+      bitmap = Drawables.getBitmap(com.fahadali.xgram.appearance.XgramIconPack.map(res)); // XGram: the icon pack's icon
+      bitmaps.put(res, bitmap);
+    }
+    return bitmap;
+  }
+
+  public static void drawBitmap (Canvas c, @DrawableRes int res, float x, float y, @Nullable Paint paint) {
+    c.drawBitmap(getBitmap(res), x, y, paint);
+  }
+
+  public static void drawBitmapRtl (Canvas c, @DrawableRes int res, float x, float y, @Nullable Paint paint, int viewWidth, boolean rtl) {
+    Bitmap bitmap = getBitmap(res);
+    c.drawBitmap(bitmap, rtl ? viewWidth - x - bitmap.getWidth() : x, y, paint);
+  }
+
+  public static void drawBitmapOrVector (Canvas c, @DrawableRes int res, Drawable vector, boolean isScaled, float x, float y, @Nullable Paint paint) {
+    // Scaled on the GPU, a bitmap looks sharper than its vector, at its own size the same
+    if (isScaled || res == 0) {
+      Drawables.draw(c, vector, x, y, paint);
+    } else {
+      drawBitmap(c, res, x, y, paint);
+    }
   }
 
   private static Drawable calendarSmallDrawable;
