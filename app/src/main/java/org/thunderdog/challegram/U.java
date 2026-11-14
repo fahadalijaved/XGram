@@ -203,6 +203,7 @@ import okio.BufferedSource;
 import okio.Okio;
 import okio.Sink;
 import okio.Source;
+import tgx.player.VideoDecoders;
 import tgx.td.Td;
 import tgx.td.data.HlsPath;
 import tgx.td.data.HlsVideo;
@@ -819,6 +820,7 @@ public class U {
       public DataSource redirectDataSource (Uri uri) {
         if (uri.equals(manifestUri)) {
           String playlistData = hlsVideo.multivariantPlaylistData(
+            VideoDecoders.getVideoDecoderSupport(),
             BuildConfig.DEBUG
           );
           return new ByteArrayDataSource(playlistData.getBytes());
