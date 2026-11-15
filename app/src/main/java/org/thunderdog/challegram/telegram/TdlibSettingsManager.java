@@ -88,6 +88,8 @@ public class TdlibSettingsManager implements CleanupStartupDelegate {
 
   public static final String NOTIFICATION_ERROR_KEY = "notification_error";
   public static final String NOTIFICATION_VERSION_KEY = "notification_version";
+  public static final String CALL_ERROR_KEY = "call_error";
+  public static final String CALL_VERSION_KEY = "call_version";
 
   private static final String LOCAL_CHAT_ID_PREFIX = "local_chat_id_"; // remote -> local
   private static final String REMOTE_CHAT_ID_PREFIX = "remote_chat_id_"; // local -> remote
@@ -101,7 +103,7 @@ public class TdlibSettingsManager implements CleanupStartupDelegate {
   private Boolean _forcePlainModeInChannels;
 
   @Nullable
-  private Integer _notificationErrorCount;
+  private Integer _notificationErrorCount, _callErrorCount;
 
   @Nullable
   private Long _userPreferences;
@@ -149,7 +151,7 @@ public class TdlibSettingsManager implements CleanupStartupDelegate {
   public void onPerformRestart () { }
 
   @Override
-  public void onPerformUserCleanup () {
+  public synchronized void onPerformUserCleanup () {
     Settings prefs = Settings.instance();
 
     SharedPreferences.Editor editor = prefs.edit();
@@ -169,6 +171,8 @@ public class TdlibSettingsManager implements CleanupStartupDelegate {
     editor.remove(key(ARCHIVE_CHAT_LIST_ENABLED, accountId));
     editor.remove(key(ARCHIVE_CHAT_LIST_POSITION, accountId));
     editor.remove(key(DISABLED_CHAT_FILTER_IDS, accountId));
+    editor.remove(key(NOTIFICATION_VERSION_KEY, accountId));
+    editor.remove(key(CALL_VERSION_KEY, accountId));
     if (!Config.CHAT_FOLDERS_APPEARANCE_IS_GLOBAL) {
       editor.remove(key(CHAT_FOLDER_BADGE, accountId));
       editor.remove(key(CHAT_FOLDER_STYLE, accountId));
@@ -183,6 +187,8 @@ public class TdlibSettingsManager implements CleanupStartupDelegate {
     String conversionPrefix = key(CONVERSION_PREFIX, accountId);
     String localChatIdPrefix = key(LOCAL_CHAT_ID_PREFIX, accountId);
     String remoteChatIdPrefix = key(REMOTE_CHAT_ID_PREFIX, accountId);
+    String notificationErrorPrefix = key(NOTIFICATION_ERROR_KEY, accountId);
+    String callErrorPrefix = key(CALL_ERROR_KEY, accountId);
     Settings.instance().removeByAnyPrefix(new String[] {
       dismissPrefix,
       dismissReqPrefix,
@@ -190,12 +196,14 @@ public class TdlibSettingsManager implements CleanupStartupDelegate {
       notificationDataPrefix,
       conversionPrefix,
       localChatIdPrefix,
-      remoteChatIdPrefix
+      remoteChatIdPrefix,
+      notificationErrorPrefix,
+      callErrorPrefix
     }, editor);
     editor.apply();
 
     _globalTheme = _globalThemeDaylight = _globalThemeNight = null;
-    _notificationErrorCount = null;
+    _notificationErrorCount = _callErrorCount = null;
     _chatStyle = null;
     _forcePlainModeInChannels = null;
     _userPreferences = null;
@@ -826,17 +834,40 @@ public class TdlibSettingsManager implements CleanupStartupDelegate {
   }
 
   public int getNotificationProblemCount () {
-    if (_notificationErrorCount == null) {
-      int versionCode = Settings.instance().getInt(key(NOTIFICATION_VERSION_KEY, tdlib.id()), BuildConfig.VERSION_CODE);
+    return getProblemCount(false);
+  }
+
+  private static String errorKey (boolean isCall) {
+    return isCall ? CALL_ERROR_KEY : NOTIFICATION_ERROR_KEY;
+  }
+
+  private static String versionKey (boolean isCall) {
+    return isCall ? CALL_VERSION_KEY : NOTIFICATION_VERSION_KEY;
+  }
+
+  private int getProblemCount (boolean isCall) {
+    Integer count = isCall ? _callErrorCount : _notificationErrorCount;
+    if (count == null) {
+      int versionCode = Settings.instance().getInt(key(versionKey(isCall), tdlib.id()),
+        BuildConfig.VERSION_CODE);
       if (versionCode != BuildConfig.VERSION_CODE) {
         LevelDB editor = Settings.instance().edit();
-        editor.removeByPrefix(key(NOTIFICATION_ERROR_KEY, tdlib.id()));
-        editor.remove(key(NOTIFICATION_VERSION_KEY, tdlib.id()));
+        editor.removeByPrefix(key(errorKey(isCall), tdlib.id()));
+        editor.remove(key(versionKey(isCall), tdlib.id()));
         editor.apply();
       }
-      _notificationErrorCount = Settings.instance().getInt(key(NOTIFICATION_ERROR_KEY, tdlib.id()), 0);
+      count = Settings.instance().getInt(key(errorKey(isCall), tdlib.id()), 0);
+      setProblemCount(isCall, count);
     }
-    return _notificationErrorCount;
+    return count;
+  }
+
+  private void setProblemCount (boolean isCall, int count) {
+    if (isCall) {
+      _callErrorCount = count;
+    } else {
+      _notificationErrorCount = count;
+    }
   }
 
   public interface NotificationProblemListener {
@@ -874,7 +905,15 @@ public class TdlibSettingsManager implements CleanupStartupDelegate {
   }
 
   public synchronized void trackNotificationProblem (Throwable t, int flags, long chatId) {
-    final int id = getNotificationProblemCount() + 1;
+    trackProblem(false, t, flags, chatId);
+  }
+
+  public synchronized void trackCallProblem (Throwable t, long chatId) {
+    trackProblem(true, t, NotificationError.FLAG_DISPLAY, chatId);
+  }
+
+  private void trackProblem (boolean isCall, Throwable t, int flags, long chatId) {
+    final int id = getProblemCount(isCall) + 1;
     final boolean isFirst = id == 1;
 
     Blob b = new Blob(1 + Log.blobSize(t));
@@ -882,12 +921,12 @@ public class TdlibSettingsManager implements CleanupStartupDelegate {
     Log.toBlob(t, b);
     final byte[] value = b.toByteArray();
 
-    final String prefix = key(NOTIFICATION_ERROR_KEY, tdlib.id());
+    final String prefix = key(errorKey(isCall), tdlib.id());
     final String existingKey = Settings.instance().pmc().findByValue(prefix, value);
 
     LevelDB editor = Settings.instance().edit();
     if (isFirst) {
-      editor.putInt(key(NOTIFICATION_VERSION_KEY, tdlib.id()), BuildConfig.VERSION_CODE);
+      editor.putInt(key(versionKey(isCall), tdlib.id()), BuildConfig.VERSION_CODE);
     }
     editor.putInt(prefix, id);
     if (existingKey != null && existingKey.endsWith("_data")) {
@@ -917,7 +956,7 @@ public class TdlibSettingsManager implements CleanupStartupDelegate {
     }
     editor.apply();
 
-    _notificationErrorCount = id;
+    setProblemCount(isCall, id);
     if (isFirst) {
       if (notificationProblemListeners != null) {
         for (NotificationProblemListener listener : notificationProblemListeners) {
@@ -929,9 +968,17 @@ public class TdlibSettingsManager implements CleanupStartupDelegate {
   }
 
   public void forgetNotificationProblems () {
-    if (getNotificationProblemCount() > 0) {
-      _notificationErrorCount = 0;
-      Settings.instance().removeByPrefix(key(NOTIFICATION_ERROR_KEY, tdlib.id()), null);
+    forgetProblems(false);
+  }
+
+  public void forgetCallProblems () {
+    forgetProblems(true);
+  }
+
+  private void forgetProblems (boolean isCall) {
+    if (getProblemCount(isCall) > 0) {
+      setProblemCount(isCall, 0);
+      Settings.instance().removeByPrefix(key(errorKey(isCall), tdlib.id()), null);
       if (notificationProblemListeners != null) {
         for (NotificationProblemListener listener : notificationProblemListeners) {
           listener.onNotificationProblemsAvailabilityChanged(tdlib, false);
@@ -971,11 +1018,19 @@ public class TdlibSettingsManager implements CleanupStartupDelegate {
   }
 
   public long getLastNotificationProblematicChat () {
-    final int totalCount = getNotificationProblemCount();
+    return getLastProblematicChat(false);
+  }
+
+  public long getLastCallProblematicChat () {
+    return getLastProblematicChat(true);
+  }
+
+  private long getLastProblematicChat (boolean isCall) {
+    final int totalCount = getProblemCount(isCall);
     if (totalCount == 0)
       return 0;
 
-    final String prefix = key(NOTIFICATION_ERROR_KEY + "_", tdlib.id());
+    final String prefix = key(errorKey(isCall) + "_", tdlib.id());
     long maxTime = 0;
     long reportId = 0;
     long resultChatId = 0;
@@ -1046,7 +1101,11 @@ public class TdlibSettingsManager implements CleanupStartupDelegate {
   }
 
   public @Nullable NotificationProblems notificationProblems () {
-    final int totalCount = getNotificationProblemCount();
+    return problems(false);
+  }
+
+  private @Nullable NotificationProblems problems (boolean isCall) {
+    final int totalCount = getProblemCount(isCall);
     if (totalCount == 0)
       return null;
 
@@ -1054,7 +1113,7 @@ public class TdlibSettingsManager implements CleanupStartupDelegate {
     NotificationError error = null;
     int errorCount = 0;
 
-    final String prefix = key(NOTIFICATION_ERROR_KEY + "_", tdlib.id());
+    final String prefix = key(errorKey(isCall) + "_", tdlib.id());
     for (LevelDB.Entry entry : Settings.instance().pmc().find(prefix)) {
       String key = entry.key();
       int i = key.indexOf('_', prefix.length());
@@ -1097,7 +1156,7 @@ public class TdlibSettingsManager implements CleanupStartupDelegate {
     }
 
     if (errors.isEmpty() || errorCount == 0) {
-      forgetNotificationProblems();
+      forgetProblems(isCall);
       return null;
     }
 
@@ -1109,7 +1168,15 @@ public class TdlibSettingsManager implements CleanupStartupDelegate {
   }
 
   public String buildNotificationReport () {
-    NotificationProblems problems = notificationProblems();
+    return buildReport(false);
+  }
+
+  public String buildCallReport () {
+    return buildReport(true);
+  }
+
+  private String buildReport (boolean isCall) {
+    NotificationProblems problems = problems(isCall);
     if (problems == null || problems.isEmpty()) {
       return null;
     }
@@ -1147,6 +1214,10 @@ public class TdlibSettingsManager implements CleanupStartupDelegate {
 
   public boolean hasNotificationProblems () {
     return getNotificationProblemCount() > 0;
+  }
+
+  public boolean hasCallProblems () {
+    return getProblemCount(true) > 0;
   }
 
   // user-specific
