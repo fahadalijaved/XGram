@@ -517,8 +517,15 @@ public class TextWrapper implements ListAnimator.Measurable, Destroyable, Text.T
     if (text != null) {
       text.setXgramRange(xgramRangeStart, xgramRangeEnd, xgramRangeColor); // XGram
       text.setXgramSelection(xgramSelectionStart, xgramSelectionEnd, xgramSelectionColor); // XGram
+      text.setCodeBlockEnd(codeBlockEnd);
       text.draw(c, startX, endX, endXPadding, startY, colorTheme, alpha, textMediaReceiver);
     }
+  }
+
+  private int codeBlockEnd = Text.NO_CODE_BLOCK_END;
+
+  public void setCodeBlockEnd (int codeBlockEnd) {
+    this.codeBlockEnd = codeBlockEnd;
   }
 
   @Override
