@@ -4926,7 +4926,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   private int desiredThumbScrollByX;
 
   private void ensureThumbsPosition (boolean scrollBy, boolean onlyMeasure) {
-    if (thumbsRecyclerView.getMeasuredWidth() > 0) {
+    if (thumbsRecyclerView.getMeasuredWidth() > 0 && thumbsAdapter.items != null) {
       ensureThumbsPosition(scrollBy, onlyMeasure, thumbsAdapter.items.getFocusItemPosition());
     }
   }
