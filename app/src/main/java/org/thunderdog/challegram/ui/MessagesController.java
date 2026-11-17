@@ -33,7 +33,6 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.text.InputType;
-import android.text.SpannableString;
 import android.text.SpannableStringBuilder;
 import android.text.TextUtils;
 import android.text.style.ClickableSpan;
@@ -6162,7 +6161,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       MessageWithProperties message = getSingleSelectedMessage();
       TdApi.FormattedText formattedText = message != null ? Td.textOrCaption(message.message.content) : null;
       if (formattedText != null) {
-        UI.copyText(TD.toCharSequence(formattedText), R.string.CopiedText);
+        UI.copyText(TD.toCopyText(formattedText), R.string.CopiedText);
       }
       return;
     }
@@ -6224,11 +6223,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
       //noinspection UnsafeOptInUsageError
       if (!Td.isEmpty(text)) {
         b.append('\n');
-        b.append(TD.toCharSequence(text));
+        b.append(TD.toCopyText(text));
       }
     }
 
-    UI.copyText(SpannableString.valueOf(b), R.string.CopiedMessages);
+    UI.copyText(b, R.string.CopiedMessages);
   }
 
   private boolean canCopySelectedMessages () {
