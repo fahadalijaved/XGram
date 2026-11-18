@@ -212,7 +212,8 @@ abstract class BuildLibvpxTask : BuildNativeLibraryTask() {
           "--disable-tools",
           "--disable-debug",
           "--disable-unit-tests",
-          "--disable-libyuv"
+          "--disable-libyuv",
+          "--size-limit=8192x8192"
         )
       )
     )
