@@ -44,12 +44,11 @@ import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.config.Config;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.support.ViewSupport;
-import org.thunderdog.challegram.theme.Theme;
+import org.thunderdog.challegram.theme.ThemeDelegate;
 import org.thunderdog.challegram.tool.DrawAlgorithms;
 import org.thunderdog.challegram.tool.Drawables;
 import org.thunderdog.challegram.tool.Icons;
 import org.thunderdog.challegram.tool.Paints;
-import org.thunderdog.challegram.tool.PorterDuffPaint;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.Views;
 import org.thunderdog.challegram.unsorted.Settings;
@@ -767,32 +766,35 @@ public class QuoteBackground {
     getBounds(startX, endX, endXBottomPadding, startY, codeBlockEnd);
     wasDrawn = true;
 
+    final ThemeDelegate theme = parent.getColorTheme();
     final int barColor;
     if (isCode) {
       // The alpha of presses comes from the theme
-      ripple.setMainColorId(parent.getCodeBlockRippleColorId(), 1f);
-      ripple.drawBackground(c, Theme.getColor(parent.getCodeBlockBackgroundColorId()));
+      final int rippleColor = org.thunderdog.challegram.util.text.TextColorSetThemed.xgramColor(theme, parent.getCodeBlockRippleColorId());
+      ripple.setMainColor(rippleColor, 1f);
+      ripple.drawBackground(c, org.thunderdog.challegram.util.text.TextColorSetThemed.xgramColor(theme, parent.getCodeBlockBackgroundColorId()));
       final int saveCount = Views.save(c);
       c.clipRect(bounds.left, bounds.top, bounds.right, headerBottom);
-      ripple.drawBackground(c, Theme.getColor(parent.getCodeBlockHeaderColorId()));
+      ripple.drawBackground(c, org.thunderdog.challegram.util.text.TextColorSetThemed.xgramColor(theme, parent.getCodeBlockHeaderColorId()));
       Views.restore(c, saveCount);
       ripple.draw(c);
-      drawCodeHeader(c, parent.getCodeBlockLineColorId());
-      barColor = Theme.getColor(parent.getCodeBlockBarColorId());
+      drawCodeHeader(c, theme, parent.getCodeBlockLineColorId(), rippleColor);
+      barColor = org.thunderdog.challegram.util.text.TextColorSetThemed.xgramColor(theme, parent.getCodeBlockBarColorId());
     } else {
       final int lineColorId = parent.getQuoteLineColorId();
+      final int lineColor = org.thunderdog.challegram.util.text.TextColorSetThemed.xgramColor(theme, lineColorId);
       // XGram: a tinted background in the quote's color, as official Telegram draws quotes (the bar's corners at the start)
       xgramRadii[0] = xgramRadii[1] = xgramRadii[6] = xgramRadii[7] = Screen.dp(1.5f);
       xgramRadii[2] = xgramRadii[3] = xgramRadii[4] = xgramRadii[5] = Screen.dp(8f);
       xgramPath.rewind();
       xgramPath.addRoundRect(bounds, xgramRadii, android.graphics.Path.Direction.CW);
-      c.drawPath(xgramPath, Paints.fillingPaint(me.vkryl.core.ColorUtils.alphaColor(.12f, Theme.getColor(lineColorId))));
-      ripple.setMainColorId(lineColorId, 0.25f);
+      c.drawPath(xgramPath, Paints.fillingPaint(me.vkryl.core.ColorUtils.alphaColor(.12f, lineColor)));
+      ripple.setMainColor(lineColor, 0.25f);
       ripple.draw(c);
       if (quoteDrawable == null) {
         quoteDrawable = Drawables.get(R.drawable.baseline_format_quote_close_16);
       }
-      Drawables.draw(c, quoteDrawable, iconX, iconY, PorterDuffPaint.get(lineColorId));
+      Drawables.draw(c, quoteDrawable, iconX, iconY, Paints.getPorterDuffPaint(lineColorId, theme));
       if (canCollapse) {
         // Below the quote mark, as far from the bottom as the mark is from the top
         final float center = Screen.dp(8f);
@@ -800,18 +802,18 @@ public class QuoteBackground {
           c,
           iconX + center,
           bounds.bottom - (iconY - bounds.top) - center,
-          Theme.getColor(lineColorId),
+          lineColor,
           parent.getSwitchFactor(this),
           0f
         );
       }
-      barColor = Theme.getColor(lineColorId);
+      barColor = lineColor;
     }
     c.drawRoundRect(barRect, barRadius, barRadius, Paints.fillingPaint(barColor));
   }
 
-  private void drawCodeHeader (Canvas c, int lineColorId) {
-    final int lineColor = Theme.getColor(lineColorId);
+  private void drawCodeHeader (Canvas c, ThemeDelegate theme, int lineColorId, int rippleColor) {
+    final int lineColor = org.thunderdog.challegram.util.text.TextColorSetThemed.xgramColor(theme, lineColorId);
     final int saveCount = needClipTitle ? Views.save(c) : -1;
     if (needClipTitle) {
       c.clipRect(textLeft, bounds.top, titleRight, headerBottom);
@@ -836,21 +838,21 @@ public class QuoteBackground {
     if (needClipTitle) {
       Views.restore(c, saveCount);
     }
-    copyRipple.setMainColorId(parent.getCodeBlockRippleColorId(), 1f);
+    copyRipple.setMainColor(rippleColor, 1f);
     copyRipple.draw(c);
     Icons.drawBitmap(
       c,
       R.drawable.baseline_content_copy_18,
       copyIconX,
       copyIconY,
-      PorterDuffPaint.get(lineColorId)
+      Paints.getPorterDuffPaint(lineColorId, theme)
     );
     if (switchRipple != null) {
-      switchRipple.setMainColorId(parent.getCodeBlockRippleColorId(), 1f);
+      switchRipple.setMainColor(rippleColor, 1f);
       switchRipple.draw(c);
       // The icon shows what a press does, and turns clockwise while lines wrap
       final float wrapFactor = parent.getSwitchFactor(this);
-      final Paint paint = PorterDuffPaint.get(lineColorId);
+      final Paint paint = Paints.getPorterDuffPaint(lineColorId, theme);
       drawSwitchIcon(c, R.drawable.baseline_wrap_text_18, 90f * wrapFactor, 1f - wrapFactor, paint);
       drawSwitchIcon(
         c,

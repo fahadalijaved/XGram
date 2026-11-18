@@ -14,24 +14,12 @@ package org.thunderdog.challegram.util.text;
 
 import androidx.annotation.ColorInt;
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 
 import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.theme.ThemeDelegate;
 import org.thunderdog.challegram.theme.ThemeManager;
 
 public interface TextColorSetThemed extends TextColorSet {
-  @Nullable
-  default ThemeDelegate forcedTheme () {
-    return null;
-  }
-
-  @NonNull
-  default ThemeDelegate colorTheme () {
-    ThemeDelegate forcedTheme = forcedTheme();
-    return forcedTheme != null ? forcedTheme : ThemeManager.instance().currentTheme();
-  }
-
   /**
    * XGram: with Expressive design the current theme's colours resolve to Material You roles, as Theme.getColor does.
    * Read straight from the theme, text took the Material You theme's fill while the bubble took the role: white text
