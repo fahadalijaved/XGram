@@ -140,3 +140,8 @@
 	url = https://github.com/TelegramMessenger/libprisma
 	shallow = true
 	branch = master
+[submodule "vkryl/annotation"]
+	path = vkryl/annotation
+	url = https://github.com/TGX-Android/X-Annotation
+	shallow = true
+	branch = main

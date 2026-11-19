@@ -48,6 +48,12 @@ open class ModulePlugin : Plugin<Project> {
     project.dependencies {
       add("coreLibraryDesugaring", libs.desugaring)
     }
+    // vkryl's @MadeByLLM marker (vkryl/annotation, an included build), as in Telegram X
+    project.configurations.named {
+      it == "compileOnly" || it == "testCompileOnly" || it == "androidTestCompileOnly"
+    }.configureEach {
+      dependencies.addLater(libs.vkryl.annotation)
+    }
 
     project.afterEvaluate {
       tasks.withType(JavaCompile::class.java).configureEach {
