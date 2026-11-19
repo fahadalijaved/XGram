@@ -1484,7 +1484,7 @@ public class TGCallService extends Service implements
       .putExtra(com.fahadali.xgram.call.XgramCallVideo.EXTRA_ANSWER_VIDEO, video.answerToken())
       .putExtra(com.fahadali.xgram.call.XgramCallVideo.EXTRA_ANSWER_CALL_ID, call.id);
     return PendingIntent.getActivity(this, 2, intent, PendingIntent.FLAG_UPDATE_CURRENT | Intents.mutabilityFlags(false));
-}
+  }
 
   private boolean startForegroundOrUpdate (int notificationId, Notification notification,
     boolean callAnswered) {
