@@ -580,23 +580,77 @@ public final class XgramForums {
       onPicked.runWithData(new PickedTopic(null, Lang.getString(R.string.XgramGeneralTopic)));
       return;
     }
-    int[] ids = new int[count];
-    String[] titles = new String[count];
-    int[] icons = new int[count];
-    TdApi.ForumTopic[] topics = new TdApi.ForumTopic[count];
-    for (int i = 0; i < count; i++) {
-      TdApi.ForumTopic topic = writable.get(i);
-      topics[i] = topic;
-      ids[i] = i + 1;
-      titles[i] = topicTitle(topic.info);
-      icons[i] = R.drawable.baseline_forum_24;
-    }
-    context.showOptions(Lang.getString(R.string.XgramSelectTopic, context.tdlib().chatTitle(chatId)), ids, titles, null, icons, (itemView, id) -> {
-      TdApi.ForumTopic topic = topics[id - 1];
-      TdApi.MessageTopic topicId = topic.info.isGeneral ? null : new TdApi.MessageTopicForum(topic.info.forumTopicId);
-      onPicked.runWithData(new PickedTopic(topicId, topicTitle(topic.info)));
-      return true;
-    });
+    // The topics as the topics screen shows them (icon, last message with its sender, time, unread), as in Telegram:
+    // with many topics, the last messages tell which one a share belongs in.
+    context.showPopup(Lang.getString(R.string.XgramSelectTopic, tdlib.chatTitle(chatId)), true, 2, (popupLayout, optionsWrap) -> {
+      android.content.Context ctx = optionsWrap.getContext();
+      androidx.recyclerview.widget.RecyclerView recyclerView = new androidx.recyclerview.widget.RecyclerView(ctx);
+      recyclerView.setLayoutManager(new androidx.recyclerview.widget.LinearLayoutManager(ctx, androidx.recyclerview.widget.RecyclerView.VERTICAL, false));
+      recyclerView.setItemAnimator(null);
+      recyclerView.setOverScrollMode(android.view.View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+      TGForumTopic[] rows = new TGForumTopic[count];
+      recyclerView.setAdapter(new androidx.recyclerview.widget.RecyclerView.Adapter<androidx.recyclerview.widget.RecyclerView.ViewHolder>() {
+        @Override
+        public int getItemCount () {
+          return count;
+        }
+
+        @androidx.annotation.NonNull
+        @Override
+        public androidx.recyclerview.widget.RecyclerView.ViewHolder onCreateViewHolder (@androidx.annotation.NonNull android.view.ViewGroup parent, int viewType) {
+          ForumTopicView view = new ForumTopicView(parent.getContext(), tdlib);
+          view.setOnClickListener(v -> {
+            TdApi.ForumTopic topic = ((ForumTopicView) v).getForumTopic();
+            if (topic == null) {
+              return;
+            }
+            popupLayout.hideWindow(true);
+            TdApi.MessageTopic topicId = topic.info.isGeneral ? null : new TdApi.MessageTopicForum(topic.info.forumTopicId);
+            onPicked.runWithData(new PickedTopic(topicId, topicTitle(topic.info)));
+          });
+          context.addThemeInvalidateListener(view);
+          return new androidx.recyclerview.widget.RecyclerView.ViewHolder(view) { };
+        }
+
+        @Override
+        public void onBindViewHolder (@androidx.annotation.NonNull androidx.recyclerview.widget.RecyclerView.ViewHolder holder, int position) {
+          if (rows[position] == null) {
+            rows[position] = new TGForumTopic(context, chatId, writable.get(position));
+          }
+          ((ForumTopicView) holder.itemView).setTopic(rows[position]);
+        }
+
+        @Override
+        public void onViewAttachedToWindow (@androidx.annotation.NonNull androidx.recyclerview.widget.RecyclerView.ViewHolder holder) {
+          ((ForumTopicView) holder.itemView).attach();
+        }
+
+        @Override
+        public void onViewDetachedFromWindow (@androidx.annotation.NonNull androidx.recyclerview.widget.RecyclerView.ViewHolder holder) {
+          ((ForumTopicView) holder.itemView).detach();
+        }
+
+        @Override
+        public void onViewRecycled (@androidx.annotation.NonNull androidx.recyclerview.widget.RecyclerView.ViewHolder holder) {
+          ((ForumTopicView) holder.itemView).setTopic(null);
+        }
+      });
+      int rowHeight = ForumTopicView.getViewHeight();
+      int listHeight = Math.min(count * rowHeight, Math.max(rowHeight * 3, (int) (org.thunderdog.challegram.tool.Screen.currentHeight() * .6f)));
+      recyclerView.setLayoutParams(new android.widget.LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, listHeight));
+      optionsWrap.addView(recyclerView);
+      popupLayout.setDismissListener(popup -> {
+        // the rows stop following typing and their media once the picker is gone
+        for (int i = 0; i < recyclerView.getChildCount(); i++) {
+          android.view.View child = recyclerView.getChildAt(i);
+          if (child instanceof ForumTopicView) {
+            context.removeThemeListenerByTarget(child);
+            ((ForumTopicView) child).performDestroy();
+          }
+        }
+      });
+      return listHeight;
+    }, null);
   }
 
   // Permissions (official rules: ChatObject.canManageTopics / canDeleteTopic)
