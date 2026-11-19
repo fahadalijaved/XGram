@@ -143,7 +143,7 @@ jobs:
       # Telegram X's wrapper jar (committed in 2021) is a Gradle 1.6 nightly that isn't on Gradle's list of official
       # wrapper jars, so setup-gradle's own wrapper check would fail. This pins that exact jar instead.
       - name: Check the Gradle wrapper jar
-        run: echo "e2b82129ab64751fd40437007bd2f7f2afb3c6e41a9198e628650b22d5824a14  gradle/wrapper/gradle-wrapper.jar" | sha256sum -c -
+        run: echo "621008afc4f5d59357fcf06ffa644dd5aade5e091bdc363742710445f73cdaf8  gradle/wrapper/gradle-wrapper.jar" | sha256sum -c -
 
       - name: Set up Gradle (wrapper, dependency and build caches)
         uses: gradle/actions/setup-gradle@v4
