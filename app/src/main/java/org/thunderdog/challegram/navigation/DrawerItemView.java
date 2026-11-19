@@ -381,10 +381,11 @@ public class DrawerItemView extends BaseView implements FactorAnimator.Target, A
   }
 
   /**
-   * XGram M3E: where the counter ends, from the row's edge: 16dp inside the current account's pill (inset 12dp), clear
+   * XGram M3E: where the counter's end sits, from the row's edge: its edge 16dp inside the current account's pill (inset 12dp), clear
    * of its rounded end, as Material 3's navigation drawer places a badge. Telegram X's 24dp otherwise.
    */
   private static int xgramCounterEnd () {
-    return Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 12f + 16f : 24f);
+    // Counter.draw's x is the centre of the badge's rounded end (12dp in from its edge)
+    return Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 12f + 16f + 12f : 24f);
   }
 }
