@@ -168,7 +168,7 @@ public class DrawerItemView extends BaseView implements FactorAnimator.Target, A
     }
     int availWidth = getMeasuredWidth() - textLeft;
     if (counter != null) {
-      availWidth -= counter.getScaledWidth(Screen.dp(24f) + Screen.dp(8f));
+      availWidth -= counter.getScaledWidth(xgramCounterEnd() + Screen.dp(8f));
     }
     if (emojiStatusHelper.needDrawEmojiStatus()) {
       availWidth -= emojiStatusHelper.getWidth() + Screen.dp(12);
@@ -376,7 +376,15 @@ public class DrawerItemView extends BaseView implements FactorAnimator.Target, A
 
     }
     if (counter != null) {
-      counter.draw(c, rtl ? Screen.dp(24f) : viewWidth - Screen.dp(24f), getMeasuredHeight() / 2f, Lang.rtl() ? Gravity.LEFT : Gravity.RIGHT, 1f, this, ColorId.badgeFailedText);
+      counter.draw(c, rtl ? xgramCounterEnd() : viewWidth - xgramCounterEnd(), getMeasuredHeight() / 2f, Lang.rtl() ? Gravity.LEFT : Gravity.RIGHT, 1f, this, ColorId.badgeFailedText);
     }
+  }
+
+  /**
+   * XGram M3E: where the counter ends, from the row's edge: 16dp inside the current account's pill (inset 12dp), clear
+   * of its rounded end, as Material 3's navigation drawer places a badge. Telegram X's 24dp otherwise.
+   */
+  private static int xgramCounterEnd () {
+    return Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 12f + 16f : 24f);
   }
 }
