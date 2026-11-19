@@ -612,7 +612,7 @@ abstract class GenerateThemesTask : DefaultTask() {
         "Theme${className}.kt"
       ) { writer ->
         writer.append("""
-          @file:MadeByGenerator("${className()}", "${theme.file.name}")
+          @file:MadeByGenerator("${className()}", ["${theme.file.name}"])
           @file:JvmName("Theme${className}")
           
           package org.thunderdog.challegram.theme.builtin
