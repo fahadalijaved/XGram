@@ -265,12 +265,15 @@ val buildLibvpxTask = tasks.register("buildLibvpx") {
   dependsOn(buildLibvpxTasks.values)
 }
 
+// XGram: the ABIs of tlottie's builds (XGram's ABI flavors pick theirs below, by their short names)
+val globalAbiFilters = listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+
 val buildTlottieTasks = Sdk.VARIANTS.values.filter {
   (it.usesLegacyNdk == useLegacyNdk ||
     config.build.primaryNdkVersion == config.build.legacyNdkVersion)
 }.flatMap { sdkVariant ->
   globalAbiFilters.map { abiFilter ->
-    Pair(Pair(sdkVariant.flavor, abiFilter), tasks.register<BuildTlottieTask>(
+    Pair(Pair(sdkVariant.flavor, abiFilter.toAbiVariant()), tasks.register<BuildTlottieTask>(
       "buildTlottie[${sdkVariant.flavor},${abiFilter}]"
     ) {
       group = "Setup"
