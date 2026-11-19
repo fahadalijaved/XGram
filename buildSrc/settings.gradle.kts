@@ -2,6 +2,14 @@
 
 apply(from = "${rootDir.parentFile}/properties.gradle.kts")
 
+// XGram: Kotlin's own artifacts from Maven Central first; the plugin portal alone at times serves a broken POM of them
+pluginManagement {
+  repositories {
+    mavenCentral()
+    gradlePluginPortal()
+  }
+}
+
 dependencyResolutionManagement {
   repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
   repositories {
