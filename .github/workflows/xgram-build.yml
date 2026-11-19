@@ -133,6 +133,7 @@ jobs:
           XGRAM_CCACHE_MAXSIZE: ${{ vars.XGRAM_CCACHE_MAXSIZE || '2G' }}
 
       - name: Restore ccache
+        if: steps.ccache.outputs.dir != ''
         uses: actions/cache/restore@v4
         with:
           path: ${{ steps.ccache.outputs.dir }}
@@ -183,11 +184,11 @@ jobs:
         run: bash scripts/ci/gradle-build.sh
 
       - name: ccache statistics
-        if: always() && steps.ccache.outcome == 'success'
+        if: always() && steps.ccache.outcome == 'success' && steps.ccache.outputs.dir != ''
         run: ccache --show-stats || true
 
       - name: Save ccache
-        if: ${{ !cancelled() && steps.ccache.outcome == 'success' && steps.build.outcome != 'skipped' }}
+        if: ${{ !cancelled() && steps.ccache.outcome == 'success' && steps.ccache.outputs.dir != '' && steps.build.outcome != 'skipped' }}
         uses: actions/cache/save@v4
         with:
           path: ${{ steps.ccache.outputs.dir }}

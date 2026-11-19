@@ -16,8 +16,22 @@ set -euo pipefail
 if ! command -v ccache > /dev/null 2>&1; then
   if command -v apt-get > /dev/null 2>&1; then
     log "Installing ccache"
-    sudo apt-get update -qq > /dev/null
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ccache > /dev/null
+    # Ubuntu's mirrors at times answer 503: a few tries, then the build goes on without ccache (slower, not failed)
+    installed=false
+    for attempt in 1 2 3; do
+      if sudo apt-get update -qq > /dev/null 2>&1 &&
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --fix-missing ccache > /dev/null 2>&1; then
+        installed=true
+        break
+      fi
+      warn "Installing ccache failed (try $attempt of 3)"
+      sleep $((attempt * 20))
+    done
+    if [[ $installed != true ]]; then
+      warn "No ccache: the native code compiles without its cache this time."
+      gh_output dir ""
+      exit 0
+    fi
   else
     die "ccache is not installed and apt-get is not available."
   fi
