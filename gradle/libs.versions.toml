@@ -353,6 +353,7 @@ android-test = { id = "com.android.test", version.ref = "android-gradle-plugin" 
 
 google-services = { id = "com.google.gms.google-services", version.ref = "google-services-plugin" }
 
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 
