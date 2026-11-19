@@ -71,6 +71,10 @@ fi
   printf 'app.name=%s\n' "$(prop_escape "$app_name")"
   printf 'app.version=%s\n' "$version"
   printf 'tgx.extension=none\n'
+  # rustup's home, which builds Telegram X's tlottie (the workflow's Rust step sets it)
+  rust_dir=${XGRAM_RUST_DIR:-$(rustup show home 2> /dev/null || true)}
+  [[ -n "$rust_dir" ]] || die "Rust isn't installed: run scripts/setup-rust.sh, or set XGRAM_RUST_DIR."
+  printf 'rust.dir=%s\n' "$(prop_escape "$rust_dir")"
   if [[ -n "${XGRAM_DOWNLOAD_URL:-}" ]]; then
     printf 'app.download_url=%s\n' "$(prop_escape "$XGRAM_DOWNLOAD_URL")"
   fi

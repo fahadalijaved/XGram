@@ -1,5 +1,10 @@
 # XGram: the newest Telegram X and TDLib commits already reviewed (taken or deliberately skipped).
 # The weekly upstream check (.github/workflows/xgram-upstream-check.yml) reports what came after these.
 # After a sync, move each line to the newest commit that was reviewed, and commit this file.
-telegram-x e11f3297f8fc740de2f0ac69b58bb54b3be01f04
-tdlib a4a3e853cbf8daa2d93ed96293383418d2addf8b
+# 2026-11-19 sync (to df631baa): deferred for their own pass, they rework notification and call settings where
+# XGram has its full-screen calls rows: 96e263b9 1fc38a27 a47a52b0 ea8e125b f0a3ec48 29ea20b2 a34b5027.
+# Left out on purpose: cf80f0ba (XGram's spring progress), 1ca39678 (send-files rewrite; XGram's own refusal handling),
+# e1d2ca92 (fingerprint on Android 6-9; XGram needs 13+), bb5760d2 (CI keeps the named mapping copy), d19b68f0 (tests).
+# 1d007c42 taken only for its Icons bitmap helper.
+telegram-x df631baa91ca0dcc16fae02846209d85e5fd560a
+tdlib 04778b955707881a253a7c9720f47fe5233f39ab

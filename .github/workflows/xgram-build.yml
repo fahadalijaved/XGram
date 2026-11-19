@@ -119,6 +119,13 @@ jobs:
         id: sdk
         run: bash scripts/ci/install-android-sdk.sh
 
+      - name: Set up Rust (Telegram X's tlottie sticker engine)
+        run: |
+          # rustup comes with GitHub's Ubuntu runners; the version and Android targets come from version.properties
+          ver=$(grep '^version.rust=' version.properties | cut -d= -f2)
+          rustup toolchain install "$ver" --profile minimal --target aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+          echo "XGRAM_RUST_DIR=$(rustup show home)" >> "$GITHUB_ENV"
+
       - name: Set up ccache
         id: ccache
         run: bash scripts/ci/setup-ccache.sh
