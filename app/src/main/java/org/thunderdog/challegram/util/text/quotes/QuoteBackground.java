@@ -92,12 +92,8 @@ public class QuoteBackground {
 
   public final RectF bounds = new RectF();
 
-  /** XGram: an expandable quote (TextEntityTypeExpandableBlockQuote), its place among the text's expandable quotes. */
-  public boolean xgramExpandable;
-  public int xgramOrdinal = -1;
   private final android.graphics.Path xgramPath = new android.graphics.Path();
   private final float[] xgramRadii = new float[8];
-  private static Drawable xgramChevron;
   private RippleDrawable ripple;
 
   public final boolean isCode;
