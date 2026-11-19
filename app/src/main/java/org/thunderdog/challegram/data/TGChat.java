@@ -740,6 +740,9 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
           layoutTitle(false);
         } else if (pinStateChanged) {
           xgramCheckOneLineReserve(); // XGram: one line's pin takes room at the title's end
+          if (listMode != Settings.CHAT_MODE_1LINE && lastCounterAddWidth != getCounterAddWidth()) {
+            layoutContent(); // XGram: and the preview's end in two and three lines
+          }
         }
         return true;
       }
@@ -1656,8 +1659,18 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
       counter.getScaledWidth(ChatView.getTimePaddingLeft()) +
       mentionCounter.getScaledWidth(ChatView.getTimePaddingLeft()) +
       reactionsCounter.getScaledWidth(ChatView.getTimePaddingLeft()) +
-      xgramLaterCounter.getScaledWidth(ChatView.getTimePaddingLeft()) // XGram Later
+      xgramLaterCounter.getScaledWidth(ChatView.getTimePaddingLeft()) + // XGram Later
+      xgramPinAddWidth()
     );
+  }
+
+  /** XGram: the pin at the end of the preview line (shown where there is no badge) keeps the text clear of it. */
+  private float xgramPinAddWidth () {
+    if (!xgramIsPinnedRow()) {
+      return 0f;
+    }
+    final float badges = Math.max(Math.max(counter.getVisibility(), xgramLaterCounter.getVisibility()), Math.max(mentionCounter.getVisibility(), reactionsCounter.getVisibility()));
+    return (Screen.dp(14f) + Screen.dp(4f)) * (1f - badges);
   }
 
   public Counter getCounter () {
