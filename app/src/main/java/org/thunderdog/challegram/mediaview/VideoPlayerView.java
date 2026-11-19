@@ -220,6 +220,7 @@ public class VideoPlayerView implements Player.Listener, CallManager.CurrentCall
     Views.removeFromParent(targetView);
     player.release();
     player = null;
+    needPrepareOnSurface = false;
   }
 
   public void setVideo (@Nullable MediaItem mediaItem) {
@@ -486,6 +487,7 @@ public class VideoPlayerView implements Player.Listener, CallManager.CurrentCall
   private MediaSource originalSource;
   private long trimStartUs = -1, trimEndUs = -1;
   private MediaSource mediaSource;
+  private boolean needPrepareOnSurface;
 
   public boolean setTrim (long trimStartUs, long trimEndUs) {
     if (this.trimStartUs != trimStartUs || this.trimEndUs != trimEndUs) {
@@ -506,6 +508,22 @@ public class VideoPlayerView implements Player.Listener, CallManager.CurrentCall
       this.mediaSource = mediaSource;
       player.setMediaSource(mediaSource);
       player.setRepeatMode(isLooping ? Player.REPEAT_MODE_ONE : Player.REPEAT_MODE_OFF);
+      prepareWithSurface();
+    }
+  }
+
+  private void prepareWithSurface () {
+    if (renderView.isAvailable()) {
+      player.prepare();
+    } else {
+      needPrepareOnSurface = true;
+    }
+  }
+
+  @Override
+  public void onSurfaceSizeChanged (int width, int height) {
+    if (needPrepareOnSurface && player != null && width > 0 && height > 0) {
+      needPrepareOnSurface = false;
       player.prepare();
     }
   }
