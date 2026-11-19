@@ -1,0 +1,5 @@
+# XGram: the newest Telegram X and TDLib commits already reviewed (taken or deliberately skipped).
+# The weekly upstream check (.github/workflows/xgram-upstream-check.yml) reports what came after these.
+# After a sync, move each line to the newest commit that was reviewed, and commit this file.
+telegram-x e11f3297f8fc740de2f0ac69b58bb54b3be01f04
+tdlib a4a3e853cbf8daa2d93ed96293383418d2addf8b

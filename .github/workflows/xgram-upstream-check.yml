@@ -1,0 +1,35 @@
+# Weekly: tells the owner (through the XGram bot) what Telegram X and its TDLib builds have that XGram hasn't
+# reviewed yet. It never merges anything; a sync is done by hand (cherry-picks, TDLib upgrade with code changes),
+# then the markers in .github/upstream-sync.txt move forward. Script: scripts/ci/upstream-check.sh
+name: XGram upstream check
+
+on:
+  schedule:
+    # Mondays, off the full hour (GitHub delays schedules at :00)
+    - cron: '23 7 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: xgram-upstream-check
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Check Telegram X and TDLib
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out XGram
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: false
+      - name: Compare and report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          XGRAM_BOT_TOKEN: ${{ secrets.XGRAM_BOT_TOKEN }}
+          XGRAM_OWNER_CHAT_ID: ${{ secrets.XGRAM_OWNER_CHAT_ID }}
+        run: bash scripts/ci/upstream-check.sh
