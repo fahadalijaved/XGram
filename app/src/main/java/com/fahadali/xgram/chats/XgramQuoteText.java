@@ -231,7 +231,7 @@ public final class XgramQuoteText {
         return null;
       }
     }
-    return new Quote(new TdApi.InputTextQuote(quoteText(s, entities, start, end), start), wasCut);
+    return new Quote(new TdApi.InputTextQuote(quoteText(s, entities, start, end), new TdApi.RichText[0], start), wasCut);
   }
 
   /** Text [start, end) with the entities TDLib keeps in quotes; a custom emoji or date only when it is all there. */
@@ -270,7 +270,7 @@ public final class XgramQuoteText {
       }
       position = found.position;
     }
-    TdApi.InputTextQuote relocated = new TdApi.InputTextQuote(quoteText(s, entitiesOf(currentText), position, position + length), position);
+    TdApi.InputTextQuote relocated = new TdApi.InputTextQuote(quoteText(s, entitiesOf(currentText), position, position + length), new TdApi.RichText[0], position);
     return Td.equalsTo(relocated, quote) ? quote : relocated;
   }
 }

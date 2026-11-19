@@ -1344,16 +1344,6 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
   }
 
   @Override
-  protected void onStop () {
-    super.onStop();
-    // The dialog of the request only pauses the activity, so it's left once stopped, e.g. by Home
-    if (isRequestingMicForCall) {
-      isRequestingMicForCall = false;
-      TGCallService.checkIncomingNotification();
-    }
-  }
-
-  @Override
   public void onDestroy () {
     try {
       super.onDestroy();
@@ -1444,6 +1434,11 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
     }
     xgramCallOverLock.onActivityStop(); // XGram: left with the screen on, no more over the lock screen
     super.onStop();
+    // The dialog of the request only pauses the activity, so it's left once stopped, e.g. by Home
+    if (isRequestingMicForCall) {
+      isRequestingMicForCall = false;
+      TGCallService.checkIncomingNotification();
+    }
   }
 
   // XGram: the screen is on once the window has focus: a call that turned it on must not turn it on again later

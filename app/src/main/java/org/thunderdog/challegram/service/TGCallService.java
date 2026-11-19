@@ -1480,7 +1480,7 @@ public class TGCallService extends Service implements
     if (keyguard != null && (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1 ? keyguard.isDeviceLocked() : keyguard.isKeyguardLocked())) {
       return null;
     }
-    Intent intent = Intents.valueOfCall()
+    Intent intent = Intents.valueOfCallInApp(false) // XGram: the app's call screen, as before Telegram X's CallActivity
       .putExtra(com.fahadali.xgram.call.XgramCallVideo.EXTRA_ANSWER_VIDEO, video.answerToken())
       .putExtra(com.fahadali.xgram.call.XgramCallVideo.EXTRA_ANSWER_CALL_ID, call.id);
     return PendingIntent.getActivity(this, 2, intent, PendingIntent.FLAG_UPDATE_CURRENT | Intents.mutabilityFlags(false));
@@ -1696,7 +1696,7 @@ public class TGCallService extends Service implements
 
   private void bringCallToFront () {
     /*try {
-      PendingIntent.getActivity(UI.getContext(), 0, Intents.valueOfCall(), PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_CANCEL_CURRENT).send();
+      PendingIntent.getActivity(UI.getContext(), 0, Intents.valueOfCallInApp(false), PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_CANCEL_CURRENT).send();
     } catch (Exception x) {
       Log.e(Log.TAG_VOIP, "Error starting incall activity", x);
     }*/

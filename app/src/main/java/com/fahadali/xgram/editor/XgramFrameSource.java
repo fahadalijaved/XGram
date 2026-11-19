@@ -120,7 +120,7 @@ public final class XgramFrameSource {
   }
 
   private boolean openVideo (@NonNull String path) {
-    ptr = N.createDecoder(path, metadata, 0);
+    ptr = N.createDecoder(path, metadata, 0, 0);
     if (ptr == 0) {
       return false;
     }

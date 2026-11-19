@@ -301,7 +301,7 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
     checkDisallowScreenshots();
   }
 
-  @MadeByLLM(models = "opus-5.5", ref = "stale-keyboard-state-fix")
+  @MadeByLLM(value = "opus-5.5", ref = "stale-keyboard-state-fix")
   private void syncKeyboardState (ViewController<?> controller) {
     if (controller.getKeyboardState() && !UI.getContext(context).isKeyboardVisible()) {
       controller.onKeyboardStateChanged(false);

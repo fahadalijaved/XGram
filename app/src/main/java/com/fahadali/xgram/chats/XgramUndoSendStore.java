@@ -380,7 +380,7 @@ final class XgramUndoSendStore {
       if (fields.length >= 2) {
         String text = Uri.decode(fields[1]);
         TdApi.TextEntity[] entities = XgramMedia.decodeEntities(fields.length > 2 ? fields[2] : null, text.length());
-        q = new TdApi.InputTextQuote(new TdApi.FormattedText(text, entities), Integer.parseInt(fields[0]));
+        q = new TdApi.InputTextQuote(new TdApi.FormattedText(text, entities), new TdApi.RichText[0], Integer.parseInt(fields[0]));
       }
     }
     int checklistTaskId = task.isEmpty() ? 0 : Integer.parseInt(task);

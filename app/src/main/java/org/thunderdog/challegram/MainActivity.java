@@ -1917,7 +1917,7 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
     Tdlib tdlib = TdlibManager.instance().calls().getCurrentCallTdlib();
 
     if (call != null && openChat) {
-      openMessagesController(tdlib.id(), ChatId.fromUserId(call.userId), 0);
+      openMessagesController(tdlib.id(), ChatId.fromUserId(call.userId), 0, 0);
       return;
     }
 

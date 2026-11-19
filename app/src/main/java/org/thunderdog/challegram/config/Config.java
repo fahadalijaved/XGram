@@ -293,6 +293,9 @@ public class Config {
 
   public static final boolean SHOW_COPY_REPORT_DETAILS_IN_SETTINGS = BuildConfig.EXPERIMENTAL;
 
+  // Telegram X's builds of tests turn on checks in the app; XGram has no such builds
+  public static final boolean ENABLE_TEST_HOOKS = false;
+
   public static final boolean FORCE_DISABLE_NOTIFICATIONS =
     BuildConfig.EXPERIMENTAL && !BuildConfig.DEBUG && !BuildConfig.FIREBASE_MESSAGING_ENABLED;
 

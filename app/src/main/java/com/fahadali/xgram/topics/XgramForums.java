@@ -886,7 +886,7 @@ public final class XgramForums {
         return true;
       }
       boolean isForum = mode != 0, hasTabs = mode == 1;
-      RunnableLong apply = supergroupChatId -> tdlib.send(new TdApi.ToggleSupergroupIsForum(tgx.td.ChatId.toSupergroupId(supergroupChatId), isForum, hasTabs), (ok, error) -> tdlib.ui().post(() -> {
+      RunnableLong apply = supergroupChatId -> tdlib.send(new TdApi.ToggleSupergroupIsForum(tgx.td.ChatId.toSupergroupId(supergroupChatId), isForum, hasTabs, false), (ok, error) -> tdlib.ui().post(() -> {
         if (error != null) {
           UI.showError(error);
         } else {
@@ -914,7 +914,7 @@ public final class XgramForums {
   /** XGram M3E: the topics mode chosen in the radio sheet, applied as the options above do (a basic group upgrades). */
   private static void applyTopicsMode (Tdlib tdlib, TdApi.Chat chat, int mode, Runnable onChanged) {
     boolean isForum = mode != 0, hasTabs = mode == 1;
-    RunnableLong apply = supergroupChatId -> tdlib.send(new TdApi.ToggleSupergroupIsForum(tgx.td.ChatId.toSupergroupId(supergroupChatId), isForum, hasTabs), (ok, error) -> tdlib.ui().post(() -> {
+    RunnableLong apply = supergroupChatId -> tdlib.send(new TdApi.ToggleSupergroupIsForum(tgx.td.ChatId.toSupergroupId(supergroupChatId), isForum, hasTabs, false), (ok, error) -> tdlib.ui().post(() -> {
       if (error != null) {
         UI.showError(error);
       } else {

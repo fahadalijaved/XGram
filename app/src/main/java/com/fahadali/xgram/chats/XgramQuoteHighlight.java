@@ -81,7 +81,7 @@ public final class XgramQuoteHighlight implements FactorAnimator.Target {
 
   /** The composer's reply bar: the quote picked for the reply being written. */
   public static void prepareJump (Tdlib tdlib, long chatId, long messageId, @Nullable TdApi.InputTextQuote quote) {
-    prepareJump(tdlib, chatId, messageId, quote != null ? new TdApi.TextQuote(quote.text, quote.position, true) : null);
+    prepareJump(tdlib, chatId, messageId, quote != null ? new TdApi.TextQuote(quote.text, new TdApi.RichText[0], quote.position, true) : null);
   }
 
   /** Telegram X flashes {@code msg} (any thread): when the jump in progress was to it, its quote shows. */

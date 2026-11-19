@@ -277,7 +277,7 @@ final class XgramWaStickerAnimator {
     boolean render (int fps, @NonNull Encoder encoder, @NonNull Work work, @NonNull CancelCheck cancel) throws IOException {
       // [0], [1]: the size frames come in; [2]: frames per 1000 s; [3]: a frame's time (ms)
       final long[] metadata = new long[N.DECODER_METADATA_ARRAY_SIZE];
-      final long ptr = N.createDecoder(path, metadata, 0);
+      final long ptr = N.createDecoder(path, metadata, 0, 0);
       if (ptr == 0) {
         return false;
       }

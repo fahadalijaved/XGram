@@ -559,11 +559,11 @@ public final class XgramQuote {
     tdlib.send(new TdApi.GetRepliedMessage(message.chatId, message.id), (replied, error) -> {
       TdApi.InputTextQuote quote = null;
       if (oldQuote != null && replied != null) {
-        quote = XgramQuoteText.relocate(new TdApi.InputTextQuote(oldQuote.text, oldQuote.position), Td.textOrCaption(replied.content));
+        quote = XgramQuoteText.relocate(new TdApi.InputTextQuote(oldQuote.text, new TdApi.RichText[0], oldQuote.position), Td.textOrCaption(replied.content));
       }
       if (quote == null) {
         // An empty quote: TDLib sends it as a plain reply.
-        quote = new TdApi.InputTextQuote(new TdApi.FormattedText("", new TdApi.TextEntity[0]), 0);
+        quote = new TdApi.InputTextQuote(new TdApi.FormattedText("", new TdApi.TextEntity[0]), new TdApi.RichText[0], 0);
         UI.showToast(R.string.XgramQuoteDropped, Toast.LENGTH_SHORT);
       }
       XgramUndoSend.flushBefore(tdlib, message.chatId); // Undo send: what waits in this chat goes first

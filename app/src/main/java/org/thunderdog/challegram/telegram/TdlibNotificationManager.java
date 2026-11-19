@@ -2989,7 +2989,7 @@ public class TdlibNotificationManager implements UI.StateListener, Passcode.Lock
   /** XGram: ghost mode local read, remove the chat's notifications on this device without reading it. */
   @AnyThread
   public void xgramRemoveChatNotifications (long chatId) {
-    queue.getHandler().post(() -> notification.xgramRemoveChatNotifications(chatId));
+    queue.post(() -> notification.xgramRemoveChatNotifications(chatId), 0);
   }
 
   @AnyThread
