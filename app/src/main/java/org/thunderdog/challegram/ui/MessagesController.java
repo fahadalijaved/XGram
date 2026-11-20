@@ -7173,9 +7173,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     // XGram: the scroll button's spring overshoots past 1 with Expressive design: it moves the bar, but the collapse
     // (colors, outline and icon alpha) and the bar's alpha take the clamped factor. The same value with it off.
     float collapseFactor = MathUtils.clamp(detachFactor);
-    int barHeight = Screen.dp(48f) + xgramBarInset(); // XGram M3E: the bar is taller by the gap under it
-    int baseY = needSearchControlsTranslate() ? (int) ((float) barHeight * MathUtils.clamp(searchControlsFactor)) : 0;
-    float fromY = bottomButtonFactor == 1f ? baseY : baseY + (int) ((float) barHeight * (1f - bottomButtonFactor));
+    float fromY = getBottomBarY();
     float alpha = (1f - 1f * collapseFactor * (1f - bottomButtonFactor)) * (1f - searchControlsFactor);
     // XGram: with Expressive design the bar collapses into a chat FAB (CircleButton.XGRAM_CHAT_FAB_DP, 48dp) one slot
     // above the scroll FAB: its centre 16dp + half the FAB from the end and above the input bar, plus one pitch
@@ -7192,6 +7190,39 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (bottomBar.getVisibility() != desiredVisibility) {
       bottomBar.setVisibility(desiredVisibility);
     }
+    final int bottomCover = getBottomCover();
+    if (this.bottomCover != bottomCover) {
+      this.bottomCover = bottomCover;
+      manager.invalidateStickyElements();
+    }
+  }
+
+  private float getBottomBarY () {
+    final float bottomButtonFactor = bottomBarVisible.getFloatValue();
+    final int barHeight = Screen.dp(48f) + xgramBarInset(); // XGram M3E: the bar is taller by the gap under it
+    final int baseY = needSearchControlsTranslate() ?
+      (int) ((float) barHeight * MathUtils.clamp(searchControlsFactor)) : 0;
+    return bottomButtonFactor == 1f ? baseY :
+      baseY + (int) ((float) barHeight * (1f - bottomButtonFactor));
+  }
+
+  private int bottomCover;
+
+  public int getBottomCover () {
+    // The list ends above the bottom inset
+    if (bottomBar == null || bottomWrap == null || bottomWrap.getVisibility() == View.VISIBLE) {
+      return 0;
+    }
+    final int height = Screen.dp(48f);
+    final float detachFactor = scrollToBottomVisible.getFloatValue();
+    final float barCover = (height - getBottomBarY()) * (1f - detachFactor);
+    float searchCover = 0f;
+    if (searchControlsFactor > 0f) {
+      searchCover = needSearchControlsTranslate() ?
+        height - (Screen.dp(49f) + extraBottomInset) * (1f - searchControlsFactor) :
+        height * searchControlsFactor;
+    }
+    return Math.round(Math.max(0f, Math.min(height, Math.max(barCover, searchCover))));
   }
 
   private static final int ANIMATOR_BOTTOM_BUTTON = 12;
