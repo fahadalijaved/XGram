@@ -29,18 +29,17 @@ import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import com.google.android.gms.maps.CameraUpdate;
-import com.google.android.gms.maps.CameraUpdateFactory;
-import com.google.android.gms.maps.GoogleMap;
-import com.google.android.gms.maps.MapView;
-import com.google.android.gms.maps.OnMapReadyCallback;
-import com.google.android.gms.maps.model.BitmapDescriptorFactory;
-import com.google.android.gms.maps.model.CameraPosition;
-import com.google.android.gms.maps.model.LatLng;
-import com.google.android.gms.maps.model.LatLngBounds;
-import com.google.android.gms.maps.model.MapStyleOptions;
-import com.google.android.gms.maps.model.Marker;
-import com.google.android.gms.maps.model.MarkerOptions;
+import org.maplibre.android.annotations.IconFactory;
+import org.maplibre.android.annotations.Marker;
+import org.maplibre.android.annotations.MarkerOptions;
+import org.maplibre.android.camera.CameraPosition;
+import org.maplibre.android.camera.CameraUpdate;
+import org.maplibre.android.camera.CameraUpdateFactory;
+import org.maplibre.android.geometry.LatLng;
+import org.maplibre.android.geometry.LatLngBounds;
+import org.maplibre.android.maps.MapLibreMap;
+import org.maplibre.android.maps.MapView;
+import org.maplibre.android.maps.OnMapReadyCallback;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.Log;
@@ -66,7 +65,8 @@ import java.util.List;
 import me.vkryl.core.lambda.Destroyable;
 import tgx.td.MessageId;
 
-final class MapGoogleController extends MapController<MapView, MapGoogleController.MarkerData> implements OnMapReadyCallback, GoogleMap.OnMyLocationChangeListener, GoogleMap.OnCameraMoveStartedListener, GoogleMap.OnMarkerClickListener {
+final class MapGoogleController extends MapController<MapView, MapGoogleController.MarkerData> implements OnMapReadyCallback, MapLibreMap.OnCameraMoveStartedListener, MapLibreMap.OnMarkerClickListener {
+  // XGram: MapLibre with OpenStreetMap (see XgramMaps), not Google Maps, whose key had to allow this app
   private static final float DEFAULT_ZOOM_LEVEL = 16.0f;
   private static final float CLICK_ZOOM_LEVEL = 17.0f;
 
@@ -76,9 +76,9 @@ final class MapGoogleController extends MapController<MapView, MapGoogleControll
 
   @Override
   protected MapView createMapView (Context context, int marginBottom) {
-    MapView mapView = new MapView(context);
+    MapView mapView = new MapView(context, com.fahadali.xgram.maps.XgramMaps.options(context));
     mapView.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-    mapView.setPadding(0, 0, 0, marginBottom);
+    this.xgramMarginBottom = marginBottom; // applied as the map's padding once it is ready
     return mapView;
   }
 
@@ -93,10 +93,30 @@ final class MapGoogleController extends MapController<MapView, MapGoogleControll
     public Canvas canvas;
     public Bitmap bitmap;
 
-    public MarkerData (Tdlib tdlib, GoogleMap googleMap, LocationPoint<MarkerData> point) {
+    public final LocationPoint<MarkerData> point;
+
+    public MarkerData (Tdlib tdlib, MapLibreMap googleMap, LocationPoint<MarkerData> point) {
       this.tdlib = tdlib;
+      this.point = point;
+      this.map = googleMap;
       marker = googleMap.addMarker(newPoint(point));
-      marker.setTag(point);
+    }
+
+    private final MapLibreMap map;
+
+    /** XGram: MapLibre's markers have no alpha: a finished live location shows a faded copy of its icon. */
+    private void xgramApplyIcon () {
+      if (bitmap == null) {
+        return;
+      }
+      Bitmap icon = bitmap;
+      if (!isActive) {
+        icon = Bitmap.createBitmap(bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
+        Paint paint = new Paint(Paint.FILTER_BITMAP_FLAG);
+        paint.setAlpha((int) (255 * FINISHED_BROADCAST_ALPHA));
+        new Canvas(icon).drawBitmap(bitmap, 0, 0, paint);
+      }
+      marker.setIcon(IconFactory.getInstance(UI.getAppContext()).fromBitmap(icon));
     }
 
     private MarkerOptions newPoint (LocationPoint<MarkerData> point) {
@@ -111,14 +131,12 @@ final class MapGoogleController extends MapController<MapView, MapGoogleControll
         TdApi.File avatar = user != null && user.profilePhoto != null ? user.profilePhoto.small : null;
         bitmap = newBitmap(this, accentColor, letters, avatar);
       } else if (point.isLiveLocation && point.message != null) {
-        opts.zIndex(1f);
         this.isActive = ((TdApi.MessageLiveLocation) point.message.content).expiresIn > 0;
-        opts.alpha(isActive ? 1f : FINISHED_BROADCAST_ALPHA);
         bitmap = newBitmap(this, point.message);
       }
       if (bitmap != null) {
-        opts.icon(BitmapDescriptorFactory.fromBitmap(bitmap));
-        opts.anchor(0.5f, xgram ? com.fahadali.xgram.appearance.XgramR6B7Places.markerAnchorY() : 0.907f); // XGram: the teardrop's tip
+        // XGram: MapLibre puts a marker's bottom centre on the spot (the teardrop's tip is near it)
+        opts.icon(IconFactory.getInstance(UI.getAppContext()).fromBitmap(bitmap));
       }
       return opts;
     }
@@ -278,12 +296,12 @@ final class MapGoogleController extends MapController<MapView, MapGoogleControll
     public void setActive (boolean isActive) {
       if (this.isActive != isActive) {
         this.isActive = isActive;
-        marker.setAlpha(isActive ? 1f : FINISHED_BROADCAST_ALPHA);
+        xgramApplyIcon();
       }
     }
 
     public void remove () {
-      marker.remove();
+      map.removeMarker(marker);
     }
 
     @Override
@@ -322,7 +340,7 @@ final class MapGoogleController extends MapController<MapView, MapGoogleControll
         drawAvatar(canvas, bitmap);
         UI.post(() -> {
           if (isRequested(file)) {
-            marker.setIcon(BitmapDescriptorFactory.fromBitmap(this.bitmap));
+            xgramApplyIcon();
           }
         });
       }
@@ -334,7 +352,7 @@ final class MapGoogleController extends MapController<MapView, MapGoogleControll
 
   @Override
   protected boolean needBackgroundMapInitialization (@NonNull MapView mapView) {
-    return true;
+    return false; // XGram: MapLibre is made on the UI thread
   }
 
   @Override
@@ -349,17 +367,21 @@ final class MapGoogleController extends MapController<MapView, MapGoogleControll
 
   @Override
   protected void resumeMap (@NonNull MapView mapView) {
-    try { mapView.onResume(); } catch (Throwable ignored) { }
+    try { mapView.onStart(); mapView.onResume(); } catch (Throwable ignored) { }
   }
 
   @Override
   protected void pauseMap (@NonNull MapView mapView) {
-    try { mapView.onPause(); } catch (Throwable ignored) { }
+    try { mapView.onPause(); mapView.onStop(); } catch (Throwable ignored) { }
   }
 
   @Override
   protected void destroyMap (@NonNull MapView mapView) {
-    try { mapView.onPause(); } catch (Throwable ignored) { }
+    if (xgramMyLocation != null) {
+      xgramMyLocation.stop();
+      xgramMyLocation = null;
+    }
+    try { mapView.onPause(); mapView.onStop(); } catch (Throwable ignored) { }
     try { mapView.onDestroy(); } catch (Throwable ignored) { }
   }
 
@@ -372,90 +394,48 @@ final class MapGoogleController extends MapController<MapView, MapGoogleControll
   @Override
   protected boolean displayMyLocation (@NonNull MapView mapView) {
     if (googleMap != null) {
-      try {
-        googleMap.setMyLocationEnabled(true);
-        return true;
-      } catch (Throwable ignored) { }
+      if (xgramMyLocation == null) {
+        xgramMyLocation = com.fahadali.xgram.maps.XgramMaps.showMyLocation(context, googleMap, this::onMyLocationChange);
+      }
+      return true;
     }
     return false;
   }
 
-  private GoogleMap googleMap;
+  private MapLibreMap googleMap;
+  private @Nullable com.fahadali.xgram.maps.XgramMaps.MyLocation xgramMyLocation;
+  private int xgramMarginBottom;
 
-  private MapStyleOptions darkMapTheme;
-  private MapStyleOptions getDarkMapTheme () {
-    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-      // XGram M3E: the night map in the dark scheme's surface roles (black with Pure black), built when applied
-      try {
-        return new MapStyleOptions(com.fahadali.xgram.appearance.XgramR6B7Places.nightMapStyle());
-      } catch (Throwable ignored) { }
+  /** XGram: OpenStreetMap has two styles here, light and dark (no satellite or terrain without a paid provider). */
+  private void xgramApplyStyle (int mapType) {
+    if (googleMap != null) {
+      googleMap.setStyle(com.fahadali.xgram.maps.XgramMaps.styleUrl(mapType == Settings.MAP_TYPE_DARK));
     }
-    if (darkMapTheme == null) {
-      darkMapTheme = MapStyleOptions.loadRawResourceStyle(context, R.raw.maps_night);
-    }
-    return darkMapTheme;
   }
 
   @Override
   protected void onApplyMapType (int oldType, int newType) {
-    if (googleMap != null) {
-      if (oldType == Settings.MAP_TYPE_DARK) {
-        try { googleMap.setMapStyle(null); } catch (Throwable ignored) { }
-      } else if (newType == Settings.MAP_TYPE_DARK) {
-        try { googleMap.setMapStyle(getDarkMapTheme()); } catch (Throwable ignored) { }
-      }
-      switch (newType) {
-        case Settings.MAP_TYPE_DEFAULT:
-          googleMap.setMapType(GoogleMap.MAP_TYPE_NORMAL);
-          break;
-        case Settings.MAP_TYPE_DARK:
-          googleMap.setMapType(GoogleMap.MAP_TYPE_NORMAL);
-          break;
-        case Settings.MAP_TYPE_TERRAIN:
-          googleMap.setMapType(GoogleMap.MAP_TYPE_TERRAIN);
-          break;
-        case Settings.MAP_TYPE_HYBRID:
-        case Settings.MAP_TYPE_SATELLITE:
-          googleMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
-          break;
-      }
-    }
+    xgramApplyStyle(newType);
   }
 
   @Override
-  public void onMapReady (GoogleMap googleMap) {
+  public void onMapReady (@NonNull MapLibreMap googleMap) {
     if (isDestroyed()) {
       return;
     }
 
     this.googleMap = googleMap;
 
-    googleMap.getUiSettings().setMyLocationButtonEnabled(false);
-    googleMap.getUiSettings().setZoomControlsEnabled(false);
-    googleMap.getUiSettings().setCompassEnabled(false);
-    googleMap.setOnMyLocationChangeListener(this);
+    com.fahadali.xgram.maps.XgramMaps.setupUi(googleMap, xgramMarginBottom + Screen.dp(4f));
+    googleMap.setPadding(0, 0, 0, xgramMarginBottom);
     googleMap.setOnMarkerClickListener(this);
-
-    googleMap.setOnCameraMoveStartedListener(this);
+    googleMap.addOnCameraMoveStartedListener(this);
 
     if (context.permissions().canAccessLocation()) {
-      try { googleMap.setMyLocationEnabled(true); } catch (Throwable ignored) { }
+      displayMyLocation(mapView());
     }
 
-    switch (mapType()) {
-      case Settings.MAP_TYPE_DEFAULT:
-        break;
-      case Settings.MAP_TYPE_DARK:
-        try { googleMap.setMapStyle(getDarkMapTheme()); } catch (Throwable ignored) { }
-        break;
-      case Settings.MAP_TYPE_TERRAIN:
-        googleMap.setMapType(GoogleMap.MAP_TYPE_TERRAIN);
-        break;
-      case Settings.MAP_TYPE_SATELLITE:
-      case Settings.MAP_TYPE_HYBRID:
-        googleMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
-        break;
-    }
+    xgramApplyStyle(mapType());
 
     List<LocationPoint<MarkerData>> points = pointsOfInterest();
     for (LocationPoint<MarkerData> point : points) {
@@ -478,16 +458,14 @@ final class MapGoogleController extends MapController<MapView, MapGoogleControll
     }
     googleMap.moveCamera(buildCamera(mapView(), null, false, getArgumentsStrict().mode == MODE_DROPPED_PIN));
 
-    mapView().onResume();
+    try { mapView().onStart(); mapView().onResume(); } catch (Throwable ignored) { }
 
     executeScheduledAnimation();
   }
 
   @Override
   protected void onPointOfInterestFocusStateChanged (LocationPoint<MarkerData> point, boolean isFocused) {
-    if (point.data != null) {
-      point.data.marker.setZIndex(isFocused ? 10f : point.isLiveLocation && point.message != null ? 1f : 0f);
-    }
+    // XGram: MapLibre's markers have no z-index
   }
 
   @Override
@@ -541,7 +519,7 @@ final class MapGoogleController extends MapController<MapView, MapGoogleControll
     if (singlePoint != null) {
       CameraPosition.Builder b = new CameraPosition.Builder();
       b.target(new LatLng(singlePoint.latitude, singlePoint.longitude));
-      float zoom = DEFAULT_ZOOM_LEVEL;
+      double zoom = DEFAULT_ZOOM_LEVEL;
       if (specificPoint != null) {
         zoom = Math.max(googleMap.getCameraPosition().zoom, CLICK_ZOOM_LEVEL);
       }
@@ -591,7 +569,7 @@ final class MapGoogleController extends MapController<MapView, MapGoogleControll
       mapHeight = Screen.currentHeight();
     }
 
-    return CameraUpdateFactory.newLatLngBounds(bounds, mapWidth, mapHeight, Screen.dp(82f));
+    return CameraUpdateFactory.newLatLngBounds(bounds, Screen.dp(82f));
   }
 
   private static final double EARTH_RADIUS = 6366198;
@@ -600,9 +578,9 @@ final class MapGoogleController extends MapController<MapView, MapGoogleControll
    * east of startLL
    */
   private static LatLng move(LatLng startLL, double toNorth, double toEast) {
-    double lonDiff = meterToLongitude(toEast, startLL.latitude);
+    double lonDiff = meterToLongitude(toEast, startLL.getLatitude());
     double latDiff = meterToLatitude(toNorth);
-    return new LatLng(startLL.latitude + latDiff, startLL.longitude
+    return new LatLng(startLL.getLatitude() + latDiff, startLL.getLongitude()
       + lonDiff);
   }
 
@@ -633,7 +611,6 @@ final class MapGoogleController extends MapController<MapView, MapGoogleControll
     return false;
   }
 
-  @Override
   public void onMyLocationChange (Location location) {
     Settings.instance().saveLastKnownLocation(location.getLatitude(), location.getLongitude(), location.getAccuracy());
     setMyLocation(location);
@@ -641,8 +618,8 @@ final class MapGoogleController extends MapController<MapView, MapGoogleControll
 
   @Override
   @SuppressWarnings("unchecked")
-  public boolean onMarkerClick (Marker marker) {
-    LocationPoint<MarkerData> point = (LocationPoint<MarkerData>) marker.getTag();
+  public boolean onMarkerClick (@NonNull Marker marker) {
+    LocationPoint<MarkerData> point = xgramPointOf(marker);
     if (point != null) {
       long chatId = 0;
       long messageId = 0;
@@ -663,9 +640,21 @@ final class MapGoogleController extends MapController<MapView, MapGoogleControll
     return true;
   }
 
+  /** XGram: MapLibre's markers carry no tag: the point whose marker it is. */
+  @Nullable
+  private LocationPoint<MarkerData> xgramPointOf (Marker marker) {
+    for (LocationPoint<MarkerData> point : pointsOfInterest()) {
+      if (point.data != null && point.data.marker == marker) {
+        return point;
+      }
+    }
+    LocationPoint<MarkerData> self = myLocation(false);
+    return self != null && self.data != null && self.data.marker == marker ? self : null;
+  }
+
   @Override
   public void onCameraMoveStarted (int reason) {
-    if (reason == REASON_GESTURE) {
+    if (reason == REASON_API_GESTURE) {
       onUserMovedCamera();
     }
   }
@@ -684,9 +673,7 @@ final class MapGoogleController extends MapController<MapView, MapGoogleControll
   protected int[] getAvailableMapTypes () {
     return new int[] {
       Settings.MAP_TYPE_DEFAULT,
-      Settings.MAP_TYPE_DARK,
-      Settings.MAP_TYPE_SATELLITE,
-      Settings.MAP_TYPE_TERRAIN
+      Settings.MAP_TYPE_DARK
     };
   }
 

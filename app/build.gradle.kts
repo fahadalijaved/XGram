@@ -455,11 +455,6 @@ android {
     targetSdk = config.build.targetSdkVersion
     multiDexEnabled = true
 
-    // XGram: Google Maps needs a key that allows com.fahadali.xgram (Telegram X's own only works for Telegram X, the
-    // map stayed blank): local.properties xgram.maps.api.key, else the Android key of google-services.json (its Cloud
-    // project needs Maps SDK for Android turned on), else Telegram X's
-    manifestPlaceholders["xgramMapsApiKey"] = xgramMapsApiKey()
-
     resValue("string", "AppName", config.applicationName)
     resValue("string", "account_type", "${config.applicationId}.sync.account")
     resValue("string", "content_authority", "${config.applicationId}.sync.provider")
@@ -1233,11 +1228,8 @@ dependencies {
     libs.google.play.services.basement.marshmallow,
     libs.google.play.services.basement.latest
   )
-  flavorImplementation(
-    libs.google.play.services.maps.legacy,
-    libs.google.play.services.maps.lollipop,
-    libs.google.play.services.maps.latest
-  )
+  // XGram: maps are MapLibre with OpenStreetMap (no Google Maps key or billing), OpenGL build (the default needs Vulkan)
+  implementation(libs.maplibre.android)
   flavorImplementation(
     libs.google.play.services.location.legacy,
     libs.google.play.services.location.lollipop,
@@ -1365,16 +1357,3 @@ if (!config.isExperimentalBuild) {
   }
 }
 
-/** XGram: the Google Maps key for the manifest (see defaultConfig). */
-fun xgramMapsApiKey(): String {
-  val local = rootDir.resolve("local.properties")
-  if (local.exists()) {
-    local.readLines().map { it.trim() }.firstOrNull { it.startsWith("xgram.maps.api.key=") }
-      ?.substringAfter('=')?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
-  }
-  val services = file("google-services.json")
-  if (services.exists()) {
-    Regex("\"current_key\"\\s*:\\s*\"([^\"]+)\"").find(services.readText())?.groupValues?.get(1)?.let { return it }
-  }
-  return "AIzaSyDzAoJrVB72LgqSZ1LP6Hpp8egGEJVH7PA"
-}

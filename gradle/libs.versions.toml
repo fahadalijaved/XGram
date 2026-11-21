@@ -88,6 +88,7 @@ google-play-integrity-latest = "1.6.0"
 google-play-services-base-latest = "18.11.0"
 google-play-services-basement-latest = "18.12.0"
 google-play-services-maps-latest = "20.0.0"
+maplibre-android = "13.7.1" # XGram: the maps (OpenStreetMap via OpenFreeMap), OpenGL build
 google-play-services-location-latest = "21.4.0"
 google-play-services-safetynet-latest = "18.1.0"
 google-play-services-mlkit-barcode-scanning-latest = "18.3.1"
@@ -156,6 +157,7 @@ google-play-services-mlkit-barcode-scanning-legacy = "16.2.1" # 18.3.0+ requires
 google-mlkit-language-id-legacy = "16.1.1"
 
 [libraries]
+maplibre-android = { module = "org.maplibre.gl:android-sdk-opengl", version.ref = "maplibre-android" }
 desugaring = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugaring" }
 androidx-multidex = { module = "androidx.multidex:multidex", version.ref = "androidx-multidex" }
 

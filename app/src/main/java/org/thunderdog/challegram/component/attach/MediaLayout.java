@@ -35,7 +35,6 @@ import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 import androidx.collection.LongSparseArray;
 
-import com.google.android.gms.maps.MapsInitializer;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.BaseActivity;
@@ -871,14 +870,8 @@ public class MediaLayout extends FrameLayoutFix implements
 
     switch (toIndex) {
       case 3: {
-        boolean googleMapsInstalled;
-        try {
-          MapsInitializer.initialize(getContext());
-          googleMapsInstalled = DeviceUtils.isApplicationInstalled(getContext(), U.PACKAGE_GOOGLE_MAPS, false);
-        } catch (Throwable t) {
-          googleMapsInstalled = false;
-        }
-        if (!googleMapsInstalled) {
+        // XGram: the map is MapLibre (OpenStreetMap), it needs neither Google Maps nor its key (Android 6+)
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.M) {
           ViewController<?> c = UI.getCurrentStackItem(getContext());
           if (c != null) {
             c.openMissingGoogleMapsAlert();

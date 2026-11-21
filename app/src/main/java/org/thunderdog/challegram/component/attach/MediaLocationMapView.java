@@ -39,12 +39,12 @@ import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.LocationSettingsRequest;
 import com.google.android.gms.location.LocationSettingsResult;
 import com.google.android.gms.location.LocationSettingsStatusCodes;
-import com.google.android.gms.maps.CameraUpdate;
-import com.google.android.gms.maps.CameraUpdateFactory;
-import com.google.android.gms.maps.GoogleMap;
-import com.google.android.gms.maps.MapView;
-import com.google.android.gms.maps.OnMapReadyCallback;
-import com.google.android.gms.maps.model.LatLng;
+import org.maplibre.android.camera.CameraUpdate;
+import org.maplibre.android.camera.CameraUpdateFactory;
+import org.maplibre.android.geometry.LatLng;
+import org.maplibre.android.maps.MapLibreMap;
+import org.maplibre.android.maps.MapView;
+import org.maplibre.android.maps.OnMapReadyCallback;
 
 import org.thunderdog.challegram.BaseActivity;
 import org.thunderdog.challegram.Log;
@@ -73,7 +73,7 @@ import me.vkryl.android.AnimatorUtils;
 import me.vkryl.android.widget.FrameLayoutFix;
 import me.vkryl.core.lambda.CancellableRunnable;
 
-public class MediaLocationMapView extends FrameLayoutFix implements OnMapReadyCallback, GoogleMap.OnMyLocationChangeListener, GoogleMap.OnCameraMoveListener, GoogleMap.OnCameraMoveStartedListener, GoogleMap.OnCameraIdleListener, GoogleMap.OnCameraMoveCanceledListener, View.OnClickListener, ActivityPermissionResult {
+public class MediaLocationMapView extends FrameLayoutFix implements OnMapReadyCallback, MapLibreMap.OnCameraMoveListener, MapLibreMap.OnCameraMoveStartedListener, MapLibreMap.OnCameraIdleListener, MapLibreMap.OnCameraMoveCanceledListener, View.OnClickListener, ActivityPermissionResult {
   public interface Callback {
     void onLocationUpdate (Location location, boolean custom, boolean gpsLocated, boolean preventRequest, boolean isSmallZoom);
     void onForcedLocationReset ();
@@ -102,7 +102,8 @@ public class MediaLocationMapView extends FrameLayoutFix implements OnMapReadyCa
   private ImageView pinXView;
   private CircleButton myLocationButton;
 
-  private @Nullable GoogleMap googleMap;
+  private @Nullable MapLibreMap googleMap; // XGram: MapLibre (OpenStreetMap), see XgramMaps
+  private @Nullable com.fahadali.xgram.maps.XgramMaps.MyLocation xgramMyLocation;
 
   public static int getMapHeight (boolean big) {
     int defaultSize = Screen.dp(150f);
@@ -124,7 +125,8 @@ public class MediaLocationMapView extends FrameLayoutFix implements OnMapReadyCa
     FrameLayoutFix.LayoutParams params;
     params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, mapHeight + mapPadding * 2);
     params.topMargin = -mapPadding;
-    mapView = new MapView(getContext()) {
+    com.fahadali.xgram.maps.XgramMaps.init(getContext());
+    mapView = new MapView(getContext(), com.fahadali.xgram.maps.XgramMaps.options(getContext())) {
       @Override
       public boolean onInterceptTouchEvent (MotionEvent ev) {
         switch (ev.getAction()) {
@@ -217,16 +219,9 @@ public class MediaLocationMapView extends FrameLayoutFix implements OnMapReadyCa
       xgramStyle(shadowView, mapHeight);
     }
 
-    // Google Maps initialization
+    // Map initialization (XGram: MapLibre is made on the UI thread)
 
-    Background.instance().post(() -> {
-      try {
-        mapView.onCreate(null);
-      } catch (Throwable ignored) {
-        // initialized google shit
-      }
-      UI.post(() -> initMap());
-    });
+    UI.post(() -> initMap());
   }
 
   @Override
@@ -299,13 +294,9 @@ public class MediaLocationMapView extends FrameLayoutFix implements OnMapReadyCa
     }
   }
 
-  private void xgramStyleMap (GoogleMap googleMap) {
-    if (!xgram) {
-      return;
-    }
-    try {
-      googleMap.setMapStyle(Theme.isDark() ? new com.google.android.gms.maps.model.MapStyleOptions(com.fahadali.xgram.appearance.XgramR6B7Places.nightMapStyle()) : null);
-    } catch (Throwable ignored) { }
+  private void xgramStyleMap (MapLibreMap googleMap) {
+    // XGram: OpenStreetMap's light or dark style, as the theme
+    googleMap.setStyle(com.fahadali.xgram.maps.XgramMaps.styleUrl());
   }
 
   public void setCallback (Callback callback) {
@@ -344,8 +335,8 @@ public class MediaLocationMapView extends FrameLayoutFix implements OnMapReadyCa
     getParent().getParent().requestDisallowInterceptTouchEvent(true);
     if (googleMap != null) {
       LatLng latLng = googleMap.getCameraPosition().target;
-      touchLatitude = latLng.latitude;
-      touchLongitude = latLng.longitude;
+      touchLatitude = latLng.getLatitude();
+      touchLongitude = latLng.getLongitude();
     }
   }
 
@@ -355,7 +346,7 @@ public class MediaLocationMapView extends FrameLayoutFix implements OnMapReadyCa
         return;
       }
       LatLng latLng = googleMap.getCameraPosition().target;
-      if (latLng.latitude == touchLatitude && latLng.longitude == touchLongitude) {
+      if (latLng.getLatitude() == touchLatitude && latLng.getLongitude() == touchLongitude) {
         return;
       }
       setUserMovingLocation(true);
@@ -440,6 +431,7 @@ public class MediaLocationMapView extends FrameLayoutFix implements OnMapReadyCa
   private void pauseMap () {
     try {
       mapView.onPause();
+      mapView.onStop();
     } catch (Throwable ignored) { }
     flags &= ~FLAG_RESUMED;
   }
@@ -448,6 +440,7 @@ public class MediaLocationMapView extends FrameLayoutFix implements OnMapReadyCa
     if ((flags & FLAG_RESUMED) == 0) {
       flags |= FLAG_RESUMED;
       try {
+        mapView.onStart();
         mapView.onResume();
       } catch (Throwable ignored) { }
     }
@@ -468,6 +461,10 @@ public class MediaLocationMapView extends FrameLayoutFix implements OnMapReadyCa
   public void onDestroyMap () {
     if ((flags & FLAG_DESTROYED) == 0) {
       flags |= FLAG_DESTROYED;
+      if (xgramMyLocation != null) {
+        xgramMyLocation.stop();
+        xgramMyLocation = null;
+      }
       try {
         mapView.onDestroy();
       } catch (Throwable ignored) { }
@@ -551,47 +548,42 @@ public class MediaLocationMapView extends FrameLayoutFix implements OnMapReadyCa
       return;
     }
     final LatLng target = googleMap.getCameraPosition().target;
-    final int zoom = MathUtils.clamp(Math.round(googleMap.getCameraPosition().zoom), 13, 20);
+    final int zoom = MathUtils.clamp((int) Math.round(googleMap.getCameraPosition().zoom), 13, 20);
     final int scale = 2;
     final int viewWidth = getMeasuredWidth() > 0 ? getMeasuredWidth() : Screen.currentWidth();
     final int w = MathUtils.clamp(viewWidth / scale, 16, 1024);
     final int h = MathUtils.clamp(xgramMapHeight / scale, 16, 1024);
     final ImageFileRemote file = new ImageFileRemote(xgramTdlib,
-      new TdApi.GetMapThumbnailFile(new TdApi.Location(target.latitude, target.longitude, 0), zoom, w, h, scale, 0),
-      "xgram_still_map_" + target.latitude + "," + target.longitude + "_" + zoom + "_" + w + "x" + h);
+      new TdApi.GetMapThumbnailFile(new TdApi.Location(target.getLatitude(), target.getLongitude(), 0), zoom, w, h, scale, 0),
+      "xgram_still_map_" + target.getLatitude() + "," + target.getLongitude() + "_" + zoom + "_" + w + "x" + h);
     file.setScaleType(ImageFile.CENTER_CROP);
     xgramStillMap.setFile(file);
   }
 
   @Override
-  public void onMapReady (GoogleMap googleMap) {
+  public void onMapReady (@androidx.annotation.NonNull MapLibreMap googleMap) {
     this.googleMap = googleMap;
     pinView.setAlpha(1f);
-    googleMap.setOnMapLoadedCallback(() -> {
-      // XGram: Google's map rendered: the still map goes
-      xgramTilesLoaded = true;
-      if (xgramStillMap != null) {
-        xgramStillMap.setVisibility(View.GONE);
+    mapView.addOnDidFinishRenderingMapListener(fully -> {
+      // XGram: the map rendered: the still map goes
+      if (fully && !xgramTilesLoaded) {
+        xgramTilesLoaded = true;
+        if (xgramStillMap != null) {
+          xgramStillMap.setVisibility(View.GONE);
+        }
       }
     });
+    com.fahadali.xgram.maps.XgramMaps.setupUi(googleMap, Screen.dp(4f));
     xgramStyleMap(googleMap); // XGram
 
-    try {
-      if (checkLocationPermission()) {
-        googleMap.setMyLocationEnabled(true);
-      }
-    } catch (Throwable t) {
-      Log.e("No access to Google Play Services", t);
+    if (checkLocationPermission()) {
+      xgramEnableMyLocation();
     }
 
-    googleMap.getUiSettings().setMyLocationButtonEnabled(false);
-    googleMap.getUiSettings().setZoomControlsEnabled(false);
-    googleMap.getUiSettings().setCompassEnabled(false);
-    googleMap.setOnMyLocationChangeListener(this);
-    googleMap.setOnCameraMoveListener(this);
-    googleMap.setOnCameraMoveStartedListener(this);
-    googleMap.setOnCameraIdleListener(this);
-    googleMap.setOnCameraMoveCanceledListener(this);
+    googleMap.addOnCameraMoveListener(this);
+    googleMap.addOnCameraMoveStartedListener(this);
+    googleMap.addOnCameraIdleListener(this);
+    googleMap.addOnCameraMoveCancelListener(this);
 
     if (currentLocation == null) {
       Location currentLocation = MediaLocationFinder.instance().getLastKnownLocation();
@@ -600,7 +592,7 @@ public class MediaLocationMapView extends FrameLayoutFix implements OnMapReadyCa
       } else {
         double latitude = 45.924197260584734;
         double longitude = 6.870443522930145;
-        float zoomLevel = googleMap.getMinZoomLevel();
+        float zoomLevel = (float) googleMap.getMinZoomLevel();
         Settings.LastLocation location = Settings.instance().getViewedLocation();
         if (location != null) {
           latitude = location.latitude;
@@ -620,17 +612,17 @@ public class MediaLocationMapView extends FrameLayoutFix implements OnMapReadyCa
     if (googleMap != null) {
       if (currentLocation == null) {
         currentLocation = new Location("network");
-        currentLocation.setLatitude(googleMap.getCameraPosition().target.latitude);
-        currentLocation.setLongitude(googleMap.getCameraPosition().target.longitude);
+        currentLocation.setLatitude(googleMap.getCameraPosition().target.getLatitude());
+        currentLocation.setLongitude(googleMap.getCameraPosition().target.getLongitude());
       }
       if (currentLocation != null) {
-        Settings.instance().setViewedLocation(currentLocation.getLatitude(), currentLocation.getLongitude(), googleMap.getCameraPosition().zoom);
+        Settings.instance().setViewedLocation(currentLocation.getLatitude(), currentLocation.getLongitude(), (float) googleMap.getCameraPosition().zoom);
       }
     }
   }
 
   private float defaultZoomLevel () {
-    return googleMap == null ? -1 : userForcedLocation ? googleMap.getMaxZoomLevel() - 3 : googleMap.getMaxZoomLevel() - 5;
+    return googleMap == null ? -1 : (float) (userForcedLocation ? googleMap.getMaxZoomLevel() - 3 : googleMap.getMaxZoomLevel() - 5);
   }
 
   private void positionMarker (Location location) {
@@ -746,9 +738,7 @@ public class MediaLocationMapView extends FrameLayoutFix implements OnMapReadyCa
       return;
     }
 
-    if (googleMap != null) {
-      googleMap.setMyLocationEnabled(true);
-    }
+    xgramEnableMyLocation();
 
     if (noGoogleApiClient) {
       locationPointView.setShowProgress(false);
@@ -886,7 +876,7 @@ public class MediaLocationMapView extends FrameLayoutFix implements OnMapReadyCa
         if (ignoreMyLocation) {
           setShowMyLocationButton(true);
           if (callback != null) {
-            callback.onLocationUpdate(currentLocation, true, lastMyLocation != null, userMovingLocation || userForcedLocation, googleMap == null || isSmallZoom(googleMap.getCameraPosition().zoom));
+            callback.onLocationUpdate(currentLocation, true, lastMyLocation != null, userMovingLocation || userForcedLocation, googleMap == null || isSmallZoom((float) googleMap.getCameraPosition().zoom));
           }
         }
       }
@@ -917,7 +907,14 @@ public class MediaLocationMapView extends FrameLayoutFix implements OnMapReadyCa
     }
   }
 
-  @Override
+  /** XGram: the my location dot and its fixes (Google Maps' setMyLocationEnabled and OnMyLocationChangeListener). */
+  private void xgramEnableMyLocation () {
+    if (googleMap == null || xgramMyLocation != null || (flags & FLAG_DESTROYED) != 0) {
+      return;
+    }
+    xgramMyLocation = com.fahadali.xgram.maps.XgramMaps.showMyLocation(getContext(), googleMap, this::onMyLocationChange);
+  }
+
   public void onMyLocationChange (Location location) {
     lastMyLocation = location;
     if (location != null) {
@@ -935,8 +932,8 @@ public class MediaLocationMapView extends FrameLayoutFix implements OnMapReadyCa
     if (userMovingLocation && googleMap != null) {
       LatLng latLng = googleMap.getCameraPosition().target;
       Location location = new Location("network");
-      location.setLatitude(latLng.latitude);
-      location.setLongitude(latLng.longitude);
+      location.setLatitude(latLng.getLatitude());
+      location.setLongitude(latLng.getLongitude());
       currentLocation = location;
       setShowMyLocationButton(true);
       if (callback != null) {

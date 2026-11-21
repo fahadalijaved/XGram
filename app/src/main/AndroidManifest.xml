@@ -3,6 +3,9 @@
   xmlns:tools="http://schemas.android.com/tools"
   android:installLocation="auto">
 
+  <!-- XGram: MapLibre needs Android 6; older builds don't open the map (MediaLayout) -->
+  <uses-sdk tools:overrideLibrary="org.maplibre.android" />
+
   <uses-feature
     android:glEsVersion="0x00020000"
     android:required="true" />
@@ -261,13 +264,6 @@
         android:resource="@xml/syncadapter" />
     </service>
 
-    <meta-data
-      android:name="com.google.android.maps.v2.API_KEY"
-      android:value="${xgramMapsApiKey}" />
-
-    <uses-library
-      android:name="com.google.android.maps"
-      android:required="false" />
     <uses-library
       android:name="org.apache.http.legacy"
       android:required="false" />
