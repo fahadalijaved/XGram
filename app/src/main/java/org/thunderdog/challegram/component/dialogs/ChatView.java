@@ -788,11 +788,18 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
     }
   }
 
+  private int lastAvatarLeft = -1, lastAvatarTop, lastAvatarSize; // only moved avatars are laid out again
+
   private void layoutReceiver () {
     final Metrics m = xgramMetrics();
     final int size = Math.round(m.avatar), avatarLeft = Math.round(m.avatarLeft), top = Math.round(m.avatarTop);
     int left = Lang.rtl() ? getMeasuredWidth() - avatarLeft - size : avatarLeft;
-    avatarReceiver.setBounds(left, top, left + size, top + size);
+    if (left != lastAvatarLeft || top != lastAvatarTop || size != lastAvatarSize) {
+      lastAvatarLeft = left;
+      lastAvatarTop = top;
+      lastAvatarSize = size;
+      avatarReceiver.setBounds(left, top, left + size, top + size);
+    }
     avatarReceiver.xgramSetBadgeScale(m.badgeScale); // XGram: the online dot follows the smaller one line photo
   }
 
