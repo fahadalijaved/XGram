@@ -116,7 +116,7 @@ final class MapGoogleController extends MapController<MapView, MapGoogleControll
         paint.setAlpha((int) (255 * FINISHED_BROADCAST_ALPHA));
         new Canvas(icon).drawBitmap(bitmap, 0, 0, paint);
       }
-      marker.setIcon(IconFactory.getInstance(UI.getAppContext()).fromBitmap(icon));
+      marker.setIcon(IconFactory.getInstance(UI.getContext()).fromBitmap(icon));
     }
 
     private MarkerOptions newPoint (LocationPoint<MarkerData> point) {
@@ -136,7 +136,7 @@ final class MapGoogleController extends MapController<MapView, MapGoogleControll
       }
       if (bitmap != null) {
         // XGram: MapLibre puts a marker's bottom centre on the spot (the teardrop's tip is near it)
-        opts.icon(IconFactory.getInstance(UI.getAppContext()).fromBitmap(bitmap));
+        opts.icon(IconFactory.getInstance(UI.getContext()).fromBitmap(bitmap));
       }
       return opts;
     }
