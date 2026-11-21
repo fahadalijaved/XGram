@@ -3451,7 +3451,10 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
     if (disallow && com.fahadali.xgram.XgramSettings.instance().allowScreenshots() && !Passcode.instance().shouldDisallowScreenshots()) {
       disallow = false; // XGram: screenshots in protected and secret chats (your own passcode setting still applies)
     }
-    setWindowFlags(disallow ? WindowManager.LayoutParams.FLAG_SECURE : 0, WindowManager.LayoutParams.FLAG_SECURE);
+    int flag = WindowManager.LayoutParams.FLAG_SECURE;
+    if (BitwiseUtils.hasFlag(getWindow().getAttributes().flags, flag) != disallow) {
+      setWindowFlags(disallow ? flag : 0, flag);
+    }
   }
 
   public interface ActivityListener {

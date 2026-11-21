@@ -810,7 +810,10 @@ public class UI {
 
   public static void setSoftInputMode (BaseActivity context, int inputMode) {
     if (context != null) {
-      context.getWindow().setSoftInputMode(inputMode);
+      Window window = context.getWindow();
+      if (window.getAttributes().softInputMode != inputMode) {
+        window.setSoftInputMode(inputMode);
+      }
     }
   }
 
