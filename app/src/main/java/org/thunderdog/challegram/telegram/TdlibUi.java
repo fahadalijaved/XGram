@@ -330,6 +330,9 @@ public class TdlibUi extends Handler {
 
     final String name = tdlib.senderName(senderId, true);
     final CharSequence text = Lang.pluralBold(R.string.QDeleteXMessagesFromY, deletingMessages.length, name);
+    final int banString = senderId.getConstructor() == TdApi.MessageSenderUser.CONSTRUCTOR ?
+      R.string.RestrictUser :
+      tdlib.isChannel(Td.getSenderId(senderId)) ? R.string.BanChannel : R.string.BanChat;
 
     final SettingsWrapBuilder builder = new SettingsWrapBuilder(R.id.btn_deleteSupergroupMessages);
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
@@ -342,14 +345,23 @@ public class TdlibUi extends Handler {
     }
     SettingsWrap wrap = context.showSettings(builder.setRawItems(
       new ListItem[] {
-        new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.btn_banMember, 0, senderId.getConstructor() == TdApi.MessageSenderUser.CONSTRUCTOR ? R.string.RestrictUser : tdlib.isChannel(((TdApi.MessageSenderChat) senderId).chatId) ? R.string.BanChannel : R.string.BanChat, false),
+        new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.btn_banMember, 0, banString, false),
         new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.btn_reportSpam, 0, R.string.ReportSpam, false),
         new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.btn_deleteAll, 0, Lang.getStringBold(R.string.DeleteAllFrom, name), false)
+      }).setOnSettingItemClick((view, settingsId, item, doneButton, adapter, window) -> {
+        boolean blockForever = adapter.getCheckIntResults().get(R.id.btn_reportSpam) != 0 &&
+          adapter.getCheckIntResults().get(R.id.btn_deleteAll) != 0;
+        int banIndex = adapter.indexOfViewById(R.id.btn_banMember);
+        int banLabel = blockForever ? R.string.BlockForever : banString;
+        if (banIndex != -1 && adapter.getItem(banIndex).setStringIfChanged(banLabel)) {
+          adapter.updateValuedSettingByPosition(banIndex);
+        }
       }).setIntDelegate((id, result) -> {
         if (id == R.id.btn_deleteSupergroupMessages) {
           boolean banUser = result.get(R.id.btn_banMember) != 0;
           boolean reportSpam = result.get(R.id.btn_reportSpam) != 0;
           boolean deleteAll = result.get(R.id.btn_deleteAll) != 0;
+          boolean blockForever = reportSpam && deleteAll;
 
           final long[] messageIds = TdExt.toMessageIdsMap(deletingMessages).valueAt(0);
 
@@ -357,6 +369,19 @@ public class TdlibUi extends Handler {
             tdlib.send(new TdApi.GetChatMember(chatId, senderId), (member, error) -> {
               if (error != null) {
                 UI.showError(error);
+              } else if (blockForever) {
+                TdApi.ChatMemberStatus bannedForever = new TdApi.ChatMemberStatusBanned();
+                tdlib.setChatMemberStatus(
+                  chatId,
+                  senderId,
+                  bannedForever,
+                  member.status,
+                  (isBanned, banError, failedToAddMember) -> {
+                    if (banError != null) {
+                      UI.showError(banError);
+                    }
+                  }
+                );
               } else {
                 context.runOnUiThreadOptional(() -> {
                   TdApi.ChatMemberStatus myStatus = tdlib.chatStatus(chatId);
