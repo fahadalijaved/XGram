@@ -1470,13 +1470,6 @@ public class SettingsNotificationController extends RecyclerViewController<Setti
         items.add(pinnedMessagesInfo = new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, !tdlib.notifications().arePinnedMessagesDisabled(customChatId) ? R.string.PinnedMessagesOff : R.string.PinnedMessagesOn));
       }
     } else {
-      if (scope == null && !com.fahadali.xgram.call.XgramFullScreenCalls.allowed(context())) {
-        // XGram: calls that come while XGram is closed ring full screen only with this allowed (Android 14+)
-        items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
-        items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramFullScreenCalls, R.drawable.baseline_call_24, R.string.XgramFullScreenCallsRow).setTextColorId(ColorId.textNegative));
-        items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
-        items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramFullScreenCallsRowInfo));
-      }
       if (scope != null) {
         items.add(new ListItem(getSnoozeViewType(), R.id.btn_notifications_snooze, 0, R.string.NotificationsSetting));
         items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
@@ -1693,7 +1686,6 @@ public class SettingsNotificationController extends RecyclerViewController<Setti
     tdlib.listeners().subscribeToSettingsUpdates(this);
     tdlib.settings().addNotificationProblemAvailabilityChangeListener(this);
     tdlib.context().global().addTokenStateListener(this);
-    com.fahadali.xgram.call.XgramFullScreenCalls.addListener(xgramFullScreenCallsListener); // XGram
     if (customChatId != 0) {
       tdlib.listeners().subscribeToChatUpdates(customChatId, this);
     }
@@ -1704,20 +1696,6 @@ public class SettingsNotificationController extends RecyclerViewController<Setti
     }
   }
 
-  // XGram: allowed on Android's page (read again on resume): the full-screen calls row and its frame go at once
-  private final com.fahadali.xgram.call.XgramFullScreenCalls.Listener xgramFullScreenCallsListener = off -> {
-    if (off || adapter == null || isDestroyed()) {
-      return;
-    }
-    final int index = adapter.indexOfViewById(R.id.btn_xgramFullScreenCalls);
-    final List<ListItem> items = adapter.getItems();
-    if (index >= 1 && index + 2 < items.size() &&
-      items.get(index - 1).getViewType() == ListItem.TYPE_SHADOW_TOP &&
-      items.get(index + 1).getViewType() == ListItem.TYPE_SHADOW_BOTTOM &&
-      items.get(index + 2).getViewType() == ListItem.TYPE_DESCRIPTION) {
-      adapter.removeRange(index - 1, 4);
-    }
-  };
 
   private final DrawModifier callChannelProblemModifier =
     new EndIconModifier(R.drawable.baseline_error_24, ColorId.iconNegative);
@@ -2117,10 +2095,6 @@ public class SettingsNotificationController extends RecyclerViewController<Setti
     if (item == null)
       return;
     final int viewId = v.getId();
-    if (viewId == R.id.btn_xgramFullScreenCalls) {
-      com.fahadali.xgram.call.XgramFullScreenCalls.openSettings(context()); // XGram
-      return;
-    }
     if (item.getViewType() == ListItem.TYPE_CHECKBOX_OPTION_WITH_AVATAR) {
       TdlibAccount selectedAccount = (TdlibAccount) item.getData();
       if (item.isSelected() && tdlib.context().getNumberOfAccountsWithEnabledNotifications() == 1) {
@@ -3214,7 +3188,6 @@ public class SettingsNotificationController extends RecyclerViewController<Setti
     tdlib.listeners().unsubscribeFromSettingsUpdates(this);
     tdlib.settings().removeNotificationProblemAvailabilityChangeListener(this);
     tdlib.context().global().removeTokenStateListener(this);
-    com.fahadali.xgram.call.XgramFullScreenCalls.removeListener(xgramFullScreenCallsListener); // XGram
     if (customChatId != 0) {
       tdlib.listeners().unsubscribeFromChatUpdates(customChatId, this);
     }

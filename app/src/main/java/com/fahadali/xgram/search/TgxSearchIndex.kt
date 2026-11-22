@@ -125,6 +125,7 @@ internal object TgxSearchIndex {
   private lateinit var devices: TgxPage
   private lateinit var websites: TgxPage
   private lateinit var notifications: TgxPage
+  private lateinit var calls: TgxPage
   private lateinit var archive: TgxPage
   private lateinit var data: TgxPage
   private lateinit var storage: TgxPage
@@ -174,6 +175,10 @@ internal object TgxSearchIndex {
     notifications = page(
       "notif", R.string.Notifications, R.drawable.baseline_notifications_24, settings, RowRef(R.id.btn_notificationSettings),
       kw = kw(R.string.XgramSearchKwNotify), open = push { TgxSearchOpen.notifications(it.context, it.tdlib) }
+    )
+    calls = page(
+      "calls", R.string.Calls, R.drawable.baseline_call_settings_24, settings, RowRef(R.id.btn_callSettings),
+      kw = kw(R.string.XgramSearchKwCalls), open = push { TgxSearchOpen.callSettings(it.context, it.tdlib) }
     )
     val scopeTitles = intArrayOf(R.string.PrivateChats, R.string.Groups, R.string.Channels)
     val scopeIcons = intArrayOf(R.drawable.baseline_person_24, R.drawable.baseline_group_24, R.drawable.baseline_bullhorn_24)
@@ -305,6 +310,7 @@ internal object TgxSearchIndex {
     row(s, "settings/xgram", R.string.XgramSettings, null, R.drawable.baseline_stars_24, kw = kw(R.string.XgramSearchKwXgram),
       open = push { XgramSettingsPages.main(it.context, it.tdlib) })
     entry(s, "settings/notifications", notifications)
+    entry(s, "settings/calls", calls)
     entry(s, "settings/data", data)
     entry(s, "settings/privacy", privacy)
     entry(s, "settings/stickers", stickers)

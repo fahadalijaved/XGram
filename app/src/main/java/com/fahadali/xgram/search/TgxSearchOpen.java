@@ -99,6 +99,13 @@ public final class TgxSearchOpen {
     return new SettingsNotificationController(context, tdlib);
   }
 
+  /** Calls (Telegram X splits them off Notifications). */
+  public static ViewController<?> callSettings (Context context, Tdlib tdlib) {
+    SettingsNotificationController c = new SettingsNotificationController(context, tdlib);
+    c.setArguments(new SettingsNotificationController.Args(SettingsNotificationController.Section.CALLS, 0));
+    return c;
+  }
+
   /** 0: private chats, 1: groups, 2: channels. */
   public static ViewController<?> notificationScope (Context context, Tdlib tdlib, int which) {
     SettingsNotificationController c = new SettingsNotificationController(context, tdlib);
