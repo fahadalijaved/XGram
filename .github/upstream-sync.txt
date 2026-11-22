@@ -7,4 +7,4 @@
 # e1d2ca92 (fingerprint on Android 6-9; XGram needs 13+), bb5760d2 (CI keeps the named mapping copy), d19b68f0 (tests).
 # 1d007c42 taken only for its Icons bitmap helper.
 telegram-x df631baa91ca0dcc16fae02846209d85e5fd560a
-tdlib 04778b955707881a253a7c9720f47fe5233f39ab
+tdlib 6a95495d2dff13253f26aec8effc42a4c6ebb12b
