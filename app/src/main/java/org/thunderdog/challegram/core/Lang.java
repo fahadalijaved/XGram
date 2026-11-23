@@ -1311,6 +1311,7 @@ public class Lang {
       case TdApi.MessageUpgradedGift.CONSTRUCTOR:
       case TdApi.MessageUpgradedGiftPurchaseOffer.CONSTRUCTOR:
       case TdApi.MessageUpgradedGiftPurchaseOfferRejected.CONSTRUCTOR:
+      case TdApi.MessageUpgradedGiftOnChainPurchaseOffer.CONSTRUCTOR:
       case TdApi.MessageStakeDice.CONSTRUCTOR:
       case TdApi.MessageRefundedUpgradedGift.CONSTRUCTOR:
       case TdApi.MessagePremiumGiftCode.CONSTRUCTOR:
@@ -1378,6 +1379,7 @@ public class Lang {
       case TdApi.MessageChatOwnerChanged.CONSTRUCTOR:
       case TdApi.MessageChatOwnerLeft.CONSTRUCTOR:
       case TdApi.MessageManagedBotCreated.CONSTRUCTOR:
+      case TdApi.MessageBotInvite.CONSTRUCTOR:
       case TdApi.MessagePollOptionAdded.CONSTRUCTOR:
       case TdApi.MessagePollOptionDeleted.CONSTRUCTOR:
       case TdApi.MessageChatAddedToCommunity.CONSTRUCTOR:
@@ -1388,7 +1390,7 @@ public class Lang {
       case TdApi.MessageWidget.CONSTRUCTOR:
         break;
       default:
-        Td.assertMessageContent_37851fea();
+        Td.assertMessageContent_e4738066();
         throw Td.unsupported(message.content);
     }
     if (format == null) {

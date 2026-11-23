@@ -1946,6 +1946,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
       case TdApi.InternalLinkTypePremiumFeaturesPage.CONSTRUCTOR:
       case TdApi.InternalLinkTypePremiumGiftPurchase.CONSTRUCTOR:
       case TdApi.InternalLinkTypeRequestManagedBot.CONSTRUCTOR:
+      case TdApi.InternalLinkTypeBotInvite.CONSTRUCTOR:
       case TdApi.InternalLinkTypeSavedMessages.CONSTRUCTOR:
       case TdApi.InternalLinkTypeSearch.CONSTRUCTOR:
       case TdApi.InternalLinkTypeStarPurchase.CONSTRUCTOR:
@@ -2004,7 +2005,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
       }
 
       default:
-        Td.assertInternalLinkType_c232a5d5();
+        Td.assertInternalLinkType_166bd314();
         break;
     }
     return true;
