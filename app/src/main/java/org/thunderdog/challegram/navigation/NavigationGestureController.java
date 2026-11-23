@@ -104,6 +104,10 @@ public class NavigationGestureController implements GestureDetector.OnGestureLis
         gestureDetector.onTouchEvent(event);
         return true;
       }
+      case MotionEvent.ACTION_CANCEL: {
+        gestureDetector.onTouchEvent(event);
+        return onTouchCancel();
+      }
       default: {
         return gestureDetector.onTouchEvent(event);
       }
@@ -172,6 +176,16 @@ public class NavigationGestureController implements GestureDetector.OnGestureLis
       return ((android.view.View) view.getParent()).getMeasuredWidth();
     }
     return view.getMeasuredWidth();
+  }
+
+  private boolean onTouchCancel () {
+    if (slidingBack) {
+      target().closePreview(0f); // XGram: the pane the gesture acts on
+    } else if (slidingDrawer && drawer != null) {
+      drawer.drop();
+    }
+    clear(true);
+    return false;
   }
 
   public boolean onDown (MotionEvent event) {
