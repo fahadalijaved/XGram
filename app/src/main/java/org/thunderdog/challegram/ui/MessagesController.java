@@ -8479,6 +8479,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     xgramSideTabs.setLayoutParams(sideParams);
     xgramSideTabs.xgramSetFloating(floating);
     xgramSideTabs.xgramSetBottomInset(full ? xgramLastBottomInset : 0);
+    xgramSideTabs.xgramSetBottomCut(floating ? Math.round(getReplyOffset() + getAttachedFilesOffset() + xgramUndoBarOffset()) : 0);
 
     // The composer and everything along the bottom sit beside the full-height column
     final int inset = xgramRailInset();
@@ -8871,6 +8872,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
     bottomShadowView.setTranslationY(y + offset + keyboardOffset + xgramUndoOffset);
     if (replyBarView != null) {
       replyBarView.setTranslationY(y + keyboardOffset);
+    }
+    if (xgramSideTabs != null) {
+      // XGram: the floating topic tabs end above the reply preview, attached files and the Undo send bar (the reply's X stays reachable)
+      xgramSideTabs.xgramSetBottomCut(xgramRailFloating() ? Math.round(-(y + offset + xgramUndoOffset)) : 0);
     }
     if (xgramUndoBar != null) {
       // Hidden with the message box (in-chat search, a Join button instead of the box): out of sight and out of reach

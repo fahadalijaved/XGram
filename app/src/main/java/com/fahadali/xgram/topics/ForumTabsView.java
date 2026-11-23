@@ -19,6 +19,7 @@ import android.graphics.drawable.Drawable;
 import android.text.TextPaint;
 import android.text.TextUtils;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 
@@ -163,7 +164,7 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
       setOutlineProvider(new android.view.ViewOutlineProvider() {
         @Override
         public void getOutline (View view, android.graphics.Outline outline) {
-          outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), radius);
+          outline.setRoundRect(0, 0, view.getWidth(), Math.max(0, view.getHeight() - xgramBottomCut), radius);
         }
       });
       setClipToOutline(true);
@@ -182,8 +183,33 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
   public void xgramSetBottomInset (int inset) {
     if (vertical && xgramBottomInset != inset) {
       xgramBottomInset = inset;
-      setPadding(getPaddingLeft(), getPaddingTop(), getPaddingRight(), Screen.dp(8f) + inset);
+      setPadding(getPaddingLeft(), getPaddingTop(), getPaddingRight(), Screen.dp(8f) + inset + xgramBottomCut);
     }
+  }
+
+  // XGram: the floating card ends above what slides in over the composer's top (the reply or edit preview, attached
+  // files, the Undo send bar), so their start (the reply's X) isn't covered. Each step of their slide only reshapes the
+  // card (its outline) and lets touches there through; the tabs' scroll room follows once the slide rests.
+  private int xgramBottomCut;
+  private final Runnable xgramApplyCutPadding = () -> setPadding(getPaddingLeft(), getPaddingTop(), getPaddingRight(), Screen.dp(8f) + xgramBottomInset + xgramBottomCut);
+
+  public void xgramSetBottomCut (int cut) {
+    if (!vertical || xgramBottomCut == cut) {
+      return;
+    }
+    xgramBottomCut = cut;
+    invalidateOutline();
+    invalidate();
+    removeCallbacks(xgramApplyCutPadding);
+    postDelayed(xgramApplyCutPadding, 48);
+  }
+
+  @Override
+  public boolean dispatchTouchEvent (MotionEvent e) {
+    if (xgramBottomCut > 0 && e.getActionMasked() == MotionEvent.ACTION_DOWN && e.getY() >= getHeight() - xgramBottomCut) {
+      return false; // under the cut: the bar there takes it
+    }
+    return super.dispatchTouchEvent(e);
   }
 
   /** XGram M3E: redraws the fill and the fades in the app bar's current colour (see {@link #xgramSetAppBarColor}). */
