@@ -27,4 +27,9 @@
   <string name="XgramSftpConnected">Connected to %1$s</string>
   <string name="XgramSftpPasswordRemove">Remove the saved password</string>
   <string name="XgramSftpNotStored">The password or key couldn\'t be stored securely, so the server wasn\'t saved.</string>
+  <string name="XgramFilesGoTo">Go to path</string>
+  <string name="XgramFilesGoToOpen">Open</string>
+  <string name="XgramFilesGoToServerHint">Folder or file on the server, like /srv/projects</string>
+  <string name="XgramFilesGoToPhoneHint">Folder or file on the phone, like /storage/emulated/0/Download</string>
+  <string name="XgramFilesGoToMissing">Nothing at that path</string>
 </resources>

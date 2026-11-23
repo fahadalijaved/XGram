@@ -110,14 +110,24 @@ public class MediaBottomFilesController extends MediaBottomBaseController<Void> 
   public void onMenuItemPressed (int id, View view) {
     if (id == R.id.menu_btn_more) {
       // XGram: Other apps (Android's picker, as before) and Arrange this list
-      if (!stack.isEmpty()) {
+      // XGram: Go to path, to paste a folder or a file's path instead of opening folder by folder (on an SFTP server
+      // inside one of its folders, else on the phone)
+      final String current = stack.isEmpty() ? null : getLastPath(1);
+      final boolean canGoTo = current == null || current.startsWith(KEY_SFTP) || current.startsWith("/");
+      if (!stack.isEmpty() && !canGoTo) {
         showSystemPicker(false);
         return;
       }
-      showOptions(null, new int[] {R.id.btn_xgramFilesOtherApps, R.id.btn_xgramFilesArrange},
-        new String[] {Lang.getString(R.string.XgramFilesOtherApps), Lang.getString(R.string.XgramFilesArrange)},
-        null, new int[] {R.drawable.baseline_cloud_24, R.drawable.baseline_sort_24}, (itemView, optionId) -> {
-          if (optionId == R.id.btn_xgramFilesOtherApps) {
+      final boolean atRoot = stack.isEmpty();
+      showOptions(null,
+        atRoot ? new int[] {R.id.btn_xgramFilesGoTo, R.id.btn_xgramFilesOtherApps, R.id.btn_xgramFilesArrange} : new int[] {R.id.btn_xgramFilesGoTo, R.id.btn_xgramFilesOtherApps},
+        atRoot ? new String[] {Lang.getString(R.string.XgramFilesGoTo), Lang.getString(R.string.XgramFilesOtherApps), Lang.getString(R.string.XgramFilesArrange)} : new String[] {Lang.getString(R.string.XgramFilesGoTo), Lang.getString(R.string.XgramFilesOtherApps)},
+        null,
+        atRoot ? new int[] {R.drawable.baseline_edit_24, R.drawable.baseline_cloud_24, R.drawable.baseline_sort_24} : new int[] {R.drawable.baseline_edit_24, R.drawable.baseline_cloud_24},
+        (itemView, optionId) -> {
+          if (optionId == R.id.btn_xgramFilesGoTo) {
+            xgramGoTo(current);
+          } else if (optionId == R.id.btn_xgramFilesOtherApps) {
             showSystemPicker(false);
           } else if (optionId == R.id.btn_xgramFilesArrange) {
             xgramArrange();
@@ -125,6 +135,65 @@ public class MediaBottomFilesController extends MediaBottomBaseController<Void> 
           return true;
         });
     }
+  }
+
+  /**
+   * XGram: Go to path. {@code current} is the folder on screen: an SFTP server's ("sftp://id\nfolder") pastes a path on
+   * that server, anything else a path on the phone. A folder opens; a file is picked and sent, as a tap on it would.
+   */
+  private void xgramGoTo (@Nullable String current) {
+    final boolean sftp = current != null && current.startsWith(KEY_SFTP);
+    final String serverId = sftp ? current.substring(KEY_SFTP.length(), current.indexOf('\n')) : null;
+    final String folder = sftp ? current.substring(current.indexOf('\n') + 1) : current;
+    openInputAlert(Lang.getString(R.string.XgramFilesGoTo), Lang.getString(sftp ? R.string.XgramFilesGoToServerHint : R.string.XgramFilesGoToPhoneHint), R.string.XgramFilesGoToOpen, R.string.Cancel, folder, (inputView, result) -> {
+      final String typed = result.trim();
+      if (typed.isEmpty()) {
+        return false;
+      }
+      if (sftp) {
+        final com.fahadali.xgram.files.XgramSftp.Server server = com.fahadali.xgram.files.XgramSftp.server(serverId);
+        if (server == null) {
+          return true;
+        }
+        xgramNetworkQueue.execute(() -> {
+          final com.fahadali.xgram.files.XgramSftp.Entry entry;
+          try {
+            entry = com.fahadali.xgram.files.XgramSftp.stat(server, typed);
+          } catch (Throwable t) {
+            UI.post(() -> UI.showToast(R.string.XgramFilesGoToMissing, Toast.LENGTH_SHORT));
+            return;
+          }
+          UI.post(() -> {
+            if (isDestroyed()) {
+              return;
+            }
+            if (entry.folder) {
+              navigateInside(recyclerView, KEY_SFTP + server.id + "\n" + entry.path, null);
+            } else {
+              xgramPick(createItem(context, tdlib, com.fahadali.xgram.files.XgramSftp.path(server, entry), R.drawable.baseline_insert_drive_file_24, entry.name, Strings.buildSize(entry.size)));
+            }
+          });
+        });
+      } else {
+        final File file = new File(typed);
+        if (!file.exists() || !file.canRead()) {
+          UI.showToast(R.string.XgramFilesGoToMissing, Toast.LENGTH_SHORT);
+          return false;
+        }
+        if (file.isDirectory()) {
+          navigateInside(recyclerView, KEY_FOLDER + file.getAbsolutePath(), null);
+        } else {
+          xgramPick(createItem(context, tdlib, file, null));
+        }
+      }
+      return true;
+    }, true);
+  }
+
+  private void xgramPick (InlineResult<?> result) {
+    final ArrayList<InlineResult<?>> results = new ArrayList<>(1);
+    results.add(result);
+    mediaLayout.getFilesControllerDelegate().onFilesSelected(results, false);
   }
 
   private void showSystemPicker (boolean forceDownloads) {

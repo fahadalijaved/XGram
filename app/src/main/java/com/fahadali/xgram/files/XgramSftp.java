@@ -494,6 +494,28 @@ public final class XgramSftp {
     return entries;
   }
 
+  /**
+   * A typed or pasted path on the server, resolved ("~" and relative paths start at the user's home, links are
+   * followed): a folder or a file. Throws when there is nothing at that path.
+   */
+  @WorkerThread
+  public static Entry stat (Server server, String path) throws Exception {
+    String p = path.trim();
+    if (p.equals("~")) {
+      p = ".";
+    } else if (p.startsWith("~/")) {
+      p = "." + p.substring(1);
+    }
+    synchronized (LIST_LOCK) {
+      final ChannelSftp channel = channel(server);
+      final String real = channel.realpath(quote(p.isEmpty() ? "." : p));
+      final SftpATTRS attrs = channel.stat(quote(real));
+      final int slash = real.lastIndexOf('/');
+      final String name = slash != -1 && slash < real.length() - 1 ? real.substring(slash + 1) : real;
+      return new Entry(name, real, attrs.isDir(), attrs.getSize(), attrs.getMTime() * 1000L);
+    }
+  }
+
   // Sending: "xgramsftp://<server>/<size>/<modified><path>" is made into a file when TDLib asks (inputFileGenerated)
 
   public static boolean isPath (@Nullable String path) {
