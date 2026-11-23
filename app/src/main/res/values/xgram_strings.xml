@@ -215,6 +215,7 @@
   <string name="XgramBubbleMergedCorners">Corners between bubbles</string>
   <string name="XgramBubbleTail">Bubble tail</string>
   <string name="XgramAvatarAtLast">Avatar next to the last message</string>
+  <string name="XgramAvatarInline">Avatar next to the name, in the bubble</string>
   <string name="XgramLockButton">Lock button in the chat list</string>
   <string name="XgramLockButtonInfo">A lock in the chat list\'s header locks XGram at once. Without it, XGram locks only with Auto-lock.</string>
   <string name="XgramLookValue">%1$s · %2$s</string>

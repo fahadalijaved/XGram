@@ -64,7 +64,7 @@ public final class XgramBackup {
     // Developer (debug builds): test items in the send menu; a release build never shows them, whatever is imported
     XgramSettings.KEY_SEND_MENU_TESTS,
     // Attach button while typing (Message box buttons), avatar next to the last message (Chat look)
-    XgramSettings.KEY_INPUT_ATTACH_TYPING, XgramSettings.KEY_AVATAR_AT_LAST,
+    XgramSettings.KEY_INPUT_ATTACH_TYPING, XgramSettings.KEY_AVATAR_AT_LAST, XgramSettings.KEY_AVATAR_INLINE,
     // Lock button in the chat list (Passcode lock), Popup menu (Message menu)
     XgramSettings.KEY_HIDE_LOCK_BUTTON, XgramSettings.KEY_MESSAGE_POPUP,
     // Header buttons (Chat list): the ghost mode indicator and Search ("xgram_header_hide_" + the button)

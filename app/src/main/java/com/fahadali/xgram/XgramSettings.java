@@ -946,9 +946,10 @@ public final class XgramSettings {
   public static final String KEY_BUBBLE_MERGE_RADIUS = "xgram_look_bubble_merged";
   public static final String KEY_BUBBLE_TAIL = "xgram_bubble_tail";
   public static final String KEY_AVATAR_AT_LAST = "xgram_avatar_last_message";
+  public static final String KEY_AVATAR_INLINE = "xgram_avatar_inline";
 
   // Cached: read on every message layout.
-  private volatile int stickerScale = -1, emojiScale = -1, bubbleRadius = -2, bubbleMergeRadius = -2, bubbleTail = -1, avatarAtLast = -1;
+  private volatile int stickerScale = -1, emojiScale = -1, bubbleRadius = -2, bubbleMergeRadius = -2, bubbleTail = -1, avatarAtLast = -1, avatarInline = -1;
 
   /** Stickers in messages, percent of Telegram X's size. */
   public int stickerScale () {
@@ -1087,6 +1088,20 @@ public final class XgramSettings {
   public void setAvatarAtLastMessage (boolean value) {
     avatarAtLast = value ? 1 : 0;
     put(KEY_AVATAR_AT_LAST, value);
+  }
+
+  /** With bubbles, a small avatar sits before the sender's name inside the bubble, so bubbles start at the screen's edge. Read on every message draw. */
+  public boolean avatarInline () {
+    int value = avatarInline;
+    if (value < 0) {
+      avatarInline = value = pmc().getBoolean(KEY_AVATAR_INLINE, false) ? 1 : 0;
+    }
+    return value == 1;
+  }
+
+  public void setAvatarInline (boolean value) {
+    avatarInline = value ? 1 : 0;
+    put(KEY_AVATAR_INLINE, value);
   }
 
   // Avatars

@@ -129,15 +129,44 @@ public final class XgramChatLook {
     avatar.setName(R.string.XgramAvatarAtLast);
     avatar.getToggler().setRadioEnabled(settings.avatarAtLastMessage(), false);
     avatar.addThemeListeners(c);
-    avatar.setOnClickListener(v -> {
-      settings.setAvatarAtLastMessage(avatar.getToggler().toggle(true));
-      rebuild.run();
-    });
     avatar.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(52f)));
     if (XgramExpressive.isEnabled()) {
-      XgramR5Chat.applyTile(avatar, XgramExpressive.SEGMENT_LAST, true); // XGram M3E: the group's last tile
+      XgramR5Chat.applyTile(avatar, XgramExpressive.SEGMENT_MIDDLE, true); // XGram M3E: a tile of the group
     }
     bottomWrap.addView(avatar);
+
+    // A small avatar before the sender's name inside the bubble: no avatar column, bubbles start at the edge.
+    // One place at a time: turning one on turns the other off.
+    SettingView inline = new SettingView(context, c.tdlib());
+    inline.setId(R.id.btn_xgramAvatarInline);
+    inline.setType(SettingView.TYPE_RADIO);
+    inline.setName(R.string.XgramAvatarInline);
+    inline.getToggler().setRadioEnabled(settings.avatarInline(), false);
+    inline.addThemeListeners(c);
+    inline.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(52f)));
+    if (XgramExpressive.isEnabled()) {
+      XgramR5Chat.applyTile(inline, XgramExpressive.SEGMENT_LAST, true); // XGram M3E: the group's last tile
+    }
+    bottomWrap.addView(inline);
+
+    avatar.setOnClickListener(v -> {
+      boolean on = avatar.getToggler().toggle(true);
+      settings.setAvatarAtLastMessage(on);
+      if (on && settings.avatarInline()) {
+        settings.setAvatarInline(false);
+        inline.getToggler().setRadioEnabled(false, true);
+      }
+      rebuild.run();
+    });
+    inline.setOnClickListener(v -> {
+      boolean on = inline.getToggler().toggle(true);
+      settings.setAvatarInline(on);
+      if (on && settings.avatarAtLastMessage()) {
+        settings.setAvatarAtLastMessage(false);
+        avatar.getToggler().setRadioEnabled(false, true);
+      }
+      rebuild.run();
+    });
   }
 
   private static int indexOf (int[] values, int value) {

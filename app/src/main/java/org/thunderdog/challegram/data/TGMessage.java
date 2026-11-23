@@ -926,7 +926,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
   private int computeBubbleLeft () {
     final int x;
-    if (needAvatar() && !isOutgoing()) {
+    if (needAvatar() && !isOutgoing() && !xgramAvatarInline()) { // XGram: an inline avatar needs no column
       x = xBubbleLeft1 + Screen.dp(40f);
     } else {
       x = Device.NEED_BIGGER_BUBBLE_OFFSETS ? xBubbleLeft2 : xBubbleLeft1;
@@ -940,7 +940,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
   private int getAuthorWidth () {
     return hAuthorNameT != null ?
-      hAuthorNameT.getWidth() + (hAuthorEmojiStatus != null ? hAuthorEmojiStatus.getWidth(Screen.dp(3)) : 0) + (hAuthorChatMark != null ? hAuthorChatMark.getWidth() + Screen.dp(16f) : 0) :
+      xgramInlineAvatarRoom() + hAuthorNameT.getWidth() + (hAuthorEmojiStatus != null ? hAuthorEmojiStatus.getWidth(Screen.dp(3)) : 0) + (hAuthorChatMark != null ? hAuthorChatMark.getWidth() + Screen.dp(16f) : 0) :
       needName(true) ? -Screen.dp(3f) : 0;
   }
 
@@ -2301,7 +2301,14 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     // Header
     if ((flags & FLAG_HEADER_ENABLED) != 0) {
       // Avatar
-      if (needAvatar() && !xgramAvatarAtBottom()) {
+      if (xgramInlineAvatarRoom() > 0) {
+        if (needName(true) && hAuthorNameT != null) {
+          xgramLayoutInlineAvatar(avatarReceiver);
+          if (avatarReceiver.needPlaceholder())
+            avatarReceiver.drawPlaceholder(c);
+          avatarReceiver.draw(c);
+        }
+      } else if (needAvatar() && !xgramAvatarAtBottom()) {
         // XGram: laid out here too (only a setBounds), as the bottom avatar is: right after Avatar next to the last
         // message is turned off, the view isn't measured again and the bounds still sit at the bubble's bottom
         layoutAvatar(view, avatarReceiver);
@@ -2317,7 +2324,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
       // Author
       if (needName(true)) {
-        int left = useBubbles ? getActualLeftContentEdge() + xBubblePadding + xBubblePaddingSmall : xContentLeft;
+        int left = useBubbles ? getActualLeftContentEdge() + xBubblePadding + xBubblePaddingSmall + (hAuthorNameT != null ? xgramInlineAvatarRoom() : 0) : xContentLeft;
         int top = useBubbles ? topContentEdge + xBubbleNameTop : xNameTop + getHeaderPadding();
         boolean isPsa = isPsa() && forceForwardOrImportInfo();
         if (hAuthorNameT != null) {
@@ -3153,7 +3160,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     if (replyData != null && replyData.isInside(x, y, useBubbles() && !useBubble())) {
       return CLICK_TYPE_REPLY;
     }
-    if ((xgramAvatarAtBottom() ? isBottomMessage() && !headerDisabled() : hasHeader()) && needAvatar() && view.getAvatarReceiver().isInsideReceiver(x, y)) {
+    if ((xgramAvatarAtBottom() ? isBottomMessage() && !headerDisabled() : hasHeader()) && needAvatar() && (xgramInlineAvatarRoom() == 0 || hAuthorNameT != null) && view.getAvatarReceiver().isInsideReceiver(x, y)) {
       return CLICK_TYPE_AVATAR;
     }
     return CLICK_TYPE_NONE;
@@ -3167,7 +3174,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     if (forceForwardOrImportInfo() || isSponsoredMessage() || !sender.isUser()) {
       return 0;
     }
-    final boolean onAvatar = (xgramAvatarAtBottom() ? isBottomMessage() && !headerDisabled() : hasHeader()) && needAvatar() && view.getAvatarReceiver().isInsideReceiver(x, y);
+    final boolean onAvatar = (xgramAvatarAtBottom() ? isBottomMessage() && !headerDisabled() : hasHeader()) && needAvatar() && (xgramInlineAvatarRoom() == 0 || hAuthorNameT != null) && view.getAvatarReceiver().isInsideReceiver(x, y);
     return onAvatar ? sender.getUserId() : 0;
   }
 
@@ -3656,6 +3663,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       }
 
       final String authorName = getDisplayAuthor();
+      maxWidth -= xgramInlineAvatarRoom(); // XGram: the inline avatar before the name
       if (needName(true) && maxWidth > 0) {
         if (!forceForwardOrImportInfo() && sender.hasChatMark()) {
           hAuthorChatMark = makeChatMark(maxWidth);
@@ -4617,7 +4625,35 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   // edge on every draw (reactions and the time can grow the bubble without a new layout).
 
   private boolean xgramAvatarAtBottom () {
-    return useBubbles() && com.fahadali.xgram.XgramSettings.instance().avatarAtLastMessage();
+    return useBubbles() && !xgramAvatarInline() && com.fahadali.xgram.XgramSettings.instance().avatarAtLastMessage();
+  }
+
+  // XGram: Chat look → Avatar next to the name: a small avatar before the sender's name inside the bubble (no avatar
+  // column, bubbles start at the screen's edge). Messages without a name line (a sticker, a group's later bubbles) have none.
+
+  private static final float XGRAM_INLINE_AVATAR_DP = 20f, XGRAM_INLINE_AVATAR_GAP_DP = 6f;
+
+  private boolean xgramAvatarInline () {
+    return useBubbles() && com.fahadali.xgram.XgramSettings.instance().avatarInline();
+  }
+
+  /** The room an inline avatar takes before the name (0 without one). */
+  private int xgramInlineAvatarRoom () {
+    return xgramAvatarInline() && needAvatar() && !isOutgoing() ? Screen.dp(XGRAM_INLINE_AVATAR_DP + XGRAM_INLINE_AVATAR_GAP_DP) : 0;
+  }
+
+  /** Where the name line starts (the avatar sits at its start, the name after it): see the header drawing. */
+  private void xgramLayoutInlineAvatar (AvatarReceiver receiver) {
+    final int size = Screen.dp(XGRAM_INLINE_AVATAR_DP);
+    final int left = getActualLeftContentEdge() + xBubblePadding + xBubblePaddingSmall;
+    int top = topContentEdge + Screen.dp(9f);
+    if (isPsa() && forceForwardOrImportInfo() && hPsaTextT != null) {
+      top += getPsaTitleHeight();
+    }
+    if (hAuthorNameT != null) {
+      top += (hAuthorNameT.getLineHeight(false) - size) / 2;
+    }
+    receiver.setBounds(left, top, left + size, top + size);
   }
 
   private void xgramLayoutBottomAvatar (MessageView view, AvatarReceiver receiver) {
@@ -4631,6 +4667,10 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   }
 
   public final void layoutAvatar (MessageView view, AvatarReceiver receiver) {
+    if (xgramInlineAvatarRoom() > 0) {
+      xgramLayoutInlineAvatar(receiver);
+      return;
+    }
     int left, top, size;
     if (useBubbles()) {
       left = xBubbleAvatarLeft;
