@@ -44,6 +44,7 @@ import org.thunderdog.challegram.navigation.SettingsWrapBuilder;
 import org.thunderdog.challegram.navigation.ViewController;
 import org.thunderdog.challegram.telegram.CallProblems;
 import org.thunderdog.challegram.telegram.DateChangeListener;
+import org.thunderdog.challegram.telegram.GlobalCallProblemsListener;
 import org.thunderdog.challegram.telegram.GlobalTokenStateListener;
 import org.thunderdog.challegram.telegram.MessageListener;
 import org.thunderdog.challegram.telegram.SessionListener;
@@ -81,7 +82,8 @@ public class CallListController extends RecyclerViewController<Void> implements
   View.OnLongClickListener,
   BaseView.ActionListProvider, TdlibOptionListener,
   SessionListener,
-  GlobalTokenStateListener {
+  GlobalTokenStateListener,
+  GlobalCallProblemsListener {
   public CallListController (Context context, Tdlib tdlib) {
     super(context, tdlib);
   }
@@ -178,6 +180,11 @@ public class CallListController extends RecyclerViewController<Void> implements
   @Override
   public void onActivityResume () {
     super.onActivityResume();
+    updateCallSettingsButton();
+  }
+
+  @Override
+  public void onCallProblemsChanged () {
     updateCallSettingsButton();
   }
 
@@ -347,6 +354,7 @@ public class CallListController extends RecyclerViewController<Void> implements
     tdlib.context().dateManager().addListener(this);
     com.fahadali.xgram.call.XgramFullScreenCalls.addListener(xgramFsiListener); // XGram
     tdlib.context().global().addTokenStateListener(this);
+    tdlib.context().global().addCallProblemsListener(this);
     loadSessions(false);
   }
 
@@ -851,6 +859,7 @@ public class CallListController extends RecyclerViewController<Void> implements
     tdlib.context().dateManager().removeListener(this);
     com.fahadali.xgram.call.XgramFullScreenCalls.removeListener(xgramFsiListener); // XGram
     tdlib.context().global().removeTokenStateListener(this);
+    tdlib.context().global().removeCallProblemsListener(this);
   }
 
   @Override
