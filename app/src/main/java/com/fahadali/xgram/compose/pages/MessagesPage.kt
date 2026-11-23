@@ -220,6 +220,14 @@ fun MessagesPage() {
       }
     }
 
+    // Join requests: the add button asks first, until "Approve, and don't ask again" is picked once
+    group {
+      switch(R.id.btn_xgramApproveAlways, s(R.string.XgramJoinRequestConfirm), null, checked = !settings.joinRequestApproveDirectly()) {
+        settings.setJoinRequestApproveDirectly(!it)
+      }
+    }
+    description(R.string.XgramJoinRequestConfirmInfo)
+
     // The page's media part: the photo editor and the camera have no settings of their own
     header(R.string.XgramHeaderVideos)
     group {

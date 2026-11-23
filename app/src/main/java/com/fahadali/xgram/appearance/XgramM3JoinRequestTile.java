@@ -56,8 +56,8 @@ public final class XgramM3JoinRequestTile extends ViewGroup implements Destroyab
   private static final float TEXT_END = BUTTON_END + BUTTON_TOUCH * 2f - BUTTON_MARGIN + 16f;
   private static final float EMOJI_STATUS_GAP = 6f;
 
-  /** The tallest tile, a three-line list item (the headline and two lines of supporting text), for height estimates. */
-  public static final float MAX_HEIGHT = 88f;
+  /** A usual tile: the headline and three lines of supporting text (username and ID, groups in common, time), for height estimates. */
+  public static final float MAX_HEIGHT = 108f;
 
   private final EmojiTextView titleView, supportingView;
   private final ImageView declineButton, acceptButton;
@@ -75,7 +75,7 @@ public final class XgramM3JoinRequestTile extends ViewGroup implements Destroyab
     titleView = newText(context, XgramExpressive.TS_BODY_L);
     titleView.setSingleLine(true);
     supportingView = newText(context, XgramExpressive.TS_BODY_M);
-    supportingView.setMaxLines(2);
+    supportingView.setMaxLines(4); // XGram: "@username · ID", the groups in common, then the time (which may wrap)
 
     declineButton = newButton(context, R.drawable.baseline_close_24);
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {

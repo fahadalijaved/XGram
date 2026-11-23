@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="XgramJoinRequestId">ID %1$s</string>
+  <string name="XgramJoinRequestNoCommon">No groups in common</string>
+  <string name="XgramJoinRequestOneCommon">1 group in common</string>
+  <string name="XgramJoinRequestCommon">%1$s groups in common</string>
+  <string name="XgramJoinRequestApproveAlways">Approve, and don\'t ask again</string>
+  <string name="XgramJoinRequestConfirm">Confirm before approving join requests</string>
+  <string name="XgramJoinRequestConfirmInfo">Off: the add button on a join request approves it at once.</string>
+</resources>

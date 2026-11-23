@@ -2541,4 +2541,16 @@ public final class XgramSettings {
   public void setEditorCutout (int mode, float tolerance, boolean global, boolean soft) {
     pmc().edit().putInt(KEY_EDITOR_CUTOUT_MODE, mode).putFloat(KEY_EDITOR_CUTOUT_TOLERANCE, tolerance).putBoolean(KEY_EDITOR_CUTOUT_GLOBAL, global).putBoolean(KEY_EDITOR_CUTOUT_SOFT, soft).apply();
   }
+
+  // Join requests: "Approve, and don't ask again" (the add button then approves at once)
+
+  public static final String KEY_JOIN_REQUEST_APPROVE_DIRECTLY = "xgram_join_request_approve_directly";
+
+  public boolean joinRequestApproveDirectly () {
+    return pmc().getBoolean(KEY_JOIN_REQUEST_APPROVE_DIRECTLY, false);
+  }
+
+  public void setJoinRequestApproveDirectly (boolean directly) {
+    pmc().edit().putBoolean(KEY_JOIN_REQUEST_APPROVE_DIRECTLY, directly).apply();
+  }
 }

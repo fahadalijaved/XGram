@@ -175,8 +175,9 @@ public class JoinRequestsComponent implements TGLegacyManager.EmojiLoadListener,
         if (xgramTile != null) {
           // XGram: Material 3 Expressive tile, "Requested today at 7:52 pm" in sentence case under the name, decline
           // and add as icon buttons, the rest of the tile opening the request's options
+          // XGram: the username, the ID and the groups in common above the time, to tell at a glance who is asking
           String status = user.getStatus();
-          xgramTile.setRequest(tdlib(), user.getSenderId(), user.getUser(), user.getName(), status != null ? StringUtils.ucfirst(status, Lang.locale()) : null);
+          xgramTile.setRequest(tdlib(), user.getSenderId(), user.getUser(), user.getName(), xgramRequestInfo(user, status != null ? StringUtils.ucfirst(status, Lang.locale()) : null));
           xgramTile.setActions(
             (v) -> declineRequest(user), Lang.getString(R.string.InviteLinkActionDeclineAction),
             (v) -> acceptRequest(user), Lang.getString(isChannel ? R.string.InviteLinkActionAcceptChannel : R.string.InviteLinkActionAccept)
@@ -270,8 +271,17 @@ public class JoinRequestsComponent implements TGLegacyManager.EmojiLoadListener,
   }
 
   private void acceptRequest (TGUser user) {
-    controller.showOptions(Lang.getStringBold(R.string.AreYouSureAcceptJoinRequest, user.getName(), tdlib().chatTitle(chatId)), new int[]{R.id.btn_approveChatRequest, R.id.btn_cancel}, new String[]{Lang.getString(isChannel ? R.string.InviteLinkActionAcceptChannel : R.string.InviteLinkActionAccept), Lang.getString(R.string.Cancel)}, new int[]{ViewController.OptionColor.BLUE, ViewController.OptionColor.NORMAL}, new int[]{R.drawable.baseline_person_add_24, R.drawable.baseline_cancel_24}, (itemView2, id2) -> {
-      if (id2 == R.id.btn_approveChatRequest) {
+    if (com.fahadali.xgram.XgramSettings.instance().joinRequestApproveDirectly()) {
+      // XGram: "Don't ask again" was chosen once: the add button approves at once
+      tdlib().client().send(new TdApi.ProcessChatJoinRequest(chatId, user.getUserId(), true), obj -> removeSender(user));
+      return;
+    }
+    // XGram: a third option approves and stops asking from then on
+    controller.showOptions(Lang.getStringBold(R.string.AreYouSureAcceptJoinRequest, user.getName(), tdlib().chatTitle(chatId)), new int[]{R.id.btn_approveChatRequest, R.id.btn_xgramApproveAlways, R.id.btn_cancel}, new String[]{Lang.getString(isChannel ? R.string.InviteLinkActionAcceptChannel : R.string.InviteLinkActionAccept), Lang.getString(R.string.XgramJoinRequestApproveAlways), Lang.getString(R.string.Cancel)}, new int[]{ViewController.OptionColor.BLUE, ViewController.OptionColor.NORMAL, ViewController.OptionColor.NORMAL}, new int[]{R.drawable.baseline_person_add_24, R.drawable.baseline_done_all_24, R.drawable.baseline_cancel_24}, (itemView2, id2) -> {
+      if (id2 == R.id.btn_approveChatRequest || id2 == R.id.btn_xgramApproveAlways) {
+        if (id2 == R.id.btn_xgramApproveAlways) {
+          com.fahadali.xgram.XgramSettings.instance().setJoinRequestApproveDirectly(true);
+        }
         tdlib().client().send(new TdApi.ProcessChatJoinRequest(chatId, user.getUserId(), true), obj -> removeSender(user));
       }
 
@@ -301,6 +311,41 @@ public class JoinRequestsComponent implements TGLegacyManager.EmojiLoadListener,
       tdlib().ui().postDelayed(() -> toggleItemAnimator(false), 500L);
     });
   }
+
+  /**
+   * XGram: a request's supporting text: "@username · ID 123" (or just the ID), the groups in common with the user (once
+   * their full info is known; it is loaded here and the row redrawn), then the request's time.
+   */
+  private CharSequence xgramRequestInfo (TGUser user, CharSequence requested) {
+    final long userId = user.getUserId();
+    StringBuilder b = new StringBuilder();
+    TdApi.User u = user.getUser();
+    String username = u != null ? tgx.td.Td.primaryUsername(u) : null;
+    if (!StringUtils.isEmpty(username)) {
+      b.append('@').append(username).append(" · ");
+    }
+    b.append(Lang.getString(R.string.XgramJoinRequestId, Long.toString(userId)));
+    TdApi.UserFullInfo full = tdlib().cache().userFull(userId, false);
+    if (full != null) {
+      int common = full.groupInCommonCount;
+      b.append('\n').append(common == 0 ? Lang.getString(R.string.XgramJoinRequestNoCommon) : common == 1 ? Lang.getString(R.string.XgramJoinRequestOneCommon) : Lang.getString(R.string.XgramJoinRequestCommon, Integer.toString(common)));
+    } else if (xgramLoadingFull.add(userId)) {
+      tdlib().client().send(new TdApi.GetUserFullInfo(userId), result -> controller.runOnUiThreadOptional(() -> {
+        if (result.getConstructor() == TdApi.UserFullInfo.CONSTRUCTOR && adapter != null) {
+          int position = adapter.indexOfViewByLongId(userId);
+          if (position != -1) {
+            adapter.notifyItemChanged(position);
+          }
+        }
+      }));
+    }
+    if (!StringUtils.isEmpty(requested)) {
+      b.append('\n').append(requested);
+    }
+    return b.toString();
+  }
+
+  private final java.util.Set<Long> xgramLoadingFull = new java.util.HashSet<>();
 
   private static String requestedSince (TdApi.ChatJoinRequest request) {
     return Lang.getString(
