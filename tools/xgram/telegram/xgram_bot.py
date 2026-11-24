@@ -430,19 +430,29 @@ def telethon_problem(cfg):
         return "Set TELEGRAM_API_ID and TELEGRAM_API_HASH (from my.telegram.org)."
     return None
 
+# Telegram's data centres (production addresses). The bot's home is DC 4: on 2026-11-24 a login through any other DC
+# failed for hours with "Telegram is having internal issues" (the hand-over to DC 4), straight to DC 4 it worked.
+TELEGRAM_DCS = {4: "149.154.167.91", 2: "149.154.167.51", 1: "149.154.175.53", 5: "91.108.56.130", 3: "149.154.175.100"}
+
 async def _bot_client(cfg, api):
-    """Logs in to MTProto as the bot (in-memory session: nothing saved, logged out after use). Telegram sometimes
-    answers the bot login with "Telegram is having internal issues" (RpcCallFailError) for a few minutes; Telethon
-    gives up after its 6 quick tries, so the login is tried again on a new connection with growing waits
-    (about 8 minutes in all) before the post fails."""
+    """Logs in to MTProto as the bot (in-memory session: nothing saved, logged out after use). Starts at the bot's
+    home DC; when Telegram answers the login with "internal issues" (RpcCallFailError) or a connection fails, it
+    goes on to the next DC with growing waits (about 8 minutes in all) before the post fails."""
     import asyncio
     from telethon import TelegramClient
     from telethon.sessions import StringSession
-    waits = [15, 30, 45, 60, 90, 120, 150]
+    order = list(TELEGRAM_DCS)
+    waits = [5, 15, 30, 45, 60, 90, 120, 150]
     for attempt in range(len(waits) + 1):
-        client = TelegramClient(StringSession(), int(cfg["TELEGRAM_API_ID"]), cfg["TELEGRAM_API_HASH"])
+        dc = order[attempt % len(order)]
+        session = StringSession()
+        session.set_dc(dc, TELEGRAM_DCS[dc], 443)
+        client = TelegramClient(session, int(cfg["TELEGRAM_API_ID"]), cfg["TELEGRAM_API_HASH"],
+                                connection_retries=2, request_retries=2)
         try:
             await client.start(bot_token=api.token)
+            if attempt:
+                log("bot login worked through DC %d" % dc)
             return client
         except Exception as e:  # RpcCallFailError, ServerError, connection errors: try again
             try:
@@ -451,7 +461,7 @@ async def _bot_client(cfg, api):
                 pass
             if attempt == len(waits):
                 raise
-            log("bot login failed (%s: %s); trying again in %ds" % (type(e).__name__, e, waits[attempt]))
+            log("bot login through DC %d failed (%s: %s); next try in %ds" % (dc, type(e).__name__, e, waits[attempt]))
             await asyncio.sleep(waits[attempt])
 
 def upload_telethon(cfg, api, target, path, caption, silent):
