@@ -2,6 +2,10 @@
 <resources>
   <!-- XGram: Double tap to react (Messages > Gestures, XgramSettings.doubleTapReact) -->
   <item type="id" name="btn_xgramDoubleTapReact" />
+  <!-- XGram: Double tap on your messages (btn_xgramDoubleTapReact is Double tap on received messages now) -->
+  <item type="id" name="btn_xgramDoubleTapOwn" />
+  <!-- XGram: Edit in the Double tap on your messages picker -->
+  <item type="id" name="btn_xgramDoubleTapEdit" />
   <!-- XGram: Double tap reaction under it (the account's default reaction, XgramDoubleTapReaction) -->
   <item type="id" name="btn_xgramDoubleTapReaction" />
 </resources>

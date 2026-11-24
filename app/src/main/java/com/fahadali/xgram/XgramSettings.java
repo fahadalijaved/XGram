@@ -378,6 +378,43 @@ public final class XgramSettings {
     put(KEY_DOUBLE_TAP_REACT, value);
   }
 
+  // Double tap on a message (Messages > Gestures): one action for received messages, one for your own, from
+  // XgramSwipeActions (Edit only for your own). Before there were two, the Double tap to react switch decided:
+  // on, received messages react and your own open Edit; off, a double tap does nothing on either.
+
+  public static final String KEY_DOUBLE_TAP_RECEIVED = "xgram_double_tap_received", KEY_DOUBLE_TAP_OWN = "xgram_double_tap_own";
+  private int doubleTapReceived = -1, doubleTapOwn = -1;
+
+  /** What a double tap on a message does: {@code own} for your own messages. One of XgramSwipeActions' actions. */
+  public int doubleTapAction (boolean own) {
+    int action = own ? doubleTapOwn : doubleTapReceived;
+    if (action < 0) {
+      int fallback = !doubleTapReact ? com.fahadali.xgram.chats.XgramSwipeActions.NOTHING : own ? com.fahadali.xgram.chats.XgramSwipeActions.EDIT : com.fahadali.xgram.chats.XgramSwipeActions.REACT;
+      action = pmc().getInt(own ? KEY_DOUBLE_TAP_OWN : KEY_DOUBLE_TAP_RECEIVED, fallback);
+      if (own) {
+        doubleTapOwn = action;
+      } else {
+        doubleTapReceived = action;
+      }
+    }
+    return action;
+  }
+
+  public void setDoubleTapAction (boolean own, int action) {
+    if (own) {
+      doubleTapOwn = action;
+    } else {
+      doubleTapReceived = action;
+    }
+    pmc().putInt(own ? KEY_DOUBLE_TAP_OWN : KEY_DOUBLE_TAP_RECEIVED, action);
+  }
+
+  /** A double tap reacts on one side or both: the Double tap reaction row is used. */
+  public boolean doubleTapReacts () {
+    int react = com.fahadali.xgram.chats.XgramSwipeActions.REACT;
+    return doubleTapAction(false) == react || doubleTapAction(true) == react;
+  }
+
   /**
    * Swipe between emoji categories: a sideways swipe on the emoji grid jumps to the next or previous category
    * (com.fahadali.xgram.chats.XgramEmojiCategorySwipe); past the last one it still opens Stickers. Off, a sideways

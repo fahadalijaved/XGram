@@ -10117,11 +10117,16 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
    * a double tap has a reaction to send (or take back).
    */
   public final boolean xgramWaitsForDoubleTap () {
-    if (!com.fahadali.xgram.XgramSettings.instance().doubleTapReact()) {
+    final int action = xgramDoubleTapAction();
+    if (action == com.fahadali.xgram.chats.XgramSwipeActions.NOTHING) {
       return false;
     }
     if (msg.chatId == 0 || this instanceof TGMessageBotInfo || isSponsoredMessage() || isEventLog() || isScheduled() || isNotSent() || xgramIsDeleted() || (flags & FLAG_UNSUPPORTED) != 0) {
       return false;
+    }
+    if (action != com.fahadali.xgram.chats.XgramSwipeActions.REACT) {
+      // XGram: Double tap on a message set to another action: wait only where it can do it on this message
+      return com.fahadali.xgram.chats.XgramSwipeActions.doubleTap(this, action) != null;
     }
     if (tdlib.isSelfChat(msg.chatId) || xgramHidesReactions()) {
       return false;
@@ -10139,6 +10144,13 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
    * {@code orElse} (the single tap) runs when there is none.
    */
   public final void xgramDoubleTapReact (View view, float x, float y, Runnable orElse) {
+    final int action = xgramDoubleTapAction();
+    if (action != com.fahadali.xgram.chats.XgramSwipeActions.REACT) {
+      // XGram: Double tap on a message set to another action (Reply, Edit on your own messages, Copy...)
+      final Runnable run = com.fahadali.xgram.chats.XgramSwipeActions.doubleTap(this, action);
+      (run != null ? run : orElse).run();
+      return;
+    }
     final int[] location = new int[2];
     view.getLocationOnScreen(location);
     final Point start = new Point(location[0] + (int) x, location[1] + (int) y);
@@ -10168,6 +10180,11 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     } else {
       loadAvailableReactions(react);
     }
+  }
+
+  /** XGram: what a double tap does on this message: Double tap on your messages, or on received messages. */
+  private int xgramDoubleTapAction () {
+    return com.fahadali.xgram.XgramSettings.instance().doubleTapAction(isOutgoing());
   }
 
   @Nullable

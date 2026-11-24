@@ -4,7 +4,10 @@
 <resources>
   <string name="XgramDoubleTapReact">Double tap to react</string>
   <string name="XgramDoubleTapReactSub">Tap a message twice to react; one tap then opens the menu a moment later</string>
-  <string name="XgramSearchKwDoubleTap">double tap, double-tap, tap twice, quick reaction, react, reaction, like, heart</string>
+  <!-- Double tap on a message: one action for received messages, one for your own (XgramSettings.doubleTapAction) -->
+  <string name="XgramDoubleTapReceived">Double tap a received message</string>
+  <string name="XgramDoubleTapOwn">Double tap your message</string>
+  <string name="XgramSearchKwDoubleTap">double tap, double-tap, tap twice, quick reaction, edit, double tap to edit, react, reaction, like, heart</string>
 
   <!-- Double tap reaction: the row and its picker (Telegram X's reaction grid, one choice) -->
   <string name="XgramDoubleTapReaction">Double tap reaction</string>

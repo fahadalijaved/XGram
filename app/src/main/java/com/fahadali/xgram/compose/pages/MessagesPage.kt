@@ -95,15 +95,15 @@ fun MessagesPage() {
       switch(R.id.btn_xgramTextSelectDrag, s(R.string.XgramSelTextDrag), s(R.string.XgramSelTextDragSub), checked = settings.textSelectDrag()) {
         settings.setTextSelectDrag(it)
       }
-      // Double tap to react: a double tap toggles the quick reaction, a single tap then opens the menu a moment later
-      switch(R.id.btn_xgramDoubleTapReact, s(R.string.XgramDoubleTapReact), s(R.string.XgramDoubleTapReactSub), checked = settings.doubleTapReact()) {
-        settings.setDoubleTapReact(it)
-      }
+      // Double tap on a message: one action for received messages, one for your own (Edit only there); with one set,
+      // a single tap opens the menu a moment later
+      doubleTap(host, settings, R.id.btn_xgramDoubleTapReact, R.string.XgramDoubleTapReceived, own = false)
+      doubleTap(host, settings, R.id.btn_xgramDoubleTapOwn, R.string.XgramDoubleTapOwn, own = true)
       // Double tap reaction: the account's default reaction (TdApi.SetDefaultReactionType), picked in Telegram X's
       // reaction grid (one choice); what a double tap sends first
       value(
         R.id.btn_xgramDoubleTapReaction, s(R.string.XgramDoubleTapReaction), XgramDoubleTapReaction.rowValue(host.tdlib),
-        enabled = settings.doubleTapReact()
+        enabled = settings.doubleTapReacts()
       ) {
         host.open(XgramDoubleTapReaction.newPicker(host.activity, host.tdlib))
       }
@@ -307,6 +307,23 @@ fun MessagesPage() {
       }
     }
     description(R.string.XgramAiToolsInfo)
+  }
+}
+
+/** Double tap on a received message or on your own: the action it takes, picked in a sheet. */
+private fun GroupScope.doubleTap(host: XgramComposeHost, settings: XgramSettings, id: Int, @StringRes title: Int, own: Boolean) {
+  val current = settings.doubleTapAction(own)
+  val actions = if (own) XgramSwipeActions.DOUBLE_TAP_OWN else XgramSwipeActions.DOUBLE_TAP_RECEIVED
+  value(id, s(title), XgramSwipeActions.name(current)) {
+    host.choose(
+      ChoiceSpec(
+        title = s(title),
+        options = actions.map { XgramSwipeActions.name(it) to it },
+        selected = current
+      ) { action ->
+        settings.setDoubleTapAction(own, action)
+      }
+    )
   }
 }
 

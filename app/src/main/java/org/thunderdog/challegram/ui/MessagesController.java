@@ -9221,6 +9221,22 @@ public class MessagesController extends ViewController<MessagesController.Argume
     return true;
   }
 
+  /** XGram: Double tap on your messages set to Edit: edits {@code m} (its caption, for an album). */
+  public boolean xgramEditMessage (TGMessage m) {
+    if (isEditingMessage() || inSelectMode() || !m.canEditText()) {
+      return false;
+    }
+    TdApi.Message message = null;
+    if (m instanceof TGMessageMedia) {
+      message = m.getMessage(((TGMessageMedia) m).getCaptionMessageId());
+    }
+    if (message == null) {
+      message = m.getNewestMessage();
+    }
+    editMessage(new MessageWithProperties(message, m.lastMessageProperties(message.id)));
+    return true;
+  }
+
   /** Esc: drops the reply or ends editing, like the bar's close button, before Esc goes back. */
   public boolean xgramCloseReplyByKeyboard () {
     if (inSelectMode() || inSearchMode() || emojiShown) {

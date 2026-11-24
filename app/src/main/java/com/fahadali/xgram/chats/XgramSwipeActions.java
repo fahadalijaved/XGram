@@ -52,6 +52,12 @@ public final class XgramSwipeActions {
   public static final int REPLY = 0, QUOTE = 1, TRANSLATE = 2, COPY = 3, FORWARD = 4, SAVE = 5, BOOKMARK = 6, REACT = 7, NOTHING = 8;
   /** Forward without sender (XgramForwardOptions): the forward sheet with Hide sender set. Stored, so a new number. */
   public static final int FORWARD_NO_SENDER = 9;
+  /** Edit: only for a double tap on your own messages (Double tap on your messages). */
+  public static final int EDIT = 10;
+
+  /** Double tap on a message: React first, then the swipe's actions; Edit only on your own messages. */
+  public static final int[] DOUBLE_TAP_RECEIVED = {NOTHING, REACT, REPLY, QUOTE, TRANSLATE, COPY, FORWARD, FORWARD_NO_SENDER, SAVE, BOOKMARK};
+  public static final int[] DOUBLE_TAP_OWN = {NOTHING, REACT, EDIT, REPLY, QUOTE, TRANSLATE, COPY, FORWARD, FORWARD_NO_SENDER, SAVE, BOOKMARK};
 
   // XGram: ACTIONS and NAMES are public for the Compose Messages page (xgram-m3e)
   public static final int[] ACTIONS = {REPLY, QUOTE, TRANSLATE, COPY, FORWARD, FORWARD_NO_SENDER, SAVE, BOOKMARK, REACT, NOTHING};
@@ -79,6 +85,9 @@ public final class XgramSwipeActions {
   }
 
   public static String name (int action) {
+    if (action == EDIT) {
+      return Lang.getString(R.string.edit);
+    }
     int index = indexOf(action);
     return Lang.getString(NAMES[index >= 0 ? index : 0]);
   }
@@ -97,6 +106,31 @@ public final class XgramSwipeActions {
       for (int i = 0; i < OPTION_IDS.length; i++) {
         if (OPTION_IDS[i] == picked) {
           XgramSettings.instance().setSwipeAction(toRight, ACTIONS[i]);
+          break;
+        }
+      }
+      if (after != null) {
+        after.run();
+      }
+    }));
+  }
+
+  /** Double tap on received messages, or on your own ({@code own}, which has Edit too). */
+  public static void showDoubleTapPicker (ViewController<?> c, boolean own, @Nullable Runnable after) {
+    final int groupId = own ? R.id.btn_xgramDoubleTapOwn : R.id.btn_xgramDoubleTapReact;
+    final int[] actions = own ? DOUBLE_TAP_OWN : DOUBLE_TAP_RECEIVED;
+    final int[] ids = new int[actions.length];
+    int current = XgramSettings.instance().doubleTapAction(own);
+    ListItem[] items = new ListItem[actions.length];
+    for (int i = 0; i < actions.length; i++) {
+      ids[i] = actions[i] == EDIT ? R.id.btn_xgramDoubleTapEdit : OPTION_IDS[indexOf(actions[i])];
+      items[i] = new ListItem(ListItem.TYPE_RADIO_OPTION, ids[i], 0, name(actions[i]), groupId, actions[i] == current);
+    }
+    c.showSettings(new SettingsWrapBuilder(groupId).setRawItems(items).setIntDelegate((id, result) -> {
+      int picked = result.get(groupId);
+      for (int i = 0; i < ids.length; i++) {
+        if (ids[i] == picked) {
+          XgramSettings.instance().setDoubleTapAction(own, actions[i]);
           break;
         }
       }
@@ -174,6 +208,22 @@ public final class XgramSwipeActions {
     position = Math.max(0, Math.min(position, actions.size()));
     actions.add(position, chosen);
     return position;
+  }
+
+  /**
+   * Double tap on a message: what {@code action} (not React, which TGMessage sends itself) does on this message, or
+   * null when it can't do it here, so the double tap does nothing and a single tap isn't kept waiting.
+   */
+  @Nullable
+  public static Runnable doubleTap (TGMessage msg, int action) {
+    if (action == NOTHING || action == REACT) {
+      return null;
+    }
+    if (action == EDIT) {
+      return msg.isOutgoing() && msg.canEditText() ? () -> msg.messagesController().xgramEditMessage(msg) : null;
+    }
+    TGMessage.SwipeQuickAction built = build(msg, action);
+    return built != null ? built.handler : null;
   }
 
   private static boolean canReply (TGMessage msg) {
