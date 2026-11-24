@@ -507,7 +507,7 @@ public final class XgramPullToNext implements FactorAnimator.Target {
     final int gen = ++generation;
     Tdlib tdlib = host.tdlib();
     if (topicId != 0) {
-      tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, 0, 0, 100), (topics, error) -> tdlib.ui().post(() -> {
+      tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, false, false, 0, 0, 0, 100), (topics, error) -> tdlib.ui().post(() -> {
         if (gen != generation) {
           return;
         }

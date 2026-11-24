@@ -275,7 +275,7 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
     int limit = topics.isEmpty() ? FIRST_PAGE_SIZE : NEXT_PAGE_SIZE;
     // The server lists pinned topics first on the first page: that is the only place their order comes from.
     final boolean firstPage = nextOffsetDate == 0 && nextOffsetMessageId == 0 && nextOffsetForumTopicId == 0;
-    tdlib.send(new TdApi.GetForumTopics(chatId, "", nextOffsetDate, nextOffsetMessageId, nextOffsetForumTopicId, limit), (result, error) -> tdlib.ui().post(() -> {
+    tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, false, false, nextOffsetDate, nextOffsetMessageId, nextOffsetForumTopicId, limit), (result, error) -> tdlib.ui().post(() -> {
       if (isDestroyed) {
         return;
       }
@@ -438,7 +438,7 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
     // ends in FLOOD_WAIT. Topics not on that page are fetched one by one, a few at a time.
     lastResyncAt = android.os.SystemClock.uptimeMillis();
     final int requestedReorderVersion = localReorderVersion;
-    tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, 0, 0, firstPageLimit()), (result, error) -> tdlib.ui().post(() -> {
+    tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, false, false, 0, 0, 0, firstPageLimit()), (result, error) -> tdlib.ui().post(() -> {
       if (isDestroyed) {
         return;
       }
@@ -854,7 +854,7 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
     }
     lastResyncAt = now;
     final int requestedReorderVersion = localReorderVersion;
-    tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, 0, 0, firstPageLimit()), (result, error) -> tdlib.ui().post(() -> {
+    tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, false, false, 0, 0, 0, firstPageLimit()), (result, error) -> tdlib.ui().post(() -> {
       if (isDestroyed) {
         return;
       }

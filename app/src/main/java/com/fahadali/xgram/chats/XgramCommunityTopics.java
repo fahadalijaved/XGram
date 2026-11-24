@@ -141,7 +141,7 @@ public final class XgramCommunityTopics {
       fetchAgain.add(chatId); // one request per forum at a time
       return;
     }
-    tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, 0, 0, FETCH_LIMIT), (result, error) -> tdlib.ui().post(() -> {
+    tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, false, false, 0, 0, 0, FETCH_LIMIT), (result, error) -> tdlib.ui().post(() -> {
       inFlight.remove(chatId);
       if (destroyed) {
         return;

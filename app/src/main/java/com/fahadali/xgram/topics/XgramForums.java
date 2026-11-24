@@ -527,7 +527,7 @@ public final class XgramForums {
     Tdlib tdlib = context.tdlib();
     if (!list.isEndReached() && list.size() < 100) {
       // Only the first page is loaded: fetch up to 100 topics for the picker, so none of them is missing.
-      tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, 0, 0, 100), (result, error) -> tdlib.ui().post(() -> {
+      tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, false, false, 0, 0, 0, 100), (result, error) -> tdlib.ui().post(() -> {
         if (context.isDestroyed()) {
           return;
         }
@@ -1147,7 +1147,7 @@ public final class XgramForums {
     tdlib.send(new TdApi.ReadAllChatMentions(chatId), tdlib.typedOkHandler());
     tdlib.send(new TdApi.ReadAllChatReactions(chatId), tdlib.typedOkHandler());
     // Topics are sorted by their last message, so unread ones come first.
-    tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, 0, 0, 100), (topics, error) -> {
+    tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, false, false, 0, 0, 0, 100), (topics, error) -> {
       if (topics == null) {
         return;
       }

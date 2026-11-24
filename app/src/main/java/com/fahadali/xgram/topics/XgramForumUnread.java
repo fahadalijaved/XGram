@@ -275,7 +275,7 @@ public final class XgramForumUnread {
         return;
       }
       lastRefreshAt.put(key, SystemClock.uptimeMillis());
-      tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, 0, 0, 100), (topics, error) -> {
+      tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, false, false, 0, 0, 0, 100), (topics, error) -> {
         if (topics == null) {
           XgramTopicFlood.onError(tdlib, error, 0);
           return;
@@ -330,7 +330,7 @@ public final class XgramForumUnread {
       return;
     }
     // Topics come sorted by their last message, so the unread ones are in the first page.
-    tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, 0, 0, 100), (topics, error) -> {
+    tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, false, false, 0, 0, 0, 100), (topics, error) -> {
       if (topics == null) {
         // The key stays requested until the retry, so rebuilt rows don't ask again meanwhile.
         tdlib.ui().postDelayed(() -> {

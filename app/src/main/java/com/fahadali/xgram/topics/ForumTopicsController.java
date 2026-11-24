@@ -238,7 +238,7 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
       scheduleSearch(query, floodWait);
       return;
     }
-    tdlib.send(new TdApi.GetForumTopics(chat.id, query, 0, 0, 0, 100), (topics, error) -> runOnUiThreadOptional(() -> {
+    tdlib.send(new TdApi.GetForumTopics(chat.id, query, 0, false, false, 0, 0, 0, 100), (topics, error) -> runOnUiThreadOptional(() -> {
       if (!query.equals(searchQuery) || !inSearchMode()) {
         return;
       }
