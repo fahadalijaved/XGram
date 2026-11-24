@@ -6,5 +6,7 @@
 # Left out on purpose: cf80f0ba (XGram's spring progress), 1ca39678 (send-files rewrite; XGram's own refusal handling),
 # e1d2ca92 (fingerprint on Android 6-9; XGram needs 13+), bb5760d2 (CI keeps the named mapping copy), d19b68f0 (tests).
 # 1d007c42 taken only for its Icons bitmap helper.
-telegram-x df631baa91ca0dcc16fae02846209d85e5fd560a
-tdlib 6a95495d2dff13253f26aec8effc42a4c6ebb12b
+# 2026-11-24 sync (to 54884b05): all taken except 54884b05 (version bump), 2dcda9b6 (OSS scanner config);
+# 32eb5eca was already in (TDLib pin). 13b7bc1c, 07b2faa4, a1ea4b1d adapted to XGram's own navigation and bar motion.
+telegram-x 54884b053f9a243111d6af18de415c6770d56291
+tdlib ba67210c12d6df7b0fa8472aec246a4e8a3a8a4d
