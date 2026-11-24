@@ -430,6 +430,30 @@ def telethon_problem(cfg):
         return "Set TELEGRAM_API_ID and TELEGRAM_API_HASH (from my.telegram.org)."
     return None
 
+async def _bot_client(cfg, api):
+    """Logs in to MTProto as the bot (in-memory session: nothing saved, logged out after use). Telegram sometimes
+    answers the bot login with "Telegram is having internal issues" (RpcCallFailError) for a few minutes; Telethon
+    gives up after its 6 quick tries, so the login is tried again on a new connection with growing waits
+    (about 8 minutes in all) before the post fails."""
+    import asyncio
+    from telethon import TelegramClient
+    from telethon.sessions import StringSession
+    waits = [15, 30, 45, 60, 90, 120, 150]
+    for attempt in range(len(waits) + 1):
+        client = TelegramClient(StringSession(), int(cfg["TELEGRAM_API_ID"]), cfg["TELEGRAM_API_HASH"])
+        try:
+            await client.start(bot_token=api.token)
+            return client
+        except Exception as e:  # RpcCallFailError, ServerError, connection errors: try again
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
+            if attempt == len(waits):
+                raise
+            log("bot login failed (%s: %s); trying again in %ds" % (type(e).__name__, e, waits[attempt]))
+            await asyncio.sleep(waits[attempt])
+
 def upload_telethon(cfg, api, target, path, caption, silent):
     """Upload a file over the Bot API limit through MTProto (Telethon logged in as the bot, up to
     ~2000 MiB). Returns the message id, which is the same id the Bot API uses."""
@@ -450,9 +474,7 @@ def upload_telethon(cfg, api, target, path, caption, silent):
     from telethon.sessions import StringSession
 
     async def run():
-        # In-memory session: a fresh bot login each run, logged out at the end, nothing saved.
-        client = TelegramClient(StringSession(), int(cfg["TELEGRAM_API_ID"]), cfg["TELEGRAM_API_HASH"])
-        await client.start(bot_token=api.token)
+        client = await _bot_client(cfg, api)
         try:
             entity = await client.get_input_entity(target.chat_id)   # -100... id or @name; bot must be a member
             next_pct = [0]
@@ -477,8 +499,7 @@ def upload_telethon_album(cfg, api, target, paths, captions, silent):
     from telethon.sessions import StringSession
 
     async def run():
-        client = TelegramClient(StringSession(), int(cfg["TELEGRAM_API_ID"]), cfg["TELEGRAM_API_HASH"])
-        await client.start(bot_token=api.token)
+        client = await _bot_client(cfg, api)
         try:
             entity = await client.get_input_entity(target.chat_id)
             log("upload album: %s" % ", ".join(os.path.basename(p) for p in paths))
