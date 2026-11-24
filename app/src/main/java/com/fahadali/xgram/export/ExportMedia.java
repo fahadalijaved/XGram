@@ -299,7 +299,7 @@ final class ExportMedia {
         }
         case TdApi.PageBlockExpandableBlockQuote.CONSTRUCTOR: {
           final TdApi.PageBlockExpandableBlockQuote quote = (TdApi.PageBlockExpandableBlockQuote) block;
-          appendRichLine(b, quote.text);
+          appendRichBlocks(b, quote.blocks);
           appendRichLine(b, quote.credit);
           break;
         }

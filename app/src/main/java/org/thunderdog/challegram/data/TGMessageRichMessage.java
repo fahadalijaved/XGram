@@ -190,7 +190,7 @@ public class TGMessageRichMessage extends TGMessage {
       }
       case TdApi.PageBlockExpandableBlockQuote.CONSTRUCTOR: {
         TdApi.PageBlockExpandableBlockQuote quote = (TdApi.PageBlockExpandableBlockQuote) block;
-        return new TdApi.PageBlockBlockQuote(new TdApi.PageBlock[] {new TdApi.PageBlockParagraph(quote.text)}, quote.credit);
+        return new TdApi.PageBlockBlockQuote(adapt(quote.blocks), quote.credit);
       }
       case TdApi.PageBlockThinking.CONSTRUCTOR:
         return new TdApi.PageBlockDetails(plain("💭"), new TdApi.PageBlock[] {new TdApi.PageBlockParagraph(((TdApi.PageBlockThinking) block).text)}, false);
