@@ -46,7 +46,8 @@ import org.thunderdog.challegram.tool.Screen;
 public final class XgramGlass {
   /** Whether the glass is on and this Android can draw it. */
   public static boolean on () {
-    return Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && XgramSettings.instance().liquidGlassTest();
+    // Only with Expressive design: its floating pill is what reads as glass (the classic bar looked foggy, owner 11-25)
+    return Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && XgramSettings.instance().liquidGlassTest() && XgramExpressive.isEnabled();
   }
 
   private static boolean recording;
