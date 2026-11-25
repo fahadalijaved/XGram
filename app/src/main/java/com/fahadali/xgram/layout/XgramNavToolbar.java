@@ -2500,6 +2500,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     }
     tabDragFrom = from;
     tabDragTo = dest;
+    tabDragPastHalf = false;
     tabDragToRight = step > 0;
     applyTabDrag(); // the pill from the first frame, after the transition's own start
     return true;
@@ -2511,8 +2512,17 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       return;
     }
     final float width = Math.max(1, navigation.getValue().getWidth());
-    navigation.xgramSetTabDragProgress((tabDragToRight ? -dx : dx) / width);
+    final float progress = (tabDragToRight ? -dx : dx) / width;
+    navigation.xgramSetTabDragProgress(progress);
+    // Haptics: a tick as the drag passes half way (it now lands on the next tab), another as it goes back under
+    final boolean past = navigation.xgramTabDragProgress() >= .5f;
+    if (past != tabDragPastHalf) {
+      tabDragPastHalf = past;
+      com.fahadali.xgram.XgramHaptics.gestureThreshold(host, past);
+    }
   }
+
+  private boolean tabDragPastHalf;
 
   /** Released ({@code cancel}: taken away): on to the target past half way or thrown towards it, else back. */
   public void endTabDrag (float dx, float velocityX, boolean cancel) {
@@ -2530,8 +2540,9 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     final boolean commit = !cancel && (towards >= fling ? progress > .02f : towards > -fling && progress >= .5f);
     final int dest = tabDragTo;
     navigation.xgramEndTabDrag(commit, Math.abs(velocityX));
+    tabDragPastHalf = false;
     if (commit) {
-      com.fahadali.xgram.XgramHaptics.segmentTick(host);
+      com.fahadali.xgram.XgramHaptics.confirm(host); // a firm click as it lands (a segment tick was too faint on Samsung)
       if (dest == DEST_CALLS && badges != null) {
         badges.markCallsSeen();
       }
@@ -4247,6 +4258,15 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     private boolean sliding;
     private int slideStartDest, slideDest;
 
+    /** While the finger slides, the pill rises a little under it, and settles with a small bounce when it lifts. */
+    private void liftSlide (boolean lift) {
+      animate().scaleX(lift ? 1.05f : 1f).scaleY(lift ? 1.05f : 1f).setDuration(lift ? 120L : 260L)
+        .setInterpolator(lift ? me.vkryl.android.AnimatorUtils.DECELERATE_INTERPOLATOR : new android.view.animation.OvershootInterpolator(2.2f)).start();
+      if (lift) {
+        com.fahadali.xgram.XgramHaptics.dragStart(this);
+      }
+    }
+
     private boolean canSlide () {
       return tabs.length > 1 && compactSpring.getTarget() < 1f && !destroyed && (shown || preview);
     }
@@ -4295,8 +4315,8 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
         return;
       }
       slideDest = tab.dest;
+      com.fahadali.xgram.XgramHaptics.tick(this); // a tick on each tab the finger reaches
       if (tab.dest != DEST_SAVED && tab.dest != selectedDest) {
-        ViewUtils.onClick(this);
         setTarget(tab.dest, true);
       }
     }
@@ -4351,6 +4371,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
           final float dx = e.getX() - slideStartX, dy = e.getY() - slideStartY;
           if (!sliding && canSlide() && Math.abs(dx) > android.view.ViewConfiguration.get(getContext()).getScaledTouchSlop() && Math.abs(dx) > Math.abs(dy) * 1.5f) {
             sliding = true;
+            liftSlide(true);
             if (getParent() != null) {
               getParent().requestDisallowInterceptTouchEvent(true);
             }
@@ -4371,10 +4392,12 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
             break;
           case MotionEvent.ACTION_UP:
             sliding = false;
+            liftSlide(false);
             finishSlide(e.getX());
             break;
           case MotionEvent.ACTION_CANCEL:
             sliding = false;
+            liftSlide(false);
             restoreSelection();
             break;
         }

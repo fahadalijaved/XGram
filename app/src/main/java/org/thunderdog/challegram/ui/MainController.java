@@ -332,9 +332,23 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     xgramUpdateNavBar(); // XGram: the bottom navigation bar of narrow windows (Chat list > Navigation)
     // XGram M3E: the floating navigation toolbar's morph follows a finger dragging the pages (XgramNavToolbar)
     pager.addOnPageChangeListener(new androidx.viewpager.widget.ViewPager.SimpleOnPageChangeListener() {
+      private boolean dragged;
+
       @Override
       public void onPageScrollStateChanged (int state) {
         xgramOnPagerScrollState(state);
+        if (state == androidx.viewpager.widget.ViewPager.SCROLL_STATE_DRAGGING) {
+          dragged = true;
+        } else if (state == androidx.viewpager.widget.ViewPager.SCROLL_STATE_IDLE) {
+          dragged = false;
+        }
+      }
+
+      @Override
+      public void onPageSelected (int position) {
+        if (dragged) {
+          com.fahadali.xgram.XgramHaptics.confirm(pager); // XGram: a swipe to another folder or page lands with a click
+        }
       }
     });
 

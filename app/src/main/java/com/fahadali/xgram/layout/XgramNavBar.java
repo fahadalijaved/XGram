@@ -68,7 +68,6 @@ import org.thunderdog.challegram.unsorted.Settings;
 import java.util.ArrayList;
 import java.util.Arrays;
 
-import me.vkryl.android.ViewUtils;
 import me.vkryl.core.BitwiseUtils;
 import tgx.td.ChatId;
 import tgx.td.ChatPosition;
@@ -331,6 +330,7 @@ public final class XgramNavBar {
     destroyed = true;
     hideSpring.cancel();
     bar.indicatorSpring.cancel();
+    bar.indicatorTrail.cancel();
     UI.cancel(missedCheck);
     UI.cancel(badgeUpdate);
     badgeTdlib.listeners().removeTotalChatCounterListener(counterListener);
@@ -668,12 +668,18 @@ public final class XgramNavBar {
     private final RectF rect = new RectF();
     /** Position of the active indicator, in items (springs between them: spatial fast). */
     final XgramExpressive.Spring indicatorSpring;
+    /**
+     * The indicator's other edge: a slower spring after the same position, so a move stretches the indicator towards
+     * where it goes and it catches up there (Google's apps' navigation bars).
+     */
+    final XgramExpressive.Spring indicatorTrail;
     private int selectedDest = XgramNavRail.DEST_CHATS;
 
     BarView (Context context) {
       super(context);
       setWillNotDraw(false);
       indicatorSpring = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> invalidate()).setThreshold(.002f);
+      indicatorTrail = new XgramExpressive.Spring(XgramExpressive.SPATIAL_DEFAULT, 0f, (s, value) -> invalidate()).setThreshold(.002f);
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
         setElevation(Screen.dp(XgramExpressive.ELEVATION_2));
         setOutlineProvider(new ViewOutlineProvider() {
@@ -704,6 +710,7 @@ public final class XgramNavBar {
       }
       int index = indexOfDest(selectedDest);
       indicatorSpring.setValue(Math.max(0, index));
+      indicatorTrail.setValue(Math.max(0, index));
       requestLayout();
       invalidate();
     }
@@ -735,8 +742,10 @@ public final class XgramNavBar {
       if (index != -1) {
         if (animated) {
           indicatorSpring.animateTo(index);
+          indicatorTrail.animateTo(index);
         } else {
           indicatorSpring.setValue(index);
+          indicatorTrail.setValue(index);
         }
       }
       invalidate();
@@ -798,6 +807,15 @@ public final class XgramNavBar {
     private float slideStartX, slideStartY;
     private boolean sliding;
 
+    /** While the finger slides, the bar rises a little under it (as a held control does), and settles when it lifts. */
+    private void liftSlide (boolean lift) {
+      animate().scaleX(lift ? 1.04f : 1f).scaleY(lift ? 1.04f : 1f).setDuration(lift ? 120L : 220L)
+        .setInterpolator(lift ? me.vkryl.android.AnimatorUtils.DECELERATE_INTERPOLATOR : new android.view.animation.OvershootInterpolator(2f)).start();
+      if (lift) {
+        com.fahadali.xgram.XgramHaptics.dragStart(this);
+      }
+    }
+
     /** The item index under {@code x}, as a fraction (the indicator's position), clamped to the items. */
     private float slideIndexAt (float x) {
       final int count = items.size();
@@ -820,6 +838,7 @@ public final class XgramNavBar {
           final float dx = e.getX() - slideStartX, dy = e.getY() - slideStartY;
           if (!sliding && items.size() > 1 && Math.abs(dx) > android.view.ViewConfiguration.get(getContext()).getScaledTouchSlop() && Math.abs(dx) > Math.abs(dy) * 1.5f) {
             sliding = true;
+            liftSlide(true);
             return true; // the item under the finger gets a cancel: no press
           }
           return false;
@@ -835,16 +854,17 @@ public final class XgramNavBar {
         switch (e.getActionMasked()) {
           case MotionEvent.ACTION_MOVE: {
             final float index = slideIndexAt(e.getX());
-            final int before = Math.round(indicatorSpring.getValue());
-            indicatorSpring.setValue(index);
+            final int before = Math.round(indicatorSpring.getTarget());
+            indicatorSpring.animateTo(index); // both edges chase the finger: the indicator stretches as it moves
+            indicatorTrail.animateTo(index);
             if (Math.round(index) != before) {
-              ViewUtils.onClick(this);
+              com.fahadali.xgram.XgramHaptics.tick(this);
             }
-            invalidate();
             break;
           }
           case MotionEvent.ACTION_UP: {
             sliding = false;
+            liftSlide(false);
             final int index = Math.round(slideIndexAt(e.getX()));
             if (index >= 0 && index < items.size()) {
               onDestinationClick(items.get(index).dest);
@@ -854,6 +874,7 @@ public final class XgramNavBar {
           }
           case MotionEvent.ACTION_CANCEL:
             sliding = false;
+            liftSlide(false);
             setSelected(computeSelected(), true);
             break;
         }
@@ -870,13 +891,15 @@ public final class XgramNavBar {
       if (!items.isEmpty() && indexOfDest(selectedDest) != -1) {
         float padding = Screen.dpf(INNER_PADDING);
         float itemWidth = (width - padding * 2f) / items.size();
-        float center = padding + (indicatorSpring.getValue() + .5f) * itemWidth;
+        float lead = padding + (indicatorSpring.getValue() + .5f) * itemWidth;
+        float trail = padding + (indicatorTrail.getValue() + .5f) * itemWidth;
         if (Lang.rtl()) {
-          center = width - center;
+          lead = width - lead;
+          trail = width - trail;
         }
         float half = indicatorWidth(itemWidth) / 2f;
         float top = Screen.dpf(INDICATOR_TOP);
-        rect.set(center - half, top, center + half, top + Screen.dpf(INDICATOR_HEIGHT));
+        rect.set(Math.min(lead, trail) - half, top, Math.max(lead, trail) + half, top + Screen.dpf(INDICATOR_HEIGHT));
         float indicatorRadius = rect.height() / 2f;
         c.drawRoundRect(rect, indicatorRadius, indicatorRadius, Paints.fillingPaint(indicatorColor()));
       }
