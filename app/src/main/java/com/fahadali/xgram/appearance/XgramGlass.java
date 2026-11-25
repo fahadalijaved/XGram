@@ -322,13 +322,38 @@ public final class XgramGlass {
     public boolean draw (@NonNull Canvas c, @NonNull RectF rect, float radius, int tint) {
       if (!on()) {
         detach();
+        restoreElevation();
         return false;
       }
       attach();
       if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || !c.isHardwareAccelerated()) {
         return false;
       }
-      return drawImpl(c, rect, radius, tint);
+      final boolean drawn = drawImpl(c, rect, radius, tint);
+      if (drawn) {
+        dropElevation();
+      }
+      return drawn;
+    }
+
+    // Android draws an elevated view's shadow under its whole shape when the view is see-through, and its inner part is
+    // a blocky polygon: through glass it showed as a square edge (the New chat button). Glass has no system shadow.
+
+    private float savedElevation = Float.NaN;
+
+    private void dropElevation () {
+      if (Float.isNaN(savedElevation) && view.getElevation() != 0f) {
+        savedElevation = view.getElevation();
+        view.post(() -> view.setElevation(0f));
+      }
+    }
+
+    private void restoreElevation () {
+      if (!Float.isNaN(savedElevation)) {
+        final float elevation = savedElevation;
+        savedElevation = Float.NaN;
+        view.post(() -> view.setElevation(elevation));
+      }
     }
 
     @RequiresApi(Build.VERSION_CODES.S)

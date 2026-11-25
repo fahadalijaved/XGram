@@ -4096,7 +4096,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       }
       if (glass != glassShown) {
         glassShown = glass;
-        setElevation(glass ? Screen.dp(2f) : Screen.dp(XgramExpressive.ELEVATION_3)); // a glass panel casts a light shadow
+        setElevation(glass ? 0f : Screen.dp(XgramExpressive.ELEVATION_3)); // no system shadow under glass (it shows through, blocky)
       }
       if (!glass) {
         fillPaint.setColor(containerColor());
