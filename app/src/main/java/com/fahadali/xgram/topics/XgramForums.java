@@ -1147,14 +1147,23 @@ public final class XgramForums {
     tdlib.send(new TdApi.ReadAllChatMentions(chatId), tdlib.typedOkHandler());
     tdlib.send(new TdApi.ReadAllChatReactions(chatId), tdlib.typedOkHandler());
     // Topics are sorted by their last message, so unread ones come first.
-    tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, false, false, 0, 0, 0, 100), (topics, error) -> {
-      if (topics == null) {
+    readTopicsPage(tdlib, chatId, 0, 0, 0, 0);
+  }
+
+  /** One page of the forum's topics (100), each unread one read, then the next page (a big forum has more than 100). */
+  private static void readTopicsPage (Tdlib tdlib, long chatId, int offsetDate, long offsetMessageId, int offsetTopicId, int page) {
+    tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, false, false, offsetDate, offsetMessageId, offsetTopicId, 100), (topics, error) -> {
+      if (topics == null || topics.topics == null || topics.topics.length == 0) {
         return;
       }
       for (TdApi.ForumTopic topic : topics.topics) {
         if (topic.lastMessage != null && topic.unreadCount > 0) {
           tdlib.send(new TdApi.ViewMessages(chatId, new long[] {topic.lastMessage.id}, new TdApi.MessageSourceForumTopicHistory(), true), tdlib.typedOkHandler());
         }
+      }
+      final boolean more = topics.nextOffsetDate != 0 || topics.nextOffsetMessageId != 0 || topics.nextOffsetForumTopicId != 0;
+      if (more && page < 20 && topics.topics.length >= 100) {
+        readTopicsPage(tdlib, chatId, topics.nextOffsetDate, topics.nextOffsetMessageId, topics.nextOffsetForumTopicId, page + 1);
       }
     });
   }

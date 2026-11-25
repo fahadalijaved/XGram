@@ -1920,7 +1920,12 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     AtomicInteger readChatsCount = new AtomicInteger(0);
     getAllChats(chatList, chat -> {
       boolean read = false;
-      if (chat.unreadCount != 0 && chat.lastMessage != null) {
+      if (chat.unreadCount != 0 && isForum(chat.id)) {
+        // XGram: a group with topics keeps its unread messages per topic: reading the chat's last message read only
+        // that one topic, so every unread topic is read (with mentions and reactions)
+        com.fahadali.xgram.topics.XgramForums.markAllTopicsAsRead(this, chat.id);
+        read = true;
+      } else if (chat.unreadCount != 0 && chat.lastMessage != null) {
         readMessages(chat.id, new long[] {chat.lastMessage.id}, new TdApi.MessageSourceChatList());
         read = true;
       }
