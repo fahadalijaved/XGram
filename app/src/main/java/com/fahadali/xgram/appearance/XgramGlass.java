@@ -123,23 +123,54 @@ public final class XgramGlass {
       }
     }
 
+    /**
+     * The backdrop: the views drawn before the panel, i.e. the earlier siblings of the panel (or of the first of its
+     * parents that has some) in their parent. Never the panel's own branch: its display list draws this node, so a
+     * backdrop holding it would hold itself (the renderer recursed until it crashed).
+     */
     @RequiresApi(Build.VERSION_CODES.S)
     private void recordImpl () {
-      final View root = view.getRootView();
-      if (root == null || root.getWidth() == 0) {
+      View branch = view;
+      android.view.ViewGroup parent = null;
+      int index = -1;
+      while (branch.getParent() instanceof android.view.ViewGroup) {
+        final android.view.ViewGroup p = (android.view.ViewGroup) branch.getParent();
+        final int i = p.indexOfChild(branch);
+        if (i > 0) {
+          parent = p;
+          index = i;
+          break;
+        }
+        branch = p;
+      }
+      if (parent == null || parent.getWidth() == 0) {
         return;
       }
-      this.root = root;
+      this.root = parent;
       RenderNode node = (RenderNode) this.node;
       if (node == null) {
         node = new RenderNode("XgramGlass");
         this.node = node;
       }
-      node.setPosition(0, 0, root.getWidth(), root.getHeight());
+      node.setPosition(0, 0, parent.getWidth(), parent.getHeight());
       final RecordingCanvas canvas = node.beginRecording();
       recording = true;
       try {
-        root.draw(canvas);
+        final android.graphics.drawable.Drawable background = parent.getBackground();
+        if (background != null) {
+          background.draw(canvas);
+        }
+        for (int i = 0; i < index; i++) {
+          final View child = parent.getChildAt(i);
+          if (child.getVisibility() != View.VISIBLE || child.getAlpha() <= 0f) {
+            continue;
+          }
+          final int save = canvas.save();
+          canvas.translate(child.getLeft(), child.getTop());
+          canvas.concat(child.getMatrix());
+          child.draw(canvas);
+          canvas.restoreToCount(save);
+        }
       } finally {
         recording = false;
         node.endRecording();
