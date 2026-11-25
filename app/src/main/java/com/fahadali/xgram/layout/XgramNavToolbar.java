@@ -4096,7 +4096,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       // Liquid glass: while a finger holds or slides, the selection is a glass lens that rises over the bar and bends
       // its tabs; the bar's own content is drawn once into a node so the lens can show it
       final float lift = glassLift;
-      if (glass && lift > .002f && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      if (glass && glassRunning && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         drawWithLens(c, width, height, lift);
       } else {
         drawContent(c, width, height);
@@ -4234,6 +4234,12 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       c.drawRenderNode(lensNode);
       fillPaint.setColor(XgramExpressive.withAlpha(0xFFFFFFFF, .10f * a));
       c.drawRoundRect(glassPillRect, radius, radius, fillPaint);
+      // As it lands it turns into the flat selection (the same capsule, same colour): one shape all the way, no second
+      // pill showing up early under it
+      if (innerVisible && innerAlpha > 0f && a < 1f) {
+        fillPaint.setColor(XgramExpressive.withAlpha(indicatorColor(), innerAlpha * (1f - a)));
+        c.drawRoundRect(glassPillRect, radius, radius, fillPaint);
+      }
       c.restoreToCount(save);
       com.fahadali.xgram.appearance.XgramGlass.drawHighlight(c, glassPillRect, radius, a);
     }
@@ -4246,7 +4252,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       // Inner pill: 8dp in from the pill's top and bottom, whatever its height now (48dp items, 40dp compact)
       final float pillH = pillHeightIn(height), pad = Screen.dpf(PAD);
       final float itemTop = pad, itemBottom = itemTop + (pillH - 2f * pad);
-      if (innerVisible && innerAlpha > 0f && glassLift < .05f) { // Liquid glass: the lifted lens is the selection then
+      if (innerVisible && innerAlpha > 0f && !glassRunning) { // Liquid glass: the lens is the selection while it moves
         fillPaint.setColor(XgramExpressive.withAlpha(indicatorColor(), innerAlpha));
         rect.set(innerL, itemTop, innerR, itemBottom);
         c.drawRoundRect(rect, innerCorner, innerCorner, fillPaint);
