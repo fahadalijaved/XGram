@@ -526,6 +526,27 @@
     </service>
 
     <!-- XGram: app icons. Exactly one alias is enabled (com.fahadali.xgram.appicons.XgramAppIcons). -->
+    <!-- XGram: "XDrive" in the system share sheet (on only while XDrive is, XDrive.onSettingChanged): what is shared goes
+         to Saved Messages, into the folder picked (MainController.shareContents) -->
+    <activity-alias
+      android:name=".XgramXDriveShare"
+      android:targetActivity=".MainActivity"
+      android:enabled="false"
+      android:exported="true"
+      android:icon="@mipmap/xgram_icon_default"
+      android:roundIcon="@mipmap/xgram_icon_default"
+      android:label="@string/XgramXDriveShareTarget">
+      <intent-filter>
+        <action android:name="android.intent.action.SEND" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <data android:mimeType="*/*" />
+      </intent-filter>
+      <intent-filter>
+        <action android:name="android.intent.action.SEND_MULTIPLE" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <data android:mimeType="*/*" />
+      </intent-filter>
+    </activity-alias>
     <activity-alias
       android:name=".XgramIconDefault"
       android:targetActivity=".MainActivity"

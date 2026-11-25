@@ -233,6 +233,9 @@ public final class XgramFilters {
 
   @AnyThread
   public static boolean isHidden (Tdlib tdlib, TdApi.Message message) {
+    if (isXDriveIndex(tdlib, message)) {
+      return true; // XDrive's folder list, a file in Saved Messages: never shown as a message
+    }
     if (message.isOutgoing) {
       return false;
     }
@@ -263,8 +266,13 @@ public final class XgramFilters {
    * be hidden, as Telegram X takes an empty page for the start of the chat and pages on from the oldest message.
    */
   @AnyThread
+  /** XDrive's index file (its folders) in Saved Messages, hidden from the chat and its Files while XDrive is on. */
+  public static boolean isXDriveIndex (Tdlib tdlib, TdApi.Message message) {
+    return message.chatId == tdlib.selfChatId() && com.fahadali.xgram.xdrive.XDrive.on() && com.fahadali.xgram.xdrive.XDriveIndex.isIndexDocument(message);
+  }
+
   public static TdApi.Message[] filter (Tdlib tdlib, TdApi.Message[] messages) {
-    if (messages.length == 0 || (banned().isEmpty() && getFilters().isEmpty() && !com.fahadali.xgram.XgramSettings.instance().hideBlocked())) {
+    if (messages.length == 0 || (banned().isEmpty() && getFilters().isEmpty() && !com.fahadali.xgram.XgramSettings.instance().hideBlocked() && !com.fahadali.xgram.xdrive.XDrive.on())) {
       return messages;
     }
     List<TdApi.Message> result = new ArrayList<>(messages.length);

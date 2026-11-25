@@ -12,6 +12,7 @@
   <item name="btn_xgramXDriveFromChats" type="id" />
   <item name="btn_xgramXDriveFolder" type="id" />
   <item name="btn_xgramXDriveNewFolder" type="id" />
+  <item name="btn_xgramXDriveSaveUnsorted" type="id" />
   <item name="btn_xgramXDriveItem" type="id" />
   <item name="btn_xgramXDriveAddToFolder" type="id" />
   <item name="btn_xgramXDriveRename" type="id" />
@@ -286,4 +287,11 @@
   <string name="XgramXDriveTopicDocuments">Documents</string>
   <string name="XgramXDriveTopicApps">Apps</string>
   <string name="XgramXDriveTopicArchives">Archives</string>
+  <!-- Save with XDrive on (XDriveSave): the folder in the same step -->
+  <string name="XgramXDriveSaveWhere">Save to which folder?</string>
+  <string name="XgramXDriveSaveUnsorted">No folder</string>
+  <string name="XgramXDriveSavedIn">Saved to XDrive, in “%1$s”</string>
+  <string name="XgramXDriveAutoSort">Sort new saves into folders</string>
+  <!-- The system share sheet's entry for XDrive -->
+  <string name="XgramXDriveShareTarget">XDrive</string>
 </resources>

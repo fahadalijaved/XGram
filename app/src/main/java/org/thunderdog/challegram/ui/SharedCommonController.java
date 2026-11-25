@@ -149,6 +149,9 @@ public class SharedCommonController extends SharedBaseController<InlineResult<?>
   @Override
   protected InlineResult<?> parseObject (TdApi.Object object) {
     TdApi.Message message = (TdApi.Message) object;
+    if (com.fahadali.xgram.chats.XgramFilters.isXDriveIndex(tdlib, message)) {
+      return null; // XGram: XDrive's folder list stays out of Saved Messages' Files
+    }
     InlineResult<?> result;
 
     final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();

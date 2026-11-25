@@ -178,6 +178,21 @@ public final class XgramMessageActions {
     Tdlib tdlib = msg.tdlib();
     long chatId = msg.getChatId();
     if (id == R.id.btn_xgramSaveToSaved) {
+      if (com.fahadali.xgram.xdrive.XDrive.on()) {
+        // XDrive: the folder in the same step (or straight into the folder of its topic)
+        com.fahadali.xgram.xdrive.XDriveSave.save(m, msg.getMessage(), onCopies -> {
+          XgramUndoSend.flushBefore(tdlib, tdlib.selfChatId());
+          tdlib.send(new TdApi.ForwardMessages(tdlib.selfChatId(), null, chatId, idsOf(msg), new TdApi.MessageSendOptions(), false, false), (result, error) -> {
+            if (error != null) {
+              tdlib.ui().post(() -> UI.showError(error));
+              onCopies.onCopies(null);
+            } else {
+              onCopies.onCopies(result);
+            }
+          });
+        });
+        return true;
+      }
       XgramUndoSend.flushBefore(tdlib, tdlib.selfChatId()); // Undo send: what waits in Saved Messages goes first
       tdlib.send(new TdApi.ForwardMessages(tdlib.selfChatId(), null, chatId, idsOf(msg), new TdApi.MessageSendOptions(), false, false), (result, error) -> tdlib.ui().post(() -> {
         if (error != null) {

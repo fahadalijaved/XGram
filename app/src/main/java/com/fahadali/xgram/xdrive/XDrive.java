@@ -58,6 +58,7 @@ public final class XDrive {
     if (!initialized) {
       initialized = true;
       on = XgramSettings.instance().xdriveTest();
+      syncShareTarget(on);
     }
     return on;
   }
@@ -66,6 +67,28 @@ public final class XDrive {
   public static void onSettingChanged (boolean value) {
     initialized = true;
     on = value;
+    syncShareTarget(value);
+  }
+
+  /** "XDrive" in the system share sheet (the manifest's .XgramXDriveShare) only while XDrive is on. */
+  private static void syncShareTarget (boolean enabled) {
+    try {
+      final android.content.Context context = org.thunderdog.challegram.tool.UI.getContext();
+      final android.content.ComponentName name = new android.content.ComponentName(context, SHARE_TARGET);
+      final android.content.pm.PackageManager pm = context.getPackageManager();
+      final int state = enabled ? android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED : android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
+      if (pm.getComponentEnabledSetting(name) != state) {
+        pm.setComponentEnabledSetting(name, state, android.content.pm.PackageManager.DONT_KILL_APP);
+      }
+    } catch (Throwable ignored) { }
+  }
+
+  /** The share sheet's XDrive entry (an alias of MainActivity). */
+  public static final String SHARE_TARGET = "org.thunderdog.challegram.XgramXDriveShare";
+
+  /** Whether {@code intent} came from the share sheet's XDrive entry. */
+  public static boolean isShareIntent (@Nullable android.content.Intent intent) {
+    return intent != null && intent.getComponent() != null && SHARE_TARGET.equals(intent.getComponent().getClassName()) && on();
   }
 
   /** Lang: a Saved Messages string becomes its XDrive twin while XDrive is on (cloud language packs too). */

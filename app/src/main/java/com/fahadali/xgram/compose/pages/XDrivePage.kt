@@ -392,14 +392,23 @@ private fun MainMenu(state: XDriveState, expanded: Boolean, onDismiss: () -> Uni
       DropdownMenuItem(
         onClick = { onDismiss(); state.openOrganize(null) },
         text = { Text(str(R.string.XgramXDriveOrganize)) },
-        shape = MenuDefaults.itemShape(0, 2).shape,
+        shape = MenuDefaults.itemShape(0, 3).shape,
         leadingIcon = { Icon(tgxIcon(R.drawable.baseline_auto_awesome_24), null) }
       )
       DropdownMenuItem(
         onClick = { onDismiss(); XDriveActions.newFolder(host) },
         text = { Text(str(R.string.XgramXDriveNewFolder)) },
-        shape = MenuDefaults.itemShape(1, 2).shape,
+        shape = MenuDefaults.itemShape(1, 3).shape,
         leadingIcon = { Icon(tgxIcon(R.drawable.baseline_create_new_folder_24), null) }
+      )
+      // Save sorts new saves with a clear topic into its folder (XDriveSave)
+      val autoSort = XgramSettings.instance().xdriveAutoSort()
+      CheckableDropdownMenuItem(
+        autoSort,
+        { checked -> onDismiss(); XgramSettings.instance().setXdriveAutoSort(checked) },
+        { Text(str(R.string.XgramXDriveAutoSort)) },
+        MenuDefaults.itemShape(2, 3),
+        leadingIcon = { Icon(tgxIcon(R.drawable.baseline_auto_awesome_24), null) }
       )
     }
     Spacer(Modifier.height(MenuDefaults.GroupSpacing))

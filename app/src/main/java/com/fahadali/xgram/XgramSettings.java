@@ -829,6 +829,17 @@ public final class XgramSettings {
     put(KEY_XDRIVE_OPENS_CHAT, value);
   }
 
+  public static final String KEY_XDRIVE_AUTO_SORT = "xgram_xdrive_auto_sort";
+
+  /** XDrive: Save puts what has a clear topic (receipts, code, places…) straight into that folder (on by default). */
+  public boolean xdriveAutoSort () {
+    return pmc().getBoolean(KEY_XDRIVE_AUTO_SORT, true);
+  }
+
+  public void setXdriveAutoSort (boolean value) {
+    put(KEY_XDRIVE_AUTO_SORT, value);
+  }
+
   /** XDrive's cloud AI for Organize: the provider's id (claude, gemini, openai), empty: none set up. */
   public String xdriveAiProvider () {
     String value = pmc().getString(KEY_XDRIVE_AI_PROVIDER, "");

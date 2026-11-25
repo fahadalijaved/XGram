@@ -3929,7 +3929,11 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   private String shareIntentAction;
   private Intent shareIntent;
 
+  /** XGram: the share came from the share sheet's XDrive entry: straight to Saved Messages, into a folder. */
+  private volatile boolean xgramShareToXDrive;
+
   public void shareIntent (final Tdlib tdlib, final String intentAction, Intent intent) {
+    this.xgramShareToXDrive = com.fahadali.xgram.xdrive.XDrive.isShareIntent(intent);
     this.shareTdlib = tdlib;
     this.shareIntentAction = intentAction;
     this.shareIntent = intent;
@@ -4348,6 +4352,41 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
         }
       };
 
+      if (xgramShareToXDrive) {
+        // XGram: XDrive in the share sheet: Saved Messages, into the folder picked (no chat picker)
+        xgramShareToXDrive = false;
+        com.fahadali.xgram.xdrive.XDriveSave.chooseFolder(this, null, folder -> {
+          final long selfChatId = tdlib.selfChatId();
+          final ArrayList<TdApi.Function<?>> functions = new ArrayList<>();
+          shareDelegate.generateFunctionsForChat(selfChatId, tdlib.chat(selfChatId), new TdApi.MessageSendOptions(), functions);
+          final java.util.List<Long> sent = new ArrayList<>();
+          final int[] left = {functions.size()};
+          for (TdApi.Function<?> function : functions) {
+            tdlib.send(function, (result, error) -> {
+              if (result instanceof TdApi.Message) {
+                sent.add(((TdApi.Message) result).id);
+              } else if (result instanceof TdApi.Messages && ((TdApi.Messages) result).messages != null) {
+                for (TdApi.Message message : ((TdApi.Messages) result).messages) {
+                  if (message != null) {
+                    sent.add(message.id);
+                  }
+                }
+              }
+              if (error != null) {
+                tdlib.ui().post(() -> UI.showError(error));
+              }
+              if (--left[0] == 0) {
+                final long[] ids = new long[sent.size()];
+                for (int i = 0; i < ids.length; i++) {
+                  ids[i] = sent.get(i);
+                }
+                tdlib.ui().post(() -> com.fahadali.xgram.xdrive.XDriveSave.intoFolderWhenSent(tdlib, ids, folder));
+              }
+            });
+          }
+        });
+        return;
+      }
       c.setArguments(new ShareController.Args(shareDelegate).setNeedOpenChat(true));
       c.show();
     })));
