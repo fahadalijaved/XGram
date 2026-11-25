@@ -9798,10 +9798,22 @@ public class MessagesController extends ViewController<MessagesController.Argume
     final int padding = bottomWrap.getVisibility() == View.GONE ? 0 : bottomWrap.getHeight();
     if (padding != xgramGlassPadding) {
       xgramGlassPadding = padding;
-      messagesView.setClipToPadding(false);
-      messagesView.post(() -> messagesView.setPadding(messagesView.getPaddingLeft(), messagesView.getPaddingTop(), messagesView.getPaddingRight(), xgramGlassPadding));
+      // Room under the newest message (the first item of the reversed list) rather than the list's padding, which the
+      // newest message did not keep clear of (it slid under the composer)
+      if (xgramGlassRoom == null) {
+        xgramGlassRoom = new androidx.recyclerview.widget.RecyclerView.ItemDecoration() {
+          @Override
+          public void getItemOffsets (@NonNull Rect outRect, @NonNull View view, @NonNull androidx.recyclerview.widget.RecyclerView parent, @NonNull androidx.recyclerview.widget.RecyclerView.State state) {
+            outRect.set(0, 0, 0, parent.getChildAdapterPosition(view) == 0 ? Math.max(0, xgramGlassPadding) : 0);
+          }
+        };
+        messagesView.addItemDecoration(xgramGlassRoom);
+      }
+      messagesView.post(() -> messagesView.invalidateItemDecorations());
     }
   }
+
+  @Nullable private androidx.recyclerview.widget.RecyclerView.ItemDecoration xgramGlassRoom;
 
   private final class XgramInputFieldBackground extends android.graphics.drawable.Drawable {
     private final android.graphics.RectF rect = new android.graphics.RectF();
