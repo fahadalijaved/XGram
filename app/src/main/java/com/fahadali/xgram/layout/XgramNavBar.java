@@ -673,6 +673,7 @@ public final class XgramNavBar {
      * where it goes and it catches up there (Google's apps' navigation bars).
      */
     final XgramExpressive.Spring indicatorTrail;
+    private final com.fahadali.xgram.appearance.XgramGlass.Panel glassPanel = new com.fahadali.xgram.appearance.XgramGlass.Panel(this);
     private int selectedDest = XgramNavRail.DEST_CHATS;
 
     BarView (Context context) {
@@ -884,10 +885,16 @@ public final class XgramNavBar {
 
     @Override
     protected void dispatchDraw (Canvas c) {
+      if (com.fahadali.xgram.appearance.XgramGlass.isRecording()) {
+        return; // Liquid glass: the backdrop being recorded leaves the bar out
+      }
       final int width = getWidth(), height = getHeight();
       float radius = height / 2f;
       rect.set(0, 0, width, height);
-      c.drawRoundRect(rect, radius, radius, Paints.fillingPaint(containerColor()));
+      // Liquid glass (a test): the blurred, bent backdrop under a light tint instead of the solid colour
+      if (!glassPanel.draw(c, rect, radius, containerColor())) {
+        c.drawRoundRect(rect, radius, radius, Paints.fillingPaint(containerColor()));
+      }
       if (!items.isEmpty() && indexOfDest(selectedDest) != -1) {
         float padding = Screen.dpf(INNER_PADDING);
         float itemWidth = (width - padding * 2f) / items.size();

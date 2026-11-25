@@ -888,6 +888,17 @@ public final class XgramSettings {
     put(KEY_CAMERA_X_TEST, value);
   }
 
+  /** Liquid glass (a test, Testing utilities): bars and menus as see-through glass (appearance.XgramGlass). Off by default. */
+  public static final String KEY_LIQUID_GLASS_TEST = "xgram_liquid_glass_test";
+
+  public boolean liquidGlassTest () {
+    return pmc().getBoolean(KEY_LIQUID_GLASS_TEST, false);
+  }
+
+  public void setLiquidGlassTest (boolean value) {
+    put(KEY_LIQUID_GLASS_TEST, value);
+  }
+
   public static final String KEY_CAMERA_VIDEO_4K = "xgram_camera_video_4k", KEY_CAMERA_VIDEO_60 = "xgram_camera_video_60";
 
   /** Camera X: videos in 4K where the camera can (else Full HD, as before). */

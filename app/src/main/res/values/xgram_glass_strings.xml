@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram Liquid glass (a test of the liquid-glass branch, com.fahadali.xgram.appearance.XgramGlass) -->
+  <item name="btn_xgramLiquidGlassTest" type="id" />
+  <string name="XgramLiquidGlassTest">Liquid glass (test)</string>
+  <string name="XgramLiquidGlassTestInfo">The bottom bar as see-through glass: what is behind it shows blurred and bent at its edges</string>
+  <string name="XgramLiquidGlassTestOld">Needs Android 12 or newer</string>
+</resources>

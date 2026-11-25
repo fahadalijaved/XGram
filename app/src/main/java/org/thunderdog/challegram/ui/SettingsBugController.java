@@ -496,6 +496,9 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
         } else if (itemId == R.id.btn_xgramXDriveOpensChat) {
           view.getToggler().setRadioEnabled(com.fahadali.xgram.XgramSettings.instance().xdriveOpensChat(), isUpdate);
           view.setData(R.string.XgramXDriveOpensChatInfo);
+        } else if (itemId == R.id.btn_xgramLiquidGlassTest) {
+          view.getToggler().setRadioEnabled(com.fahadali.xgram.XgramSettings.instance().liquidGlassTest(), isUpdate);
+          view.setData(android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S ? R.string.XgramLiquidGlassTestInfo : R.string.XgramLiquidGlassTestOld);
         } else if (itemId == R.id.btn_xgramCameraXTest) {
           view.getToggler().setRadioEnabled(com.fahadali.xgram.XgramSettings.instance().cameraXTest(), isUpdate);
           view.setData(R.string.XgramCameraXTestInfo);
@@ -832,6 +835,9 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
             items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_xgramXDriveOpensChat, R.drawable.baseline_chat_bubble_24, R.string.XgramXDriveOpensChat, false));
             items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
           }
+          // XGram: Liquid glass, a test of its own branch (never in CI builds)
+          items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_xgramLiquidGlassTest, R.drawable.baseline_auto_awesome_24, R.string.XgramLiquidGlassTest, false));
+          items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
           if (testerLevel >= Tdlib.TesterLevel.TESTER || BuildConfig.DEBUG || com.fahadali.xgram.XgramSettings.instance().cameraXTest()) {
             // XGram: Camera X, a test like XDrive
             items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_xgramCameraXTest, R.drawable.baseline_camera_alt_24, R.string.XgramCameraXTest, false));
@@ -1204,6 +1210,10 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
       Intents.shareText(U.getUsefulMetadata(null) + "\n" + crash.message);
     } else if (viewId == R.id.btn_xgramLogsShare) {
       com.fahadali.xgram.XgramLogs.confirmAndShare(this);
+    } else if (viewId == R.id.btn_xgramLiquidGlassTest) {
+      com.fahadali.xgram.XgramSettings.instance().setLiquidGlassTest(!com.fahadali.xgram.XgramSettings.instance().liquidGlassTest()); // XGram Liquid glass (test)
+      adapter.updateValuedSettingById(R.id.btn_xgramLiquidGlassTest);
+      context().getWindow().getDecorView().invalidate();
     } else if (viewId == R.id.btn_xgramCameraXTest) {
       com.fahadali.xgram.XgramSettings.instance().setCameraXTest(!com.fahadali.xgram.XgramSettings.instance().cameraXTest()); // XGram Camera X (test)
       adapter.updateValuedSettingById(R.id.btn_xgramCameraXTest);

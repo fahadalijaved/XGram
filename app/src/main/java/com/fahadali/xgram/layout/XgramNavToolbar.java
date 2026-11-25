@@ -3842,6 +3842,9 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       return true;
     };
 
+    private final com.fahadali.xgram.appearance.XgramGlass.Panel glassPanel = new com.fahadali.xgram.appearance.XgramGlass.Panel(this);
+    private boolean glassShown;
+
     PillView (Context context) {
       super(context);
       setWillNotDraw(false);
@@ -4051,13 +4054,23 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       if (width <= 0 || height <= 0) {
         return;
       }
+      if (com.fahadali.xgram.appearance.XgramGlass.isRecording()) {
+        return; // Liquid glass: the backdrop being recorded leaves the bar out
+      }
       if (layoutDirty) {
         relayoutItems(); // drawn before the pre-draw listener ran (a preview's first frame)
       }
-      // Container
-      fillPaint.setColor(containerColor());
+      // Container (Liquid glass, a test: the blurred, bent backdrop under a light tint instead of the solid colour)
       rect.set(0, 0, width, height);
-      c.drawRoundRect(rect, height / 2f, height / 2f, fillPaint);
+      final boolean glass = !preview && glassPanel.draw(c, rect, height / 2f, containerColor());
+      if (glass != glassShown) {
+        glassShown = glass;
+        setElevation(glass ? Screen.dp(2f) : Screen.dp(XgramExpressive.ELEVATION_3)); // a glass panel casts a light shadow
+      }
+      if (!glass) {
+        fillPaint.setColor(containerColor());
+        c.drawRoundRect(rect, height / 2f, height / 2f, fillPaint);
+      }
       // Folding into one tab (Collapse): the tabs folding away (their state layers, icons and badges) stay inside the
       // pill as it narrows (the pill and the host draw outside their bounds otherwise)
       final float collapse = collapseNow();
