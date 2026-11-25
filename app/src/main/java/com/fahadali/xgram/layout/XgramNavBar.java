@@ -859,7 +859,7 @@ public final class XgramNavBar {
             indicatorSpring.animateTo(index); // both edges chase the finger: the indicator stretches as it moves
             indicatorTrail.animateTo(index);
             if (Math.round(index) != before) {
-              com.fahadali.xgram.XgramHaptics.tick(this);
+              com.fahadali.xgram.XgramHaptics.slideTick(this);
             }
             break;
           }

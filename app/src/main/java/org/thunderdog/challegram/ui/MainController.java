@@ -347,7 +347,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       @Override
       public void onPageSelected (int position) {
         if (dragged) {
-          com.fahadali.xgram.XgramHaptics.confirm(pager); // XGram: a swipe to another folder or page lands with a click
+          com.fahadali.xgram.XgramHaptics.tabLanded(pager); // XGram: a swipe to another folder or page lands with a click
         }
       }
     });
