@@ -4207,7 +4207,6 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       } finally {
         content.endRecording();
       }
-      c.drawRenderNode(content);
 
       // The lens: the inner pill's size grown (wider, and taller than the bar), centred between the selected tab and
       // the finger as far as it is lifted, so it slides home as it lands
@@ -4222,6 +4221,14 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       final float cx = Math.max(w / 2f, Math.min(width - w / 2f, pos)), cy = pillH / 2f;
       glassPillRect.set(cx - w / 2f, cy - h / 2f, cx + w / 2f, cy + h / 2f);
       final float radius = h / 2f;
+      // The tabs everywhere but under the lens (the lens shows them itself, bent and magnified: drawn under it too,
+      // they showed twice)
+      glassClip.reset();
+      glassClip.addRoundRect(glassPillRect, radius, radius, android.graphics.Path.Direction.CW);
+      final int outside = c.save();
+      c.clipOutPath(glassClip);
+      c.drawRenderNode(content);
+      c.restoreToCount(outside);
 
       lensNode.setPosition(0, 0, width, height);
       final android.graphics.RecordingCanvas lc = lensNode.beginRecording();
