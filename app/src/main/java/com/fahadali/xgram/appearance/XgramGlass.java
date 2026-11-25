@@ -56,31 +56,160 @@ public final class XgramGlass {
     return recording;
   }
 
-  private static final String REFRACTION =
-    "uniform shader content;\n" +
-    "uniform float4 box;\n" +       // the panel in the root: left, top, right, bottom
-    "uniform float radius;\n" +
-    "uniform float depth;\n" +      // how far the edge bends, in px
-    "uniform float band;\n" +       // how wide the bending band along the edge is, in px
-    "half4 main(float2 p) {\n" +
-    "  float2 c = (box.xy + box.zw) * 0.5;\n" +
-    "  float2 h = (box.zw - box.xy) * 0.5;\n" +
-    "  float2 q = abs(p - c) - h + radius;\n" +
-    "  float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - radius;\n" + // < 0 inside
-    "  if (d > 0.0) { return content.eval(p); }\n" +
-    "  float t = clamp(1.0 + d / band, 0.0, 1.0);\n" +   // 1 at the edge, 0 a band's width in
-    "  float2 n = normalize(max(abs(p - c) - (h - radius), 0.0001) * sign(p - c));\n" +
-    "  float2 offset = -n * depth * t * t * t;\n" +
-    "  half4 col = content.eval(p + offset);\n" +
-    "  col.rgb += half3(0.06) * half(t * t);\n" +         // the rim catches a little light
-    "  return col;\n" +
+  // The shaders: Kyant's backdrop (github.com/Kyant0/backdrop, Copyright 2025 Kyant, Apache License 2.0): a rounded
+  // rectangle's signed distance, the lens (the edge band bends the backdrop outwards along the shape's normal, a
+  // circle's profile, with a touch of colour dispersion) and the rim highlight (light from an angle).
+
+  private static final String SDF =
+    "float sdRoundedRect(float2 coord, float2 halfSize, float radius) {\n" +
+    "  float2 cornerCoord = abs(coord) - (halfSize - float2(radius));\n" +
+    "  float outside = length(max(cornerCoord, 0.0)) - radius;\n" +
+    "  float inside = min(max(cornerCoord.x, cornerCoord.y), 0.0);\n" +
+    "  return outside + inside;\n" +
+    "}\n" +
+    "float2 gradSdRoundedRect(float2 coord, float2 halfSize, float radius) {\n" +
+    "  float2 cornerCoord = abs(coord) - (halfSize - float2(radius));\n" +
+    "  if (cornerCoord.x >= 0.0 || cornerCoord.y >= 0.0) {\n" +
+    "    return sign(coord) * normalize(max(cornerCoord, 0.0));\n" +
+    "  } else {\n" +
+    "    float gradX = step(cornerCoord.y, cornerCoord.x);\n" +
+    "    return sign(coord) * float2(gradX, 1.0 - gradX);\n" +
+    "  }\n" +
     "}\n";
+
+  /** The lens: {@code size} and {@code offset} place the shape in the content's coordinates (offset = -its top left). */
+  private static final String LENS =
+    "uniform shader content;\n" +
+    "uniform float2 size;\n" +
+    "uniform float2 offset;\n" +
+    "uniform float radius;\n" +
+    "uniform float refractionHeight;\n" +
+    "uniform float refractionAmount;\n" +
+    "uniform float depthEffect;\n" +
+    "uniform float chromaticAberration;\n" +
+    SDF +
+    "float circleMap(float x) { return 1.0 - sqrt(1.0 - x * x); }\n" +
+    "half4 main(float2 coord) {\n" +
+    "  float2 halfSize = size * 0.5;\n" +
+    "  float2 centeredCoord = (coord + offset) - halfSize;\n" +
+    "  float sd = sdRoundedRect(centeredCoord, halfSize, radius);\n" +
+    "  if (-sd >= refractionHeight || sd > 0.0) { return content.eval(coord); }\n" +
+    "  sd = min(sd, 0.0);\n" +
+    "  float d = circleMap(1.0 - -sd / refractionHeight) * refractionAmount;\n" +
+    "  float gradRadius = min(radius * 1.5, min(halfSize.x, halfSize.y));\n" +
+    "  float2 grad = normalize(gradSdRoundedRect(centeredCoord, halfSize, gradRadius) + depthEffect * normalize(centeredCoord));\n" +
+    "  float2 refractedCoord = coord + d * grad;\n" +
+    "  float dispersionIntensity = chromaticAberration * ((centeredCoord.x * centeredCoord.y) / (halfSize.x * halfSize.y));\n" +
+    "  float2 dispersedCoord = d * grad * dispersionIntensity;\n" +
+    "  half4 color = half4(0.0);\n" +
+    "  half4 red = content.eval(refractedCoord + dispersedCoord);\n" +
+    "  color.r += red.r / 3.5; color.a += red.a / 7.0;\n" +
+    "  half4 orange = content.eval(refractedCoord + dispersedCoord * (2.0 / 3.0));\n" +
+    "  color.r += orange.r / 3.5; color.g += orange.g / 7.0; color.a += orange.a / 7.0;\n" +
+    "  half4 yellow = content.eval(refractedCoord + dispersedCoord * (1.0 / 3.0));\n" +
+    "  color.r += yellow.r / 3.5; color.g += yellow.g / 3.5; color.a += yellow.a / 7.0;\n" +
+    "  half4 green = content.eval(refractedCoord);\n" +
+    "  color.g += green.g / 3.5; color.a += green.a / 7.0;\n" +
+    "  half4 cyan = content.eval(refractedCoord - dispersedCoord * (1.0 / 3.0));\n" +
+    "  color.g += cyan.g / 3.5; color.b += cyan.b / 3.0; color.a += cyan.a / 7.0;\n" +
+    "  half4 blue = content.eval(refractedCoord - dispersedCoord * (2.0 / 3.0));\n" +
+    "  color.b += blue.b / 3.0; color.a += blue.a / 7.0;\n" +
+    "  half4 purple = content.eval(refractedCoord - dispersedCoord);\n" +
+    "  color.r += purple.r / 7.0; color.b += purple.b / 3.0; color.a += purple.a / 7.0;\n" +
+    "  return color;\n" +
+    "}\n";
+
+  /** The rim's light: brightest where the edge faces {@code angle}. */
+  private static final String HIGHLIGHT =
+    "uniform float2 size;\n" +
+    "uniform float radius;\n" +
+    "layout(color) uniform half4 color;\n" +
+    "uniform float angle;\n" +
+    "uniform float falloff;\n" +
+    SDF +
+    "half4 main(float2 coord) {\n" +
+    "  float2 halfSize = size * 0.5;\n" +
+    "  float2 centeredCoord = coord - halfSize;\n" +
+    "  float gradRadius = min(radius * 1.5, min(halfSize.x, halfSize.y));\n" +
+    "  float2 grad = gradSdRoundedRect(centeredCoord, halfSize, gradRadius);\n" +
+    "  float2 normal = float2(cos(angle), sin(angle));\n" +
+    "  float d = dot(grad, normal);\n" +
+    "  return color * pow(abs(d), falloff);\n" +
+    "}\n";
+
+  /** The lens effect for a rounded rectangle at {@code box} (in the content's coordinates), or null below Android 13. */
+  @Nullable
+  public static RenderEffect lensEffect (@Nullable Object[] cache, RectF box, float radius, float height, float amount, boolean dispersion) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || height <= 0f || amount == 0f) {
+      return null;
+    }
+    RuntimeShader shader = cache != null ? (RuntimeShader) cache[0] : null;
+    if (shader == null) {
+      shader = new RuntimeShader(LENS);
+      if (cache != null) {
+        cache[0] = shader;
+      }
+    }
+    shader.setFloatUniform("size", box.width(), box.height());
+    shader.setFloatUniform("offset", -box.left, -box.top);
+    shader.setFloatUniform("radius", Math.min(radius, Math.min(box.width(), box.height()) / 2f));
+    shader.setFloatUniform("refractionHeight", Math.min(height, Math.min(box.width(), box.height()) / 2f));
+    shader.setFloatUniform("refractionAmount", -amount);
+    shader.setFloatUniform("depthEffect", 1f);
+    shader.setFloatUniform("chromaticAberration", dispersion ? 1f : 0f);
+    return RenderEffect.createRuntimeShaderEffect(shader, "content");
+  }
+
+  private static final Paint highlightPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+  @Nullable private static Object highlightShader;
+
+  /** The rim: a thin line of light around {@code rect}, lit from the top left (Kyant's Highlight.Default). */
+  public static void drawHighlight (Canvas c, RectF rect, float radius, float alpha) {
+    if (alpha <= 0f) {
+      return;
+    }
+    final float stroke = Math.max(1f, Screen.dpf(1f));
+    highlightPaint.setStyle(Paint.Style.STROKE);
+    highlightPaint.setStrokeWidth(stroke);
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      RuntimeShader shader = (RuntimeShader) highlightShader;
+      if (shader == null) {
+        shader = new RuntimeShader(HIGHLIGHT);
+        highlightShader = shader;
+      }
+      shader.setFloatUniform("size", rect.width(), rect.height());
+      shader.setFloatUniform("radius", radius);
+      shader.setColorUniform("color", 0xFFFFFFFF);
+      shader.setFloatUniform("angle", (float) Math.toRadians(45));
+      shader.setFloatUniform("falloff", 1f);
+      highlightPaint.setShader(shader);
+      highlightPaint.setBlendMode(android.graphics.BlendMode.PLUS);
+      highlightPaint.setAlpha(Math.round(255 * .5f * alpha));
+      final int save = c.save();
+      c.translate(rect.left, rect.top);
+      final float inset = stroke / 2f;
+      c.drawRoundRect(inset, inset, rect.width() - inset, rect.height() - inset, radius - inset, radius - inset, highlightPaint);
+      c.restoreToCount(save);
+    } else {
+      highlightPaint.setShader(new LinearGradient(0, rect.top, 0, rect.bottom, 0x8CFFFFFF, 0x1FFFFFFF, Shader.TileMode.CLAMP));
+      highlightPaint.setAlpha(Math.round(255 * alpha));
+      final float inset = stroke / 2f;
+      c.drawRoundRect(rect.left + inset, rect.top + inset, rect.right - inset, rect.bottom - inset, radius - inset, radius - inset, highlightPaint);
+    }
+  }
+
+  /** Saturation 1.5 (Kyant's vibrancy): what shows through glass is livelier, as iOS's. */
+  private static android.graphics.ColorMatrixColorFilter vibrancy () {
+    final android.graphics.ColorMatrix m = new android.graphics.ColorMatrix();
+    m.setSaturation(1.5f);
+    return new android.graphics.ColorMatrixColorFilter(m);
+  }
 
   /** One glass panel: its view, its backdrop node and the root it records. */
   public static final class Panel {
     private final View view;
     @Nullable private Object node; // RenderNode (API 29+), kept as Object for older Androids' class loading
-    @Nullable private Object shader; // RuntimeShader (API 33+)
+    private final Object[] shaderCache = new Object[1]; // the lens' RuntimeShader (API 33+)
     @Nullable private View root;
     private final int[] rootLocation = new int[2], viewLocation = new int[2];
     private final Paint tintPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -207,18 +336,14 @@ public final class XgramGlass {
       final float dx = viewLocation[0] - rootLocation[0], dy = viewLocation[1] - rootLocation[1];
       // The panel in the root, for the refraction
       box.set(rect.left + dx, rect.top + dy, rect.right + dx, rect.bottom + dy);
-      RenderEffect effect = RenderEffect.createBlurEffect(Screen.dpf(18f), Screen.dpf(18f), Shader.TileMode.CLAMP);
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        RuntimeShader shader = (RuntimeShader) this.shader;
-        if (shader == null) {
-          shader = new RuntimeShader(REFRACTION);
-          this.shader = shader;
-        }
-        shader.setFloatUniform("box", box.left, box.top, box.right, box.bottom);
-        shader.setFloatUniform("radius", radius);
-        shader.setFloatUniform("depth", Screen.dpf(10f));
-        shader.setFloatUniform("band", Math.min(Screen.dpf(22f), Math.min(rect.width(), rect.height()) / 2f));
-        effect = RenderEffect.createChainEffect(RenderEffect.createRuntimeShaderEffect(shader, "content"), effect);
+      // Kyant's order: vibrancy, a light blur, then the lens (clear glass, as iOS's, not frosted)
+      RenderEffect effect = RenderEffect.createChainEffect(
+        RenderEffect.createBlurEffect(Screen.dpf(6f), Screen.dpf(6f), Shader.TileMode.CLAMP),
+        RenderEffect.createColorFilterEffect(vibrancy())
+      );
+      final RenderEffect lens = lensEffect(shaderCache, box, radius, Screen.dpf(24f), Screen.dpf(24f), true);
+      if (lens != null) {
+        effect = RenderEffect.createChainEffect(lens, effect);
       }
       node.setRenderEffect(effect);
 
@@ -230,15 +355,10 @@ public final class XgramGlass {
       c.drawRenderNode(node);
       c.restoreToCount(save);
 
-      // The tint: the panel's own colour, light enough to see through
-      tintPaint.setColor(XgramExpressive.withAlpha(tint, .42f));
+      // The tint: the panel's own colour, light enough to see through (Kyant's surface at 40 %)
+      tintPaint.setColor(XgramExpressive.withAlpha(tint, .35f));
       c.drawRoundRect(rect, radius, radius, tintPaint);
-      // The rim: bright at the top, fading down (light from above)
-      final float stroke = Math.max(1f, Screen.dpf(1f));
-      rimPaint.setStrokeWidth(stroke);
-      rimPaint.setShader(new LinearGradient(0, rect.top, 0, rect.bottom, 0x8CFFFFFF, 0x1FFFFFFF, Shader.TileMode.CLAMP));
-      final float inset = stroke / 2f;
-      c.drawRoundRect(rect.left + inset, rect.top + inset, rect.right - inset, rect.bottom - inset, radius - inset, radius - inset, rimPaint);
+      drawHighlight(c, rect, radius, 1f);
       return true;
     }
   }

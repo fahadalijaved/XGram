@@ -4078,6 +4078,110 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       if (clip != -1) {
         c.clipRect(0, 0, width, height);
       }
+      // Liquid glass: while a finger holds or slides, the selection is a glass lens that rises over the bar and bends
+      // its tabs; the bar's own content is drawn once into a node so the lens can show it
+      final float lift = glassLift.getValue();
+      if (glass && lift > .002f && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        drawWithLens(c, width, height, lift);
+      } else {
+        drawContent(c, width, height);
+      }
+      if (clip != -1) {
+        drawFoldedBadge(c, width, height, collapse, rtlNow());
+        c.restoreToCount(clip);
+      }
+    }
+
+    private boolean rtlNow () {
+      return Lang.rtl();
+    }
+
+    // Liquid glass: the selection as a lifted lens (after BitChord's floating tab bar, github.com/kushagrasinghx/BitChord)
+
+    /** 0 at rest, 1 lifted (an under-damped spring: it overshoots as it rises and dips as it lands). */
+    private final XgramExpressive.Spring glassLift = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> invalidate()).setThreshold(.002f);
+    /** Where the lifted lens is centred while held (the finger), and where it was let go. */
+    private float glassFingerX = -1f;
+    @Nullable private Object glassContentNode, glassLensNode;
+    private final Object[] glassLensShader = new Object[1];
+    private final RectF glassPillRect = new RectF();
+
+    private void liftGlass (boolean lift, float x) {
+      if (!com.fahadali.xgram.appearance.XgramGlass.on() || preview) {
+        return;
+      }
+      if (x >= 0f) {
+        glassFingerX = x;
+      }
+      glassLift.animateTo(lift ? 1f : 0f);
+      invalidate();
+    }
+
+    @android.annotation.TargetApi(Build.VERSION_CODES.TIRAMISU)
+    private void drawWithLens (Canvas c, int width, int height, float lift) {
+      android.graphics.RenderNode content = (android.graphics.RenderNode) glassContentNode;
+      android.graphics.RenderNode lensNode = (android.graphics.RenderNode) glassLensNode;
+      if (content == null) {
+        glassContentNode = content = new android.graphics.RenderNode("XgramGlassBar");
+        glassLensNode = lensNode = new android.graphics.RenderNode("XgramGlassLens");
+      }
+      content.setPosition(0, 0, width, height);
+      final android.graphics.RecordingCanvas rc = content.beginRecording();
+      try {
+        drawContent(rc, width, height);
+      } finally {
+        content.endRecording();
+      }
+      c.drawRenderNode(content);
+
+      // The lens: the inner pill's size grown (wider, and taller than the bar), centred between the selected tab and
+      // the finger as far as it is lifted, so it slides home as it lands
+      final float pillH = pillHeightIn(height), pad = Screen.dpf(PAD);
+      final float restW = Math.max(innerR - innerL, pillH - 2f * pad), restH = pillH - 2f * pad;
+      final float liftClamped = Math.max(0f, Math.min(1.2f, lift));
+      final float w = restW + Screen.dpf(14f) * lift, h = restH + (height - restH) * Math.min(1f, liftClamped) + Screen.dpf(9f) * lift;
+      final float home = (innerL + innerR) / 2f;
+      final float finger = glassFingerX >= 0f ? Math.max(w / 2f, Math.min(width - w / 2f, glassFingerX)) : home;
+      final float cx = home + (finger - home) * Math.max(0f, Math.min(1f, lift)), cy = pillH / 2f;
+      glassPillRect.set(cx - w / 2f, cy - h / 2f, cx + w / 2f, cy + h / 2f);
+      final float radius = h / 2f;
+
+      lensNode.setPosition(0, 0, width, height);
+      final android.graphics.RecordingCanvas lc = lensNode.beginRecording();
+      try {
+        // A little magnified, as a drop of glass does
+        final float zoom = 1f + .18f * Math.max(0f, Math.min(1f, lift));
+        lc.scale(zoom, zoom, cx, cy);
+        lc.drawRenderNode(content);
+      } finally {
+        lensNode.endRecording();
+      }
+      lensNode.setRenderEffect(com.fahadali.xgram.appearance.XgramGlass.lensEffect(glassLensShader, glassPillRect, radius, Screen.dpf(16f) * liftClamped, Screen.dpf(22f) * liftClamped, true));
+      lensNode.setClipToBounds(false);
+
+      final float a = Math.max(0f, Math.min(1f, lift));
+      // A soft shadow under the lifted lens
+      glassShadowPaint.setColor(XgramExpressive.withAlpha(0xFF000000, .16f * a));
+      glassShadowPaint.setMaskFilter(new android.graphics.BlurMaskFilter(Screen.dpf(8f), android.graphics.BlurMaskFilter.Blur.NORMAL));
+      c.drawRoundRect(glassPillRect.left, glassPillRect.top + Screen.dpf(3f), glassPillRect.right, glassPillRect.bottom + Screen.dpf(3f), radius, radius, glassShadowPaint);
+      final int save = c.save();
+      glassClip.reset();
+      glassClip.addRoundRect(glassPillRect, radius, radius, android.graphics.Path.Direction.CW);
+      c.clipPath(glassClip);
+      fillPaint.setColor(containerColor());
+      c.drawRoundRect(glassPillRect, radius, radius, fillPaint); // the lens sees the bar's own colour at its edges
+      c.drawRenderNode(lensNode);
+      fillPaint.setColor(XgramExpressive.withAlpha(0xFFFFFFFF, .10f * a));
+      c.drawRoundRect(glassPillRect, radius, radius, fillPaint);
+      c.restoreToCount(save);
+      com.fahadali.xgram.appearance.XgramGlass.drawHighlight(c, glassPillRect, radius, a);
+    }
+
+    private final android.graphics.Path glassClip = new android.graphics.Path();
+    private final Paint glassShadowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+    /** The bar's content: the inner pill, the tabs' state layers, their icons, labels and badges. */
+    private void drawContent (Canvas c, int width, int height) {
       // Inner pill: 8dp in from the pill's top and bottom, whatever its height now (48dp items, 40dp compact)
       final float pillH = pillHeightIn(height), pad = Screen.dpf(PAD);
       final float itemTop = pad, itemBottom = itemTop + (pillH - 2f * pad);
@@ -4117,10 +4221,6 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
           }
         }
         drawBadge(c, tab, a * badgeFade, rtl, cy);
-      }
-      if (clip != -1) {
-        drawFoldedBadge(c, width, height, collapse, rtl);
-        c.restoreToCount(clip);
       }
     }
 
@@ -4273,6 +4373,14 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
 
     /** While the finger slides, the pill rises a little under it, and settles with a small bounce when it lifts. */
     private void liftSlide (boolean lift) {
+      if (com.fahadali.xgram.appearance.XgramGlass.on() && !preview) {
+        // Liquid glass: the selection itself lifts as a lens instead of the whole bar
+        liftGlass(lift, lift ? slideStartX : -1f);
+        if (lift) {
+          com.fahadali.xgram.XgramHaptics.dragStart(this);
+        }
+        return;
+      }
       animate().scaleX(lift ? 1.05f : 1f).scaleY(lift ? 1.05f : 1f).setDuration(lift ? 120L : 260L)
         .setInterpolator(lift ? me.vkryl.android.AnimatorUtils.DECELERATE_INTERPOLATOR : new android.view.animation.OvershootInterpolator(2.2f)).start();
       if (lift) {
@@ -4371,6 +4479,24 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     }
 
     @Override
+    public boolean dispatchTouchEvent (MotionEvent e) {
+      // Liquid glass: a touch on the bar lifts the selection as a lens at once (iOS); it lands on the tab when the finger
+      // lets go (a tap on another tab: it glides there as it comes down)
+      switch (e.getActionMasked()) {
+        case MotionEvent.ACTION_DOWN:
+          if (canSlide()) {
+            liftGlass(true, e.getX());
+          }
+          break;
+        case MotionEvent.ACTION_UP:
+        case MotionEvent.ACTION_CANCEL:
+          liftGlass(false, -1f);
+          break;
+      }
+      return super.dispatchTouchEvent(e);
+    }
+
+    @Override
     public boolean onInterceptTouchEvent (MotionEvent e) {
       switch (e.getActionMasked()) {
         case MotionEvent.ACTION_DOWN:
@@ -4402,6 +4528,10 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
         switch (e.getActionMasked()) {
           case MotionEvent.ACTION_MOVE:
             slideTo(e.getX());
+            if (glassLift.getTarget() > 0f) {
+              glassFingerX = e.getX();
+              invalidate();
+            }
             break;
           case MotionEvent.ACTION_UP:
             sliding = false;
