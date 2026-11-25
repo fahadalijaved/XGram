@@ -68,6 +68,7 @@ import org.thunderdog.challegram.unsorted.Settings;
 import java.util.ArrayList;
 import java.util.Arrays;
 
+import me.vkryl.android.ViewUtils;
 import me.vkryl.core.BitwiseUtils;
 import tgx.td.ChatId;
 import tgx.td.ChatPosition;
@@ -791,9 +792,72 @@ public final class XgramNavBar {
       return super.dispatchTouchEvent(e);
     }
 
+    // Hold and slide: a sideways drag on the bar carries the indicator under the finger, and the destination under it
+    // opens when the finger lifts (one that opens a screen hands the indicator back to the chat list's page)
+
+    private float slideStartX, slideStartY;
+    private boolean sliding;
+
+    /** The item index under {@code x}, as a fraction (the indicator's position), clamped to the items. */
+    private float slideIndexAt (float x) {
+      final int count = items.size();
+      final float padding = Screen.dpf(INNER_PADDING);
+      final float itemWidth = (getWidth() - padding * 2f) / Math.max(1, count);
+      float slot = (x - padding) / itemWidth - .5f;
+      slot = Math.max(0f, Math.min(count - 1, slot));
+      return Lang.rtl() ? count - 1 - slot : slot;
+    }
+
+    @Override
+    public boolean onInterceptTouchEvent (MotionEvent e) {
+      switch (e.getActionMasked()) {
+        case MotionEvent.ACTION_DOWN:
+          sliding = false;
+          slideStartX = e.getX();
+          slideStartY = e.getY();
+          return false;
+        case MotionEvent.ACTION_MOVE: {
+          final float dx = e.getX() - slideStartX, dy = e.getY() - slideStartY;
+          if (!sliding && items.size() > 1 && Math.abs(dx) > android.view.ViewConfiguration.get(getContext()).getScaledTouchSlop() && Math.abs(dx) > Math.abs(dy) * 1.5f) {
+            sliding = true;
+            return true; // the item under the finger gets a cancel: no press
+          }
+          return false;
+        }
+      }
+      return false;
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     @Override
     public boolean onTouchEvent (MotionEvent e) {
+      if (sliding) {
+        switch (e.getActionMasked()) {
+          case MotionEvent.ACTION_MOVE: {
+            final float index = slideIndexAt(e.getX());
+            final int before = Math.round(indicatorSpring.getValue());
+            indicatorSpring.setValue(index);
+            if (Math.round(index) != before) {
+              ViewUtils.onClick(this);
+            }
+            invalidate();
+            break;
+          }
+          case MotionEvent.ACTION_UP: {
+            sliding = false;
+            final int index = Math.round(slideIndexAt(e.getX()));
+            if (index >= 0 && index < items.size()) {
+              onDestinationClick(items.get(index).dest);
+            }
+            setSelected(computeSelected(), true);
+            break;
+          }
+          case MotionEvent.ACTION_CANCEL:
+            sliding = false;
+            setSelected(computeSelected(), true);
+            break;
+        }
+      }
       return true; // between the destinations too: nothing under the bar gets the touch
     }
 

@@ -4239,8 +4239,146 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       c.drawCircle(cx, cy, dot / 2f * presence, fillPaint);
     }
 
+    // Hold and slide: a sideways drag on the pill moves the selection from tab to tab under the finger, and the tab
+    // under it opens when the finger lifts (a short flick that stays on its tab moves one tab that way). Saved, which
+    // never takes the selection, opens when the finger lifts on it. Not while folded into one tab.
+
+    private float slideStartX, slideStartY;
+    private boolean sliding;
+    private int slideStartDest, slideDest;
+
+    private boolean canSlide () {
+      return tabs.length > 1 && compactSpring.getTarget() < 1f && !destroyed && (shown || preview);
+    }
+
+    /** The tab whose item is under {@code x} in this pill, else the nearest one. */
+    @Nullable
+    private Tab slideTabAt (float x) {
+      Tab nearest = null;
+      float best = Float.MAX_VALUE;
+      for (Tab tab : tabs) {
+        final View v = tab.view;
+        if (v.getVisibility() != View.VISIBLE || v.getWidth() == 0) {
+          continue;
+        }
+        if (x >= v.getLeft() && x < v.getRight()) {
+          return tab;
+        }
+        final float d = Math.min(Math.abs(x - v.getLeft()), Math.abs(x - v.getRight()));
+        if (d < best) {
+          best = d;
+          nearest = tab;
+        }
+      }
+      return nearest;
+    }
+
+    /** The visible tab next to {@code from} on the screen, to the right when {@code right}; null at the end. */
+    @Nullable
+    private Tab slideNeighbour (Tab from, boolean right) {
+      Tab next = null;
+      for (Tab tab : tabs) {
+        if (tab == from || tab.view.getVisibility() != View.VISIBLE || tab.view.getWidth() == 0) {
+          continue;
+        }
+        final boolean side = right ? tab.view.getLeft() >= from.view.getRight() - 1 : tab.view.getRight() <= from.view.getLeft() + 1;
+        if (side && (next == null || (right ? tab.view.getLeft() < next.view.getLeft() : tab.view.getLeft() > next.view.getLeft()))) {
+          next = tab;
+        }
+      }
+      return next;
+    }
+
+    private void slideTo (float x) {
+      final Tab tab = slideTabAt(x);
+      if (tab == null || tab.dest == slideDest) {
+        return;
+      }
+      slideDest = tab.dest;
+      if (tab.dest != DEST_SAVED && tab.dest != selectedDest) {
+        ViewUtils.onClick(this);
+        setTarget(tab.dest, true);
+      }
+    }
+
+    private void finishSlide (float x) {
+      Tab tab = slideTabAt(x);
+      final Tab start = tabOf(slideStartDest);
+      if (tab != null && start != null && tab == start && Math.abs(x - slideStartX) > Screen.dp(32f)) {
+        final Tab next = slideNeighbour(start, x > slideStartX);
+        if (next != null) {
+          tab = next;
+        }
+      }
+      if (tab == null) {
+        restoreSelection();
+        return;
+      }
+      final int dest = tab.dest;
+      if (dest == slideStartDest) {
+        restoreSelection();
+        return;
+      }
+      if (dest != DEST_SAVED) {
+        setTarget(dest, true);
+      }
+      onTabClick(dest, tab.view);
+      // A tab that could not open now (a screen still moving): the selection goes back to what is on screen
+      postDelayed(this::restoreSelection, 400);
+    }
+
+    private void restoreSelection () {
+      if (destroyed || sliding || preview || navigation == null || navigation.isAnimating()) {
+        return;
+      }
+      final int actual = computeSelected(navigation.getCurrentStackItem());
+      if (actual != selectedDest && indexOf(actual) != -1) {
+        setTarget(actual, true);
+      }
+    }
+
+    @Override
+    public boolean onInterceptTouchEvent (MotionEvent e) {
+      switch (e.getActionMasked()) {
+        case MotionEvent.ACTION_DOWN:
+          sliding = false;
+          slideStartX = e.getX();
+          slideStartY = e.getY();
+          slideStartDest = selectedDest;
+          slideDest = selectedDest;
+          return false;
+        case MotionEvent.ACTION_MOVE: {
+          final float dx = e.getX() - slideStartX, dy = e.getY() - slideStartY;
+          if (!sliding && canSlide() && Math.abs(dx) > android.view.ViewConfiguration.get(getContext()).getScaledTouchSlop() && Math.abs(dx) > Math.abs(dy) * 1.5f) {
+            sliding = true;
+            if (getParent() != null) {
+              getParent().requestDisallowInterceptTouchEvent(true);
+            }
+            return true; // the tab under the finger gets a cancel: no press, no long press
+          }
+          return false;
+        }
+      }
+      return false;
+    }
+
     @Override
     public boolean onTouchEvent (MotionEvent e) {
+      if (sliding) {
+        switch (e.getActionMasked()) {
+          case MotionEvent.ACTION_MOVE:
+            slideTo(e.getX());
+            break;
+          case MotionEvent.ACTION_UP:
+            sliding = false;
+            finishSlide(e.getX());
+            break;
+          case MotionEvent.ACTION_CANCEL:
+            sliding = false;
+            restoreSelection();
+            break;
+        }
+      }
       return true; // nothing under the pill gets a touch that started on it
     }
 
