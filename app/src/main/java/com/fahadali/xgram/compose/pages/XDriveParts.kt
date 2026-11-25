@@ -185,6 +185,10 @@ internal enum class XDriveSort(val title: Int) {
 internal fun items(count: Int): String =
   Lang.getString(if (count == 1) R.string.XgramXDriveItemsOne else R.string.XgramXDriveItemsMany, count)
 
+/** "12 items · 340 MB" (the size once known and above zero). */
+internal fun itemsAndSize(count: Int, size: Long?): String =
+  if (size != null && size > 0L) items(count) + " · " + org.thunderdog.challegram.tool.Strings.buildSize(size) else items(count)
+
 /**
  * A drag of items onto a folder: it starts with a long press on an item (which selects it and takes the whole
  * selection along) and shows its ghost once the finger moves. Positions are in the page's root coordinates.
@@ -354,6 +358,7 @@ internal class XDriveState(val tdlib: Tdlib, val host: XgramComposeHost, val sco
   fun indexChanged() {
     indexVersion++
     feeds.values.forEach { it.indexChanged() }
+    loadSizes()
   }
 
   fun dispose() {
@@ -369,6 +374,51 @@ internal class XDriveState(val tdlib: Tdlib, val host: XgramComposeHost, val sco
   fun counts(): Map<String, Int> {
     indexVersion
     return index.counts()
+  }
+
+  // Folder sizes: each foldered item's file size, read once (GetMessages, 100 at a time) and summed per folder
+
+  private val sizeOf = HashMap<Long, Long>()
+  private val sizesAsked = HashSet<Long>()
+  val folderSizes = mutableStateMapOf<String, Long>()
+
+  /** Reads the sizes still unknown, then sums them per folder (on each index change). */
+  fun loadSizes() {
+    val chatId = tdlib.selfChatId()
+    if (!index.isLoaded || chatId == 0L) return
+    val missing = ArrayList<Long>()
+    for (folder in index.folders()) {
+      for (id in index.messagesIn(folder.id)) {
+        if (id != 0L && sizesAsked.add(id)) missing.add(id)
+      }
+    }
+    if (missing.isEmpty()) {
+      sumSizes()
+      return
+    }
+    val chunks = missing.chunked(100)
+    var left = chunks.size
+    for (chunk in chunks) {
+      tdlib.send(TdApi.GetMessages(chatId, chunk.toLongArray())) { result, _ ->
+        tdlib.ui().post {
+          result?.messages?.forEach { message ->
+            if (message != null) sizeOf[message.id] = XDriveItems.fileOf(message)?.size ?: 0L
+          }
+          if (--left == 0) sumSizes()
+        }
+      }
+    }
+  }
+
+  private fun sumSizes() {
+    val sums = HashMap<String, Long>()
+    for (folder in index.folders()) {
+      var sum = 0L
+      for (id in index.messagesIn(folder.id)) sum += sizeOf[id] ?: 0L
+      sums[folder.id] = sum
+    }
+    folderSizes.keys.retainAll(sums.keys)
+    folderSizes.putAll(sums)
   }
 
   fun folderOf(message: TdApi.Message): XDriveIndex.Folder? {

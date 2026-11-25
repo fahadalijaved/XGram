@@ -362,12 +362,13 @@ private fun RecentRow(state: XDriveState, recent: List<TdApi.Message>) {
 
 @Composable
 private fun HomeFolders(state: XDriveState, folders: List<XDriveIndex.Folder>, counts: Map<String, Int>) {
+  LaunchedEffect(state.indexVersion) { state.loadSizes() }
   LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.xgramNoSwipeBack()) {
     items(folders, key = { it.id }) { folder ->
       var menu by remember { mutableStateOf(false) }
       val target = "tile:home:" + folder.id
       FolderTile(
-        state, folder.id, target, folder.name, items(counts[folder.id] ?: 0), folder.emoji, XDriveIcons.drawableOf(folder.icon),
+        state, folder.id, target, folder.name, itemsAndSize(counts[folder.id] ?: 0, state.folderSizes[folder.id]), folder.emoji, XDriveIcons.drawableOf(folder.icon),
         dropKey = folder.id, onClick = { state.openFolder(XDriveScope.InFolder(folder.id), target) }, onMenu = { menu = true },
         modifier = Modifier.width(168.dp).animateItem(),
         menu = { FolderMenu(state, folder, menu) { menu = false } }
@@ -428,6 +429,7 @@ internal fun FoldersTab(state: XDriveState) {
   val controller = host.controller
   val folders = state.folders()
   val counts = state.counts()
+  LaunchedEffect(state.indexVersion) { state.loadSizes() }
   val unsorted = state.feed(XDriveView.ALL, XDriveScope.Unsorted)
   val grid = state.grid("folders")
   LoadMore(unsorted, grid)
@@ -464,7 +466,7 @@ internal fun FoldersTab(state: XDriveState) {
       var menu by remember { mutableStateOf(false) }
       val target = "tile:folders:" + folder.id
       FolderTile(
-        state, folder.id, target, folder.name, items(counts[folder.id] ?: 0), folder.emoji, XDriveIcons.drawableOf(folder.icon),
+        state, folder.id, target, folder.name, itemsAndSize(counts[folder.id] ?: 0, state.folderSizes[folder.id]), folder.emoji, XDriveIcons.drawableOf(folder.icon),
         dropKey = folder.id, onClick = { state.openFolder(XDriveScope.InFolder(folder.id), target) }, onMenu = { menu = true },
         modifier = Modifier.animateItem().padding(bottom = 8.dp),
         menu = { FolderMenu(state, folder, menu) { menu = false } }
