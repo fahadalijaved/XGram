@@ -885,9 +885,6 @@ public final class XgramNavBar {
 
     @Override
     protected void dispatchDraw (Canvas c) {
-      if (com.fahadali.xgram.appearance.XgramGlass.isRecording()) {
-        return; // Liquid glass: the backdrop being recorded leaves the bar out
-      }
       final int width = getWidth(), height = getHeight();
       float radius = height / 2f;
       rect.set(0, 0, width, height);

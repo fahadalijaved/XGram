@@ -3282,6 +3282,10 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
   }
 
   private int indicatorColor () {
+    if (com.fahadali.xgram.appearance.XgramGlass.on()) {
+      // Liquid glass: the selection is a clear capsule (iOS), no colour of its own
+      return XgramExpressive.withAlpha(color(XgramExpressive.ON_SURFACE), .09f);
+    }
     return color(vibrant ? XgramExpressive.PRIMARY : XgramExpressive.SECONDARY_CONTAINER);
   }
 
@@ -3290,6 +3294,9 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
   }
 
   private int selectedContentColor () {
+    if (com.fahadali.xgram.appearance.XgramGlass.on()) {
+      return color(XgramExpressive.PRIMARY); // Liquid glass: the selected tab says so with its icon and label colour
+    }
     return color(vibrant ? XgramExpressive.ON_PRIMARY : XgramExpressive.ON_SECONDARY_CONTAINER);
   }
 
@@ -4054,15 +4061,21 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       if (width <= 0 || height <= 0) {
         return;
       }
-      if (com.fahadali.xgram.appearance.XgramGlass.isRecording()) {
-        return; // Liquid glass: the backdrop being recorded leaves the bar out
-      }
       if (layoutDirty) {
         relayoutItems(); // drawn before the pre-draw listener ran (a preview's first frame)
       }
       // Container (Liquid glass, a test: the blurred, bent backdrop under a light tint instead of the solid colour)
       rect.set(0, 0, width, height);
-      final boolean glass = !preview && glassPanel.draw(c, rect, height / 2f, containerColor());
+      final boolean glass;
+      if (preview && com.fahadali.xgram.appearance.XgramGlass.on()) {
+        // The settings preview: the glass's tint and rim over the page (it has nothing behind it to bend)
+        fillPaint.setColor(XgramExpressive.withAlpha(containerColor(), .55f));
+        c.drawRoundRect(rect, height / 2f, height / 2f, fillPaint);
+        com.fahadali.xgram.appearance.XgramGlass.drawHighlight(c, rect, height / 2f, 1f);
+        glass = true;
+      } else {
+        glass = !preview && glassPanel.draw(c, rect, height / 2f, containerColor());
+      }
       if (glass != glassShown) {
         glassShown = glass;
         setElevation(glass ? Screen.dp(2f) : Screen.dp(XgramExpressive.ELEVATION_3)); // a glass panel casts a light shadow
