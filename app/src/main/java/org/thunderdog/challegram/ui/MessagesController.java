@@ -9830,7 +9830,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
       final float radius = Math.min(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L_INC), rect.height() / 2f);
       if (xgramGlassComposer && connect <= 0f) {
         if (xgramFieldGlass == null) {
-          xgramFieldGlass = new com.fahadali.xgram.appearance.XgramGlass.Panel(inputView).setBranch(bottomWrap);
+          // A text field: frosted more and tinted more than the bars, so the message text and its icons stay readable
+          xgramFieldGlass = new com.fahadali.xgram.appearance.XgramGlass.Panel(inputView).setBranch(bottomWrap).setLook(.72f, 14f);
         }
         if (xgramFieldGlass.draw(c, rect, radius, fieldColor)) {
           return;

@@ -224,6 +224,14 @@ public final class XgramGlass {
     };
 
     @Nullable private View branch;
+    private float tintAlpha = .35f, blurDp = 6f;
+
+    /** How much of the tint and how much blur: a text field takes more of both, so its text and icons stay readable. */
+    public Panel setLook (float tintAlpha, float blurDp) {
+      this.tintAlpha = tintAlpha;
+      this.blurDp = blurDp;
+      return this;
+    }
 
     /**
      * The backdrop is what is drawn before {@code branch} (an ancestor of the panel's view) instead of before the panel's
@@ -383,7 +391,7 @@ public final class XgramGlass {
       box.set(rect.left + dx, rect.top + dy, rect.right + dx, rect.bottom + dy);
       // Kyant's order: vibrancy, a light blur, then the lens (clear glass, as iOS's, not frosted)
       RenderEffect effect = RenderEffect.createChainEffect(
-        RenderEffect.createBlurEffect(Screen.dpf(6f), Screen.dpf(6f), Shader.TileMode.CLAMP),
+        RenderEffect.createBlurEffect(Screen.dpf(blurDp), Screen.dpf(blurDp), Shader.TileMode.CLAMP),
         RenderEffect.createColorFilterEffect(vibrancy())
       );
       // The bend scales with the panel: 24dp on the bar, less on a button (a 56dp FAB bent the chat list's white cards
@@ -404,7 +412,7 @@ public final class XgramGlass {
       c.restoreToCount(save);
 
       // The tint: the panel's own colour, light enough to see through (Kyant's surface at 40 %)
-      tintPaint.setColor(XgramExpressive.withAlpha(tint, .35f));
+      tintPaint.setColor(XgramExpressive.withAlpha(tint, tintAlpha));
       c.drawRoundRect(rect, radius, radius, tintPaint);
       drawHighlight(c, rect, radius, 1f);
       return true;
