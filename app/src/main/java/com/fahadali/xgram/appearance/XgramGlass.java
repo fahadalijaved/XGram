@@ -223,6 +223,18 @@ public final class XgramGlass {
       return true;
     };
 
+    @Nullable private View branch;
+
+    /**
+     * The backdrop is what is drawn before {@code branch} (an ancestor of the panel's view) instead of before the panel's
+     * own nearest ancestor with earlier siblings: the chat's message field records the messages and the wallpaper
+     * behind the whole composer, not the composer's own rows above the field.
+     */
+    public Panel setBranch (@Nullable View branch) {
+      this.branch = branch;
+      return this;
+    }
+
     public Panel (@NonNull View view) {
       this.view = view;
       rimPaint.setStyle(Paint.Style.STROKE);
@@ -260,7 +272,7 @@ public final class XgramGlass {
      */
     @RequiresApi(Build.VERSION_CODES.S)
     private void recordImpl () {
-      View branch = view;
+      View branch = this.branch != null ? this.branch : view;
       // In a popup (menus, the message popup): what is behind the popup, not the popup's own other parts
       for (android.view.ViewParent p = view.getParent(); p instanceof View; p = p.getParent()) {
         if (p instanceof org.thunderdog.challegram.widget.PopupLayout) {

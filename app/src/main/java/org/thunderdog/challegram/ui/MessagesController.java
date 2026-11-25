@@ -828,7 +828,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
     addThemeInvalidateListener(wallpaperView);
 
     params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-    params.addRule(RelativeLayout.ABOVE, R.id.msg_bottom);
+    // XGram Liquid glass (a test): the messages run on under the composer (its field is glass), padded by its height
+    xgramGlassComposer = com.fahadali.xgram.appearance.XgramGlass.on() && previewMode == PREVIEW_MODE_NONE && !isInForceTouchMode();
+    if (!xgramGlassComposer) {
+      params.addRule(RelativeLayout.ABOVE, R.id.msg_bottom);
+    }
 
     MessagesLayoutManager messagesManager;
 
@@ -880,6 +884,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       protected void onLayout (boolean changed, int l, int t, int r, int b) {
         super.onLayout(changed, l, t, r, b);
         updateButtonsY();
+        xgramSyncGlassPadding();
       }
     };
     bottomWrap.setId(R.id.msg_bottom);
@@ -9769,13 +9774,34 @@ public class MessagesController extends ViewController<MessagesController.Argume
   // centred, and keeps 16dp from the field's end (XgramM3Composer). The trailing record or send
   // button is a 40dp filled circle outside the field; the record button morphs into the send one.
 
+  // XGram Liquid glass (a test): the messages run on under the composer, whose field is glass
+
+  private boolean xgramGlassComposer;
+  private int xgramGlassPadding = -1;
+  @Nullable private com.fahadali.xgram.appearance.XgramGlass.Panel xgramFieldGlass;
+
+  /** The messages' bottom padding follows the composer's height, so the newest one rests above it and scrolls under. */
+  private void xgramSyncGlassPadding () {
+    if (!xgramGlassComposer || messagesView == null || bottomWrap == null) {
+      return;
+    }
+    final int padding = bottomWrap.getVisibility() == View.GONE ? 0 : bottomWrap.getHeight();
+    if (padding != xgramGlassPadding) {
+      xgramGlassPadding = padding;
+      messagesView.setClipToPadding(false);
+      messagesView.post(() -> messagesView.setPadding(messagesView.getPaddingLeft(), messagesView.getPaddingTop(), messagesView.getPaddingRight(), xgramGlassPadding));
+    }
+  }
+
   private final class XgramInputFieldBackground extends android.graphics.drawable.Drawable {
     private final android.graphics.RectF rect = new android.graphics.RectF();
 
     @Override
     public void draw (@NonNull Canvas c) {
       Rect bounds = getBounds();
-      c.drawRect(bounds, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE)));
+      if (!xgramGlassComposer) {
+        c.drawRect(bounds, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE)));
+      }
       final float verticalInset = (Screen.dp(49f) - Screen.dp(com.fahadali.xgram.appearance.XgramExpressiveC.ICON_BUTTON_BOX)) / 2f;
       final float start = com.fahadali.xgram.appearance.XgramM3Chat.fieldStart();
       // The end follows the send button in when there is no record button (the text keeps its 16dp from the send slot)
@@ -9792,6 +9818,14 @@ public class MessagesController extends ViewController<MessagesController.Argume
       }
       // 20dp corners: a full pill on one line (40dp), the same 20dp corners as the field grows, not a stretched pill
       final float radius = Math.min(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L_INC), rect.height() / 2f);
+      if (xgramGlassComposer && connect <= 0f) {
+        if (xgramFieldGlass == null) {
+          xgramFieldGlass = new com.fahadali.xgram.appearance.XgramGlass.Panel(inputView).setBranch(bottomWrap);
+        }
+        if (xgramFieldGlass.draw(c, rect, radius, fieldColor)) {
+          return;
+        }
+      }
       if (connect <= 0f) {
         c.drawRoundRect(rect, radius, radius, Paints.fillingPaint(fieldColor));
       } else {
@@ -9816,7 +9850,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     @Override
     @SuppressWarnings("deprecation")
     public int getOpacity () {
-      return android.graphics.PixelFormat.OPAQUE;
+      return xgramGlassComposer ? android.graphics.PixelFormat.TRANSLUCENT : android.graphics.PixelFormat.OPAQUE;
     }
   }
 
