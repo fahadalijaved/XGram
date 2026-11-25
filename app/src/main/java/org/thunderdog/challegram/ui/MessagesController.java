@@ -832,6 +832,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
     xgramGlassComposer = com.fahadali.xgram.appearance.XgramGlass.on() && previewMode == PREVIEW_MODE_NONE && !isInForceTouchMode();
     if (!xgramGlassComposer) {
       params.addRule(RelativeLayout.ABOVE, R.id.msg_bottom);
+    } else {
+      // To the composer's bottom (not the screen's: the emoji panel and the keyboard sit below it)
+      params.addRule(RelativeLayout.ALIGN_BOTTOM, R.id.msg_bottom);
     }
 
     MessagesLayoutManager messagesManager;
