@@ -206,6 +206,34 @@ public final class XgramHaptics {
     return gestureThreshold(view, true);
   }
 
+  /**
+   * A tab under a sliding finger (the bottom bar, a tab swipe passing half way): a crisp tick on the touch vibrator
+   * (Android 13+ primitives, else a short buzz), much firmer than the view's clock tick, which Samsung plays faintly.
+   */
+  public static boolean slideTick (@Nullable View view) {
+    if (view == null || !enabled()) {
+      return false;
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      final android.os.Vibrator vibrator = vibrator(view.getContext());
+      if (vibrator != null && vibrator.hasVibrator()) {
+        final android.os.VibrationEffect effect = hasPrimitives(vibrator)
+          ? android.os.VibrationEffect.startComposition().addPrimitive(android.os.VibrationEffect.Composition.PRIMITIVE_CLICK, .7f).compose()
+          : vibrator.hasAmplitudeControl() ? android.os.VibrationEffect.createOneShot(14, 200) : android.os.VibrationEffect.createPredefined(android.os.VibrationEffect.EFFECT_TICK);
+        if (vibrateTouch(view, effect)) {
+          lastTickTime = SystemClock.uptimeMillis();
+          return true;
+        }
+      }
+    }
+    return perform(view, HapticFeedbackConstants.KEYBOARD_TAP);
+  }
+
+  /** A swipe or slide landed on another tab: a full click. */
+  public static boolean tabLanded (@Nullable View view) {
+    return pullArmed(view);
+  }
+
   /** A clock tick: a row or value under the finger changed. */
   public static boolean tick (@Nullable View view) {
     return performTick(view, clockTick());

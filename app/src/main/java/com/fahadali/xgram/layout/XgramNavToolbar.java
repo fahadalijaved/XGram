@@ -2518,7 +2518,9 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     final boolean past = navigation.xgramTabDragProgress() >= .5f;
     if (past != tabDragPastHalf) {
       tabDragPastHalf = past;
-      com.fahadali.xgram.XgramHaptics.gestureThreshold(host, past);
+      if (past) {
+        com.fahadali.xgram.XgramHaptics.slideTick(host);
+      }
     }
   }
 
@@ -2542,7 +2544,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     navigation.xgramEndTabDrag(commit, Math.abs(velocityX));
     tabDragPastHalf = false;
     if (commit) {
-      com.fahadali.xgram.XgramHaptics.confirm(host); // a firm click as it lands (a segment tick was too faint on Samsung)
+      com.fahadali.xgram.XgramHaptics.tabLanded(host); // a firm click as it lands (a segment tick was too faint on Samsung)
       if (dest == DEST_CALLS && badges != null) {
         badges.markCallsSeen();
       }
@@ -4315,7 +4317,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
         return;
       }
       slideDest = tab.dest;
-      com.fahadali.xgram.XgramHaptics.tick(this); // a tick on each tab the finger reaches
+      com.fahadali.xgram.XgramHaptics.slideTick(this); // a tick on each tab the finger reaches
       if (tab.dest != DEST_SAVED && tab.dest != selectedDest) {
         setTarget(tab.dest, true);
       }
