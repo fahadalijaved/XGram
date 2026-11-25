@@ -81,6 +81,8 @@ public final class TdlibChatList implements Comparator<TdlibChatList.Entry> {
   private final TdApi.ChatList chatList;
   private final ArrayList<Entry> list = new ArrayList<>();
   private final List<Runnable> onLoadMore = new ArrayList<>();
+  /** XGram: failed loads in a row (not the end of the list): the next retry waits 1, 2, 4… up to 30 seconds. */
+  private int xgramLoadRetries;
   private final List<RunnableData<TdApi.Chat>> perChatCallbacks = new ArrayList<>();
 
   private @State int state = State.END_NOT_REACHED;
@@ -325,6 +327,21 @@ public final class TdlibChatList implements Comparator<TdlibChatList.Entry> {
     }
     setState(State.LOADING);
     tdlib.client().send(new TdApi.LoadChats(chatList, limit), result -> {
+      // XGram: only TDLib's 404 means the list has no more chats. Any other error (a request that timed out or was
+      // cut off by a reconnect, a flood wait, a server error) used to count as the end too, so the list stayed half
+      // loaded until the app restarted (a user's "not all my chats load, archive does"): it is asked again instead,
+      // a little later each time, with the waiting callbacks kept for when it answers
+      if (result.getConstructor() == TdApi.Error.CONSTRUCTOR && ((TdApi.Error) result).code != 404) {
+        setState(State.END_NOT_REACHED);
+        final int attempt = Math.min(xgramLoadRetries++, 5);
+        tdlib.runOnTdlibThread(() -> {
+          if (state != State.END_REACHED && state != State.LOADING) {
+            loadMore(limit, null);
+          }
+        }, Math.min(30, 1 << attempt), false);
+        return;
+      }
+      xgramLoadRetries = 0;
       boolean endReached = result.getConstructor() == TdApi.Error.CONSTRUCTOR;
       setState(endReached ? State.END_REACHED : State.END_NOT_REACHED);
       if (!onLoadMore.isEmpty()) {
