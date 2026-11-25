@@ -840,10 +840,16 @@ public class ViewPagerTopView extends FrameLayoutFix implements RtlCheckListener
     }
     final float height = Screen.dp(viewHeight >= Screen.dp(56f) ? 40f : 32f);
     final float top = (viewHeight - height) / 2f;
-    RectF rectF = Paints.getRectF();
+    RectF rectF = xgramPillRect;
     rectF.set(start, top, end, top + height);
-    c.drawRoundRect(rectF, height / 2f, height / 2f, Paints.fillingPaint(color));
+    // Liquid glass (a test): the selected folder's pill as glass (its colour as the tint)
+    if (!com.fahadali.xgram.appearance.XgramGlass.on() || !xgramPillGlass.draw(c, rectF, height / 2f, color)) {
+      c.drawRoundRect(rectF, height / 2f, height / 2f, Paints.fillingPaint(color));
+    }
   }
+
+  private final RectF xgramPillRect = new RectF();
+  private final com.fahadali.xgram.appearance.XgramGlass.Panel xgramPillGlass = new com.fahadali.xgram.appearance.XgramGlass.Panel(this);
 
   // XGram: Material 3 Expressive state layers (XgramPillStateLayer). Each item presses in its own pill, the selection
   // pill's shape (its content with 16dp on each side, as tall as the selection pill, full corners), never in its

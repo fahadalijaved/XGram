@@ -261,6 +261,13 @@ public final class XgramGlass {
     @RequiresApi(Build.VERSION_CODES.S)
     private void recordImpl () {
       View branch = view;
+      // In a popup (menus, the message popup): what is behind the popup, not the popup's own other parts
+      for (android.view.ViewParent p = view.getParent(); p instanceof View; p = p.getParent()) {
+        if (p instanceof org.thunderdog.challegram.widget.PopupLayout) {
+          branch = (View) p;
+          break;
+        }
+      }
       android.view.ViewGroup parent = null;
       int index = -1;
       while (branch.getParent() instanceof android.view.ViewGroup) {
@@ -362,6 +369,44 @@ public final class XgramGlass {
       drawHighlight(c, rect, radius, 1f);
       return true;
     }
+  }
+
+  /**
+   * A view's background as glass while the glass is on (else {@code color}, as a plain rounded rectangle): for popup
+   * containers (the message popup's reaction pill and grid).
+   */
+  public static android.graphics.drawable.Drawable background (View view, int color, float cornerPx) {
+    final Panel panel = new Panel(view);
+    final Paint solid = new Paint(Paint.ANTI_ALIAS_FLAG);
+    solid.setColor(color);
+    final RectF bounds = new RectF();
+    return new android.graphics.drawable.Drawable() {
+      @Override
+      public void draw (@NonNull Canvas c) {
+        bounds.set(getBounds());
+        if (!on() || !panel.draw(c, bounds, cornerPx, color)) {
+          c.drawRoundRect(bounds, cornerPx, cornerPx, solid);
+        }
+      }
+
+      @Override
+      public void getOutline (@NonNull android.graphics.Outline outline) {
+        outline.setRoundRect(getBounds(), cornerPx);
+      }
+
+      @Override
+      public void setAlpha (int alpha) {
+        solid.setAlpha(alpha);
+      }
+
+      @Override
+      public void setColorFilter (@Nullable android.graphics.ColorFilter filter) { }
+
+      @Override
+      public int getOpacity () {
+        return android.graphics.PixelFormat.TRANSLUCENT;
+      }
+    };
   }
 
   private XgramGlass () { }

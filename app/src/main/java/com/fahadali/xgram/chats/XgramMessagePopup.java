@@ -548,11 +548,17 @@ public final class XgramMessagePopup {
 
   /** The popup's floating container: full corners for the pill, large ones for the grid; elevated like the card. */
   private static void applyContainer (View v, boolean m3, float cornerDp) {
-    GradientDrawable background = new GradientDrawable();
-    background.setCornerRadius(Screen.dp(cornerDp));
-    // the strip's own pill color with Expressive design (so the two read as one), the menu's floating color otherwise
-    background.setColor(m3 ? XgramExpressive.color(XgramExpressive.SURFACE_CONTAINER_HIGH) : Theme.headerFloatBackgroundColor());
-    v.setBackground(background);
+    final int color = m3 ? XgramExpressive.color(XgramExpressive.SURFACE_CONTAINER_HIGH) : Theme.headerFloatBackgroundColor();
+    if (com.fahadali.xgram.appearance.XgramGlass.on()) {
+      // Liquid glass (a test): the reaction pill and the grid as glass over the chat
+      v.setBackground(com.fahadali.xgram.appearance.XgramGlass.background(v, color, Screen.dp(cornerDp)));
+    } else {
+      GradientDrawable background = new GradientDrawable();
+      background.setCornerRadius(Screen.dp(cornerDp));
+      // the strip's own pill color with Expressive design (so the two read as one), the menu's floating color otherwise
+      background.setColor(color);
+      v.setBackground(background);
+    }
     v.setElevation(Screen.dp(m3 ? XgramExpressive.ELEVATION_2 : 3f));
     v.setClipToOutline(true);
     v.setOutlineProvider(android.view.ViewOutlineProvider.BACKGROUND);

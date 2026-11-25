@@ -205,6 +205,7 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
       } else {
         container.setFloatingColorRole(XgramExpressive.SURFACE_CONTAINER);
       }
+      container.setGlass(new com.fahadali.xgram.appearance.XgramGlass.Panel(this)); // Liquid glass (a test)
       final int inset = Screen.dp(PADDING);
       ViewUtils.setBackground(this, new InsetDrawable(container, inset, 0, inset, 0));
       setPadding(inset, inset, inset, inset);
