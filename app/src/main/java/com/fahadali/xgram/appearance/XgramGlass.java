@@ -349,7 +349,10 @@ public final class XgramGlass {
         RenderEffect.createBlurEffect(Screen.dpf(6f), Screen.dpf(6f), Shader.TileMode.CLAMP),
         RenderEffect.createColorFilterEffect(vibrancy())
       );
-      final RenderEffect lens = lensEffect(shaderCache, box, radius, Screen.dpf(24f), Screen.dpf(24f), true);
+      // The bend scales with the panel: 24dp on the bar, less on a button (a 56dp FAB bent the chat list's white cards
+      // into a hard rectangle across its middle)
+      final float bend = Math.min(Screen.dpf(24f), Math.min(rect.width(), rect.height()) * .22f);
+      final RenderEffect lens = lensEffect(shaderCache, box, radius, bend, bend, true);
       if (lens != null) {
         effect = RenderEffect.createChainEffect(lens, effect);
       }

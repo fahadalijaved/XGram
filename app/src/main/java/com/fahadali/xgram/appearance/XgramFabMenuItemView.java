@@ -221,6 +221,8 @@ public class XgramFabMenuItemView extends NoScrollTextView {
   }
 
   /** The container: a full-corner pill in primaryContainer, as wide as the current width factor, anchored to the end edge. */
+  private final XgramGlass.Panel glass = new XgramGlass.Panel(this);
+
   private class PillDrawable extends Drawable {
     @Override
     public void draw (@NonNull Canvas c) {
@@ -229,7 +231,11 @@ public class XgramFabMenuItemView extends NoScrollTextView {
         return;
       }
       final float radius = Math.min(pillRect.width(), pillRect.height()) / 2f;
-      c.drawRoundRect(pillRect, radius, radius, Paints.fillingPaint(XgramExpressive.color(XgramExpressive.PRIMARY_CONTAINER)));
+      final int color = XgramExpressive.color(XgramExpressive.PRIMARY_CONTAINER);
+      // Liquid glass (a test): the menu's pills as glass, like the FAB
+      if (!XgramGlass.on() || !glass.draw(c, pillRect, radius, color)) {
+        c.drawRoundRect(pillRect, radius, radius, Paints.fillingPaint(color));
+      }
     }
 
     @Override
