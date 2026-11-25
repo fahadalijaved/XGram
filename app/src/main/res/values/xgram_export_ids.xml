@@ -4,5 +4,8 @@
   <item type="id" name="btn_xgramExportOptions" />
   <item type="id" name="btn_xgramExportFrom" />
   <item type="id" name="btn_xgramExportTill" />
+  <!-- Export filters: Sent by, Containing -->
+  <item type="id" name="btn_xgramExportSentBy" />
+  <item type="id" name="btn_xgramExportContaining" />
   <item type="id" name="btn_xgramExportOnlyTopic" />
 </resources>

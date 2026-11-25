@@ -8,6 +8,15 @@
   <string name="XgramExportSizeLimit">Size limit</string>
   <string name="XgramExportFrom">From</string>
   <string name="XgramExportTill">To</string>
+  <!-- Export filters: only some people's messages, only messages with some words -->
+  <string name="XgramExportSentBy">Sent by</string>
+  <string name="XgramExportEveryone">Everyone</string>
+  <string name="XgramExportSendersMore">%1$s and %2$d more</string>
+  <string name="XgramExportSearchPeople">Name or username, or leave empty to list members</string>
+  <string name="XgramExportNoPeople">No one found</string>
+  <string name="XgramExportContaining">Containing</string>
+  <string name="XgramExportAnyText">Any message</string>
+  <string name="XgramExportContainingHint">Words to find. Use * for any letters: good* finds good and goodbye</string>
   <string name="XgramExportOnlyTopic">Only this topic</string>
   <string name="XgramExportMediaProgress">media %1$s of %2$s</string>
   <string name="XgramExportLowSpace">Some media were left out: storage is almost full</string>

@@ -64,9 +64,13 @@ final class ExportOptionsSheet {
     ExportOptions.TYPE_STICKERS, ExportOptions.TYPE_GIFS, ExportOptions.TYPE_FILES
   };
 
-  /** The picked days, as the local midnight in ms (0: Beginning / Today). Main thread. */
+  /** The picked days, as the local midnight in ms (0: Beginning / Today), and the export filters. Main thread. */
   private static final class Range {
     long fromDayMs, tillDayMs;
+    /** Sent by: the picked senders, everyone when empty. */
+    final List<TdApi.MessageSender> senders = new ArrayList<>();
+    /** Containing: what was typed, "" for any message. */
+    String containing = "";
   }
 
   @UiThread
@@ -87,6 +91,11 @@ final class ExportOptionsSheet {
     rows.add(new ListItem(ListItem.TYPE_SLIDER, R.id.btn_size, 0, R.string.XgramExportSizeLimit, false).setSliderInfo(sizes, ExportOptions.lastSizeIndex()));
     rows.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramExportFrom, 0, R.string.XgramExportFrom, false));
     rows.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramExportTill, 0, R.string.XgramExportTill, false));
+    // Export filters: only some people's messages, only messages with some words (Telegram's search finds them)
+    if (!c.tdlib().isChannel(chatId)) {
+      rows.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramExportSentBy, 0, R.string.XgramExportSentBy, false));
+    }
+    rows.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramExportContaining, 0, R.string.XgramExportContaining, false));
     if (topicScope != ExportOptions.SCOPE_WHOLE) {
       rows.add(new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.btn_xgramExportOnlyTopic, 0, R.string.XgramExportOnlyTopic, true));
     }
@@ -102,12 +111,23 @@ final class ExportOptionsSheet {
           view.setData(range.fromDayMs != 0 ? dayLabel(range.fromDayMs) : Lang.getString(R.string.Beginning));
         } else if (id == R.id.btn_xgramExportTill) {
           view.setData(range.tillDayMs != 0 ? dayLabel(range.tillDayMs) : Lang.getString(R.string.Today));
+        } else if (id == R.id.btn_xgramExportSentBy) {
+          view.setData(sendersLabel(c, range.senders));
+        } else if (id == R.id.btn_xgramExportContaining) {
+          view.setData(range.containing.isEmpty() ? Lang.getString(R.string.XgramExportAnyText) : range.containing);
         }
       })
       .setOnSettingItemClick((view, settingsId, item, doneButton, adapter, window) -> {
         final int id = item.getId();
         if (id == R.id.btn_xgramExportFrom || id == R.id.btn_xgramExportTill) {
           pickDay(c, range, id == R.id.btn_xgramExportFrom, adapter);
+        } else if (id == R.id.btn_xgramExportSentBy) {
+          pickSenders(c, chatId, range.senders, () -> adapter.updateValuedSettingById(R.id.btn_xgramExportSentBy));
+        } else if (id == R.id.btn_xgramExportContaining) {
+          pickContaining(c, range.containing, typed -> {
+            range.containing = typed;
+            adapter.updateValuedSettingById(R.id.btn_xgramExportContaining);
+          });
         }
       })
       .setSaveStr(R.string.XgramExportStart)
@@ -122,8 +142,105 @@ final class ExportOptionsSheet {
         final int tillDate = range.tillDayMs != 0 ? (int) (nextDayMs(range.tillDayMs) / 1000L) : 0;
         callback.onStart(new ExportOptions(c.tdlib().id(), chatId,
           onlyTopic ? topicScope : ExportOptions.SCOPE_WHOLE, onlyTopic ? topicIdOf(topic) : 0,
-          mask, ExportOptions.sizeBytesAt(sizeIndex), fromDate, tillDate));
+          mask, ExportOptions.sizeBytesAt(sizeIndex), fromDate, tillDate,
+          range.senders.toArray(new TdApi.MessageSender[0]), range.containing));
       }));
+  }
+
+  // Export filters (also Find and delete's)
+
+  /** "Everyone", one name, or the first name and how many more. */
+  static String sendersLabel (ViewController<?> c, List<TdApi.MessageSender> senders) {
+    if (senders.isEmpty()) {
+      return Lang.getString(R.string.XgramExportEveryone);
+    }
+    final String first = c.tdlib().senderName(senders.get(0), true);
+    return senders.size() == 1 ? first : Lang.getString(R.string.XgramExportSendersMore, first, senders.size() - 1);
+  }
+
+  /**
+   * Sent by: in a private chat, you and them; elsewhere a name search among the members (an empty search lists recent
+   * ones), then a sheet of the results with the people already picked on top, checked. Searching again adds more.
+   */
+  static void pickSenders (ViewController<?> c, long chatId, List<TdApi.MessageSender> picked, Runnable after) {
+    final org.thunderdog.challegram.telegram.Tdlib tdlib = c.tdlib();
+    if (tgx.td.ChatId.isUserChat(chatId)) {
+      final List<TdApi.MessageSender> candidates = new ArrayList<>();
+      candidates.add(tdlib.mySender());
+      final long userId = tgx.td.ChatId.toUserId(chatId);
+      if (userId != tdlib.myUserId()) {
+        candidates.add(new TdApi.MessageSenderUser(userId));
+      }
+      showSenderSheet(c, candidates, picked, after);
+      return;
+    }
+    c.openInputAlert(Lang.getString(R.string.XgramExportSentBy), Lang.getString(R.string.XgramExportSearchPeople), R.string.Search, R.string.Cancel, null, (inputView, result) -> {
+      tdlib.send(new TdApi.SearchChatMembers(chatId, result.trim(), 50, null), (members, error) -> c.runOnUiThreadOptional(() -> {
+        final List<TdApi.MessageSender> candidates = new ArrayList<>(picked);
+        if (members != null && members.members != null) {
+          for (TdApi.ChatMember member : members.members) {
+            if (!contains(candidates, member.memberId)) {
+              candidates.add(member.memberId);
+            }
+          }
+        }
+        if (candidates.isEmpty()) {
+          org.thunderdog.challegram.tool.UI.showToast(R.string.XgramExportNoPeople, android.widget.Toast.LENGTH_SHORT);
+          return;
+        }
+        showSenderSheet(c, candidates, picked, after);
+      }));
+      return true;
+    }, true);
+  }
+
+  private static void showSenderSheet (ViewController<?> c, List<TdApi.MessageSender> candidates, List<TdApi.MessageSender> picked, Runnable after) {
+    final ListItem[] items = new ListItem[candidates.size()];
+    for (int i = 0; i < items.length; i++) {
+      final TdApi.MessageSender sender = candidates.get(i);
+      items[i] = new ListItem(ListItem.TYPE_CHECKBOX_OPTION, i + 1, 0, c.tdlib().senderName(sender, false), contains(picked, sender));
+    }
+    c.showSettings(new SettingsWrapBuilder(R.id.btn_xgramExportSentBy)
+      .xgramSetHeadline(R.id.btn_xgramExportSentBy, Lang.getString(R.string.XgramExportSentBy))
+      .setRawItems(items)
+      .setSaveStr(R.string.Done)
+      .setIntDelegate((id, result) -> {
+        for (int i = 0; i < items.length; i++) {
+          final TdApi.MessageSender sender = candidates.get(i);
+          final boolean checked = result.get(i + 1) != 0;
+          if (checked && !contains(picked, sender)) {
+            picked.add(sender);
+          } else if (!checked) {
+            for (int j = picked.size() - 1; j >= 0; j--) {
+              if (tgx.td.Td.equalsTo(picked.get(j), sender)) {
+                picked.remove(j);
+              }
+            }
+          }
+        }
+        after.run();
+      }));
+  }
+
+  private static boolean contains (List<TdApi.MessageSender> list, TdApi.MessageSender sender) {
+    for (TdApi.MessageSender s : list) {
+      if (tgx.td.Td.equalsTo(s, sender)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  interface TextCallback {
+    void onText (String typed);
+  }
+
+  /** Containing: words, * for any letters in a word; empty for any message. */
+  static void pickContaining (ViewController<?> c, String current, TextCallback callback) {
+    c.openInputAlert(Lang.getString(R.string.XgramExportContaining), Lang.getString(R.string.XgramExportContainingHint), R.string.Done, R.string.Cancel, current, (inputView, result) -> {
+      callback.onText(result.trim());
+      return true;
+    }, true);
   }
 
   private static int typesOf (SparseIntArray result) {

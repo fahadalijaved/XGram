@@ -90,15 +90,16 @@ final class ExportSource {
       }
     }
     long lastMin = Long.MAX_VALUE; // the oldest id seen: the index stays strictly newest first
+    final boolean[] searchDone = new boolean[Math.max(1, options.senders.length)]; // export filters: searches at their end
     int idlePages = 0;
     while (true) {
       job.checkInterrupted();
-      final TdApi.Messages page = td.call(history(options, chatId, from));
-      if (page.messages == null || page.messages.length == 0) {
+      final TdApi.Message[] page = page(td, options, chatId, from, searchDone);
+      if (page.length == 0) {
         break;
       }
       boolean progressed = false, reachedStart = false;
-      for (TdApi.Message message : page.messages) {
+      for (TdApi.Message message : page) {
         if (message == null || message.id >= lastMin) {
           continue; // TDLib may repeat fromMessageId itself
         }
@@ -259,6 +260,63 @@ final class ExportSource {
     }
   }
 
+  /**
+   * The next page of {@code chatId} from {@code from} (0: the newest), newest first. With export filters that
+   * Telegram's search can take (Sent by, or Containing that starts with a letter), its search instead of the history:
+   * one search per sender, merged, each page ending at the newest of the searches' oldest ids so no sender's older
+   * messages are skipped (the next page starts there). The filters are checked again on each message ({@link #accept}).
+   */
+  private static TdApi.Message[] page (ExportTd td, ExportOptions options, long chatId, long from, boolean[] searchDone) throws IOException {
+    final String query = options.serverQuery();
+    if (options.senders.length == 0 && query.isEmpty()) {
+      final TdApi.Messages page = td.call(history(options, chatId, from));
+      return page.messages != null ? page.messages : new TdApi.Message[0];
+    }
+    final TdApi.MessageTopic topic = chatId == options.chatId ? searchTopic(options) : null;
+    final java.util.List<TdApi.Message> all = new java.util.ArrayList<>();
+    long boundary = 0;
+    for (int i = 0; i < searchDone.length; i++) {
+      if (searchDone[i]) {
+        continue;
+      }
+      final TdApi.MessageSender sender = options.senders.length > 0 ? options.senders[i] : null;
+      final TdApi.FoundChatMessages found = td.call(new TdApi.SearchChatMessages(chatId, topic, query, sender, from, 0, LIMIT, null));
+      final TdApi.Message[] messages = found.messages != null ? found.messages : new TdApi.Message[0];
+      long oldest = Long.MAX_VALUE;
+      boolean older = false;
+      for (TdApi.Message message : messages) {
+        if (message != null) {
+          all.add(message);
+          oldest = Math.min(oldest, message.id);
+          older |= from == 0 || message.id < from;
+        }
+      }
+      if (!older) {
+        searchDone[i] = true; // nothing older from this sender
+      } else if (found.nextFromMessageId != 0) {
+        boundary = Math.max(boundary, oldest); // more to come: the merged page stops here
+      }
+    }
+    final long stop = boundary;
+    all.removeIf(message -> message.id < stop);
+    java.util.Collections.sort(all, (a, b) -> Long.compare(b.id, a.id));
+    return all.toArray(new TdApi.Message[0]);
+  }
+
+  /** The scope's topic for Telegram's search, null for the whole chat. */
+  private static TdApi.MessageTopic searchTopic (ExportOptions options) {
+    switch (options.scope) {
+      case ExportOptions.SCOPE_FORUM_TOPIC:
+        return new TdApi.MessageTopicForum((int) options.topicId);
+      case ExportOptions.SCOPE_SAVED_TOPIC:
+        return new TdApi.MessageTopicSavedMessages(options.topicId);
+      case ExportOptions.SCOPE_DM_TOPIC:
+        return new TdApi.MessageTopicDirectMessages(options.topicId);
+      default:
+        return null;
+    }
+  }
+
   /** One page of the scope's history of {@code chatId} before {@code from} (0: the newest). Topic histories always ask the server. */
   @NonNull
   private static TdApi.Function<TdApi.Messages> history (ExportOptions options, long chatId, long from) {
@@ -284,7 +342,8 @@ final class ExportSource {
     return message.sendingState == null &&
       message.schedulingState == null &&
       MessageId.toServerMessageId(message.id) != 0 &&
-      options.inRange(message.date);
+      options.inRange(message.date) &&
+      options.matchesFilters(message);
   }
 
   /**
