@@ -4234,7 +4234,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       final android.graphics.RecordingCanvas lc = lensNode.beginRecording();
       try {
         // A little magnified, as a drop of glass does
-        final float zoom = 1f + .18f * Math.max(0f, Math.min(1f, lift));
+        final float zoom = 1f + .08f * Math.max(0f, Math.min(1f, lift)); // a light magnification: more pushed labels out of it
         lc.scale(zoom, zoom, cx, cy);
         lc.drawRenderNode(content);
       } finally {
@@ -4253,15 +4253,10 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       glassClip.addRoundRect(glassPillRect, radius, radius, android.graphics.Path.Direction.CW);
       c.clipPath(glassClip);
       // Clear: the bar's glass (already drawn) shows through, the tabs bend in it, a whisper of white as the flat one
-      c.drawRenderNode(lensNode);
-      fillPaint.setColor(XgramExpressive.withAlpha(indicatorColor(), innerAlpha * a));
+      // The whisper of white under the tabs, not over them (over them it washed the icon and label out)
+      fillPaint.setColor(XgramExpressive.withAlpha(indicatorColor(), innerAlpha));
       c.drawRoundRect(glassPillRect, radius, radius, fillPaint);
-      // As it lands it turns into the flat selection (the same capsule, same colour): one shape all the way, no second
-      // pill showing up early under it
-      if (innerVisible && innerAlpha > 0f && a < 1f) {
-        fillPaint.setColor(XgramExpressive.withAlpha(indicatorColor(), innerAlpha * (1f - a)));
-        c.drawRoundRect(glassPillRect, radius, radius, fillPaint);
-      }
+      c.drawRenderNode(lensNode);
       c.restoreToCount(save);
       com.fahadali.xgram.appearance.XgramGlass.drawHighlight(c, glassPillRect, radius, innerAlpha); // the same rim as at rest
     }
