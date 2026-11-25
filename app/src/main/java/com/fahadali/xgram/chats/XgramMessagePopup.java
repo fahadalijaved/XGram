@@ -1077,6 +1077,8 @@ public final class XgramMessagePopup {
 
     // Placement, fixed at the first layout: a page switch never moves the popup (the message moving moves it, track)
     private boolean placed, alignEnd, cardBelow, gridBelow;
+    /** The menu above the message with the reactions between them, right by the message (Telegram's), not on the menu's top. */
+    private boolean pillByMessage;
     /** The pill's top; the visible card's top when it grows down (below the message), else its bottom. */
     private int pillTop, cardEdge, gridEdge;
     /** How far the pill moved while a grid was open (that grid stays where it is); the next grid starts at the pill. */
@@ -1161,7 +1163,7 @@ public final class XgramMessagePopup {
       }
       final float pillFrom = pillPart, cardFrom = cardPart, detailsFrom = detailsPart, gridFrom = gridPart;
       // the pill goes with the grid, and with who viewed when that grows up into its band (the menu above the message)
-      final float pillTo = page == PAGE_GRID || (page == PAGE_DETAILS && !cardBelow) ? 0f : 1f, cardTo = page == PAGE_MENU ? 1f : 0f;
+      final float pillTo = page == PAGE_GRID || (page == PAGE_DETAILS && !cardBelow && !pillByMessage) ? 0f : 1f, cardTo = page == PAGE_MENU ? 1f : 0f;
       final float detailsTo = page == PAGE_DETAILS ? 1f : 0f, gridTo = page == PAGE_GRID ? 1f : 0f;
       if (XgramMotion.reduce()) {
         pillPart = pillTo;
@@ -1213,7 +1215,7 @@ public final class XgramMessagePopup {
       // it up with the pill on top (onLayout) while the pill stays in the safe area, past that its rows scroll instead of
       // growing over the reactions; who viewed may take the pill's band (the pill fades out for it).
       final int cardRoom = placed ? Math.max(0, cardBelow ? safeBottom - cardEdge : cardEdge - safeTop) : Math.max(0, roomHeight - used);
-      final int menuRoom = placed && !cardBelow && pill != null ? Math.max(0, cardEdge - (safeTop + pill.getMeasuredHeight() + gap)) : cardRoom;
+      final int menuRoom = placed && !cardBelow && pill != null && !pillByMessage ? Math.max(0, cardEdge - (safeTop + pill.getMeasuredHeight() + gap)) : cardRoom;
       for (View v : new View[] {card, details}) {
         if (v == null) {
           continue;
@@ -1240,7 +1242,7 @@ public final class XgramMessagePopup {
       } else if (onPlacementLost != null && Math.abs(safeRect().bottom - placedSafeBottom) > Screen.dp(24f)) {
         placementLost(); // the keyboard came or went: the message is somewhere else now
       }
-      if (placed && !cardBelow && pill != null && card != null) {
+      if (placed && !cardBelow && !pillByMessage && pill != null && card != null) {
         // Above the message the pill sits on the card's top, the card's bottom by the message: a card that changed its
         // height after placement keeps its rows by the message where they are and the pill on its top (as place() put
         // it), inside the safe area (onMeasure keeps the card under it)
@@ -1309,10 +1311,12 @@ public final class XgramMessagePopup {
         cardTop = bubble.bottom + gap;
         cardBelow = true;
       } else if (bubble.top - gap - cardHeight - pillBlock >= safeTop) {
-        // both above
-        cardTop = bubble.top - gap - cardHeight;
-        pillTop = cardTop - pillBlock;
+        // both above: the reactions right above the message, the menu above them (Telegram's: the reactions stay by
+        // the finger)
+        pillTop = bubble.top - gap - pillHeight;
+        cardTop = (pill != null ? pillTop - gap : bubble.top - gap) - cardHeight;
         cardBelow = false;
+        pillByMessage = pill != null;
       } else if (bubble.bottom + gap + pillBlock + cardHeight <= safeBottom) {
         // both below
         pillTop = bubble.bottom + gap;
@@ -1335,8 +1339,10 @@ public final class XgramMessagePopup {
             pillTop = pillFitsAbove ? bubble.top - gap - pillHeight : bubble.bottom + gap;
             cardTop = pillFitsAbove ? bubble.bottom + gap : pillTop + pillBlock;
           } else {
-            cardTop = bubble.top - gap - cardHeight;
-            pillTop = cardTop - pillBlock;
+            // the reactions right above the message, the menu above them
+            pillTop = bubble.top - gap - pillHeight;
+            cardTop = bubble.top - gap - pillBlock - cardHeight;
+            pillByMessage = pill != null;
           }
         } else {
           // a message taller than the screen, or a tiny window: stacked inside the safe area, over the message (the
