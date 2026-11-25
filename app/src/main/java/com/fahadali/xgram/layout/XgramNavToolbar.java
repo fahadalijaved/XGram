@@ -4800,6 +4800,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
    * profile is on screen or it is pressed. Level 3 shadow, its outline follows the corner.
    */
   private final class ProfileView extends PhotoView {
+    private final com.fahadali.xgram.appearance.XgramGlass.Panel profileGlass = new com.fahadali.xgram.appearance.XgramGlass.Panel(this);
     /** The photo; a swipe hands it the photo it slid in (no reload, no flash). */
     private AvatarReceiver avatar;
     /** Up or down on the photo: the next or previous account. */
@@ -4959,7 +4960,10 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       float radius = corner();
       float slop = Screen.dpf(BUTTON_HIT_SLOP);
       rect.set(slop, slop, width - slop, height - slop);
-      c.drawRoundRect(rect, radius, radius, paint);
+      // Liquid glass (a test): the button as glass, like the bar beside it
+      if (preview || !com.fahadali.xgram.appearance.XgramGlass.on() || !profileGlass.draw(c, rect, radius, fill)) {
+        c.drawRoundRect(rect, radius, radius, paint);
+      }
       setStateShape(rect.left, rect.top, rect.right, rect.bottom, radius);
       drawState(c);
       float scale = 1f + (AVATAR_PRESSED_SCALE - 1f) * MathUtils.clamp(press.getValue());

@@ -233,6 +233,9 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
     }
     xgramMorph.setHost(this);
     xgramMask.setHost(this);
+    if (fab) {
+      xgramMorph.setGlass(new com.fahadali.xgram.appearance.XgramGlass.Panel(this)); // Liquid glass (a test)
+    }
     xgramRippleColor = XgramExpressive.withAlpha(xgramIconColor(), XgramExpressive.STATE_PRESSED);
     // The mask is wrapped so RippleSupport.changeViewColor recolors the container only
     xgramRipple = new RippleDrawable(ColorStateList.valueOf(xgramRippleColor), xgramMorph, new InsetDrawable(xgramMask, 0));
