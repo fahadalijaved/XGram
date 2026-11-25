@@ -3285,10 +3285,17 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
 
   private int indicatorColor () {
     if (com.fahadali.xgram.appearance.XgramGlass.on()) {
-      // Liquid glass: the selection is a clear capsule (iOS), no colour of its own
-      return XgramExpressive.withAlpha(color(XgramExpressive.ON_SURFACE), .09f);
+      // Liquid glass: the selection is a clear capsule (iOS), no colour of its own: a whisper of white (a little more
+      // on light bars), its rim does the rest (drawContent)
+      return XgramExpressive.withAlpha(0xFFFFFFFF, glassLightBar() ? .5f : .14f);
     }
     return color(vibrant ? XgramExpressive.PRIMARY : XgramExpressive.SECONDARY_CONTAINER);
+  }
+
+  /** Whether the bar is light (its tint's luminance), for how white the glass selection is. */
+  private boolean glassLightBar () {
+    final int c = containerColor();
+    return (0.299f * Color.red(c) + 0.587f * Color.green(c) + 0.114f * Color.blue(c)) > 140f;
   }
 
   private int restContentColor () {
@@ -4075,8 +4082,17 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
         c.drawRoundRect(rect, height / 2f, height / 2f, fillPaint);
         com.fahadali.xgram.appearance.XgramGlass.drawHighlight(c, rect, height / 2f, 1f);
         glass = true;
+      } else if (!preview && com.fahadali.xgram.appearance.XgramGlass.on()) {
+        if (!glassPanel.draw(c, rect, height / 2f, containerColor())) {
+          // No backdrop this frame (the first after a swipe or a screen change, before it is recorded): the glass's
+          // tint and rim, not the solid bar, which flashed hard grey before the glass came
+          fillPaint.setColor(XgramExpressive.withAlpha(containerColor(), .55f));
+          c.drawRoundRect(rect, height / 2f, height / 2f, fillPaint);
+          com.fahadali.xgram.appearance.XgramGlass.drawHighlight(c, rect, height / 2f, 1f);
+        }
+        glass = true;
       } else {
-        glass = !preview && glassPanel.draw(c, rect, height / 2f, containerColor());
+        glass = false;
       }
       if (glass != glassShown) {
         glassShown = glass;
@@ -4229,10 +4245,9 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       glassClip.reset();
       glassClip.addRoundRect(glassPillRect, radius, radius, android.graphics.Path.Direction.CW);
       c.clipPath(glassClip);
-      fillPaint.setColor(containerColor());
-      c.drawRoundRect(glassPillRect, radius, radius, fillPaint); // the lens sees the bar's own colour at its edges
+      // Clear: the bar's glass (already drawn) shows through, the tabs bend in it, a whisper of white as the flat one
       c.drawRenderNode(lensNode);
-      fillPaint.setColor(XgramExpressive.withAlpha(0xFFFFFFFF, .10f * a));
+      fillPaint.setColor(XgramExpressive.withAlpha(indicatorColor(), innerAlpha * a));
       c.drawRoundRect(glassPillRect, radius, radius, fillPaint);
       // As it lands it turns into the flat selection (the same capsule, same colour): one shape all the way, no second
       // pill showing up early under it
@@ -4241,7 +4256,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
         c.drawRoundRect(glassPillRect, radius, radius, fillPaint);
       }
       c.restoreToCount(save);
-      com.fahadali.xgram.appearance.XgramGlass.drawHighlight(c, glassPillRect, radius, a);
+      com.fahadali.xgram.appearance.XgramGlass.drawHighlight(c, glassPillRect, radius, innerAlpha); // the same rim as at rest
     }
 
     private final android.graphics.Path glassClip = new android.graphics.Path();
@@ -4256,6 +4271,9 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
         fillPaint.setColor(XgramExpressive.withAlpha(indicatorColor(), innerAlpha));
         rect.set(innerL, itemTop, innerR, itemBottom);
         c.drawRoundRect(rect, innerCorner, innerCorner, fillPaint);
+        if (com.fahadali.xgram.appearance.XgramGlass.on()) {
+          com.fahadali.xgram.appearance.XgramGlass.drawHighlight(c, rect, innerCorner, innerAlpha); // the glass capsule's rim
+        }
       }
       // The tabs' state layers
       super.dispatchDraw(c);
