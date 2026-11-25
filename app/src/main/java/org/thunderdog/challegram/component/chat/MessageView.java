@@ -581,6 +581,11 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
 
   private float touchX, touchY;
 
+  /** XGram: where the last touch on this message went down (the popup menu opens there on a message taller than the screen). */
+  public float xgramTouchY () {
+    return touchY;
+  }
+
   private static void selectMessage (MessagesController m, TGMessage msg, float touchX, float touchY) {
     long messageId = msg.findMessageIdUnder(touchX, touchY);
     if (messageId == 0) {

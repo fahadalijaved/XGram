@@ -111,6 +111,8 @@ public final class XgramMessagePopup {
   /** The pill: the strip's 40dp reactions and its 7dp padding. */
   private static final float PILL_HEIGHT = 54f;
   private static final float GAP = 8f, EDGE = 8f;
+  /** On a message taller than the screen: the reactions sit this far above the finger, out from under it. */
+  private static final float FINGER_ROOM = 24f;
   private static final float CARD_MAX_WIDTH = 280f;
   /** A cell of the reaction grid: a 40dp reaction and 2dp around it. */
   private static final float GRID_CELL = 44f, GRID_PADDING = 8f;
@@ -1338,9 +1340,17 @@ public final class XgramMessagePopup {
           }
         } else {
           // a message taller than the screen, or a tiny window: stacked inside the safe area, over the message (the
-          // card's rows scroll)
+          // card's rows scroll). Telegram's: at the finger, the reactions just above where it pressed and the menu
+          // under them, rather than at the screen's top where the message's top is out of sight
           final int block = pillBlock + cardHeight;
           int top = bubble.top - pillBlock;
+          if (anchor instanceof org.thunderdog.challegram.component.chat.MessageView) {
+            final float touchY = ((org.thunderdog.challegram.component.chat.MessageView) anchor).xgramTouchY();
+            final int fingerY = location[1] - rootY + Math.round(touchY);
+            if (touchY > 0 && fingerY > bubble.top && fingerY < bubble.bottom) {
+              top = fingerY - Screen.dp(FINGER_ROOM) - pillBlock;
+            }
+          }
           top = Math.max(safeTop, Math.min(top, safeBottom - block));
           pillTop = top;
           cardTop = top + pillBlock;
