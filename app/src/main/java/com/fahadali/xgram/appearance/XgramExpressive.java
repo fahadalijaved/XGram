@@ -1117,6 +1117,13 @@ public final class XgramExpressive {
 
     // Drawing
 
+    @Nullable private XgramGlass.Panel glass;
+
+    /** Liquid glass (a test): this container is drawn as glass while it is on (the chat list's FAB). */
+    public void setGlass (@Nullable XgramGlass.Panel glass) {
+      this.glass = glass;
+    }
+
     @Override
     public void draw (@NonNull Canvas c) {
       syncRipple();
@@ -1126,6 +1133,9 @@ public final class XgramExpressive {
         return;
       }
       computeShape();
+      if (glass != null && XgramGlass.on() && glass.draw(c, rect, radii[0], color)) {
+        return;
+      }
       paint.setColor((color & 0x00ffffff) | (a << 24));
       if (radii[0] == 0f && radii[2] == 0f && radii[4] == 0f && radii[6] == 0f) {
         c.drawRect(rect, paint);
