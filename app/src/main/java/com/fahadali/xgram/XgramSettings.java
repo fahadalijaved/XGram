@@ -888,6 +888,26 @@ public final class XgramSettings {
     put(KEY_CAMERA_X_TEST, value);
   }
 
+  public static final String KEY_CAMERA_VIDEO_4K = "xgram_camera_video_4k", KEY_CAMERA_VIDEO_60 = "xgram_camera_video_60";
+
+  /** Camera X: videos in 4K where the camera can (else Full HD, as before). */
+  public boolean cameraVideo4k () {
+    return pmc().getBoolean(KEY_CAMERA_VIDEO_4K, false);
+  }
+
+  public void setCameraVideo4k (boolean value) {
+    put(KEY_CAMERA_VIDEO_4K, value);
+  }
+
+  /** Camera X: videos at 60 frames a second where the camera can. */
+  public boolean cameraVideo60 () {
+    return pmc().getBoolean(KEY_CAMERA_VIDEO_60, false);
+  }
+
+  public void setCameraVideo60 (boolean value) {
+    put(KEY_CAMERA_VIDEO_60, value);
+  }
+
   // Network
 
   /** Download boost (see {@link XgramDownloadBoost}). Read on every download request, so it applies at once to every account. */

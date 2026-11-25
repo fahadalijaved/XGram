@@ -181,6 +181,10 @@ public class SettingsThemeController extends RecyclerViewController<SettingsThem
           v.getToggler().setRadioEnabled(Settings.instance().rememberAlbumSetting(), isUpdate);
         } else if (itemId == R.id.btn_cameraSetting) {
           v.getToggler().setRadioEnabled(Settings.instance().getNewSetting(item.getLongId()) != item.getBoolValue(), isUpdate);
+        } else if (itemId == R.id.btn_xgramCameraVideo4k) {
+          v.getToggler().setRadioEnabled(com.fahadali.xgram.XgramSettings.instance().cameraVideo4k(), isUpdate);
+        } else if (itemId == R.id.btn_xgramCameraVideo60) {
+          v.getToggler().setRadioEnabled(com.fahadali.xgram.XgramSettings.instance().cameraVideo60(), isUpdate);
         } else if (itemId == R.id.btn_cameraRatio) {
           int ratioMode = Settings.instance().getCameraAspectRatioMode();
           switch (ratioMode) {
@@ -693,6 +697,13 @@ public class SettingsThemeController extends RecyclerViewController<SettingsThem
     items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
     items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_cameraRatio, 0, R.string.CameraRatio));
     items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+    if (com.fahadali.xgram.XgramSettings.instance().cameraXTest()) {
+      // XGram: Camera X's video choices (stabilisation is on wherever the camera has it)
+      items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_xgramCameraVideo4k, 0, R.string.XgramCameraVideo4k));
+      items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+      items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_xgramCameraVideo60, 0, R.string.XgramCameraVideo60));
+      items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+    }
     items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_cameraSetting, 0, R.string.CameraFlip).setLongId(Settings.SETTING_FLAG_CAMERA_NO_FLIP).setBoolValue(true));
     return items;
   }
@@ -974,6 +985,10 @@ public class SettingsThemeController extends RecyclerViewController<SettingsThem
     } else if (viewId == R.id.btn_cameraSetting) {
       ListItem item = ((ListItem) v.getTag());
       Settings.instance().setNewSetting(item.getLongId(), item.getBoolValue() != adapter.toggleView(v));
+    } else if (viewId == R.id.btn_xgramCameraVideo4k) {
+      com.fahadali.xgram.XgramSettings.instance().setCameraVideo4k(adapter.toggleView(v));
+    } else if (viewId == R.id.btn_xgramCameraVideo60) {
+      com.fahadali.xgram.XgramSettings.instance().setCameraVideo60(adapter.toggleView(v));
     } else if (viewId == R.id.btn_cameraRatio) {
       showOptions(Lang.boldify(Lang.getString(R.string.CameraRatio)), new int[] {
         R.id.btn_cameraRatio_16_9,

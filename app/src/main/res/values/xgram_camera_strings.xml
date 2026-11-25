@@ -15,4 +15,9 @@
   <string name="XgramCameraNoVideo">%1$s takes photos only. Switch to Photo to record a video.</string>
   <!-- TalkBack: a lens chip, "0.6× zoom" -->
   <string name="XgramCameraLensA11y">%1$s zoom</string>
+  <!-- Camera settings, with Camera X: video choices (CameraManagerX.xgramNewVideoCapture) -->
+  <string name="XgramCameraVideo4k">4K video, where the camera can</string>
+  <string name="XgramCameraVideo60">60 fps video, where the camera can</string>
+  <item name="btn_xgramCameraVideo4k" type="id" />
+  <item name="btn_xgramCameraVideo60" type="id" />
 </resources>

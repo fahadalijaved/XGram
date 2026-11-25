@@ -239,7 +239,7 @@ public class CameraManagerX extends CameraManager<PreviewView> {
     imageCapture = imageCaptureBuilder.build();
 
     xgramVideoResolution = resolutionSelector; // XGram: VideoCapture is bound (and made again) for each recording
-    videoCapture = xgramNewVideoCapture(resolutionSelector);
+    videoCapture = xgramNewVideoCapture(resolutionSelector, false);
 
     ImageAnalysis imageAnalyzer;
 
@@ -720,21 +720,53 @@ public class CameraManagerX extends CameraManager<PreviewView> {
 
   // XGram: VideoCapture is bound only for a recording (see bindPreview)
 
+  /**
+   * A VideoCapture for the next recording. Telegram X's way (CameraX 1.7): the Recorder takes the aspect ratio of the
+   * camera's ratio mode instead of a resolution selector. XGram's video choices (Camera settings, with Camera X): 4K and
+   * 60 fps where the camera can, and stabilisation where it has it. {@code plain}: none of those, the fallback when the
+   * camera refuses the binding.
+   */
   @SuppressWarnings("RestrictedApi")
-  private VideoCapture<Recorder> xgramNewVideoCapture (ResolutionSelector resolutionSelector) {
-    QualitySelector qualitySelector = QualitySelector.fromOrderedList(
-      Arrays.asList(Quality.FHD, Quality.HD, Quality.SD),
-      FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)
-    );
-    Recorder recorder = new Recorder.Builder()
-      .setQualitySelector(qualitySelector)
-      .build();
-    return new VideoCapture.Builder<>(recorder)
+  private VideoCapture<Recorder> xgramNewVideoCapture (ResolutionSelector resolutionSelector, boolean plain) {
+    final com.fahadali.xgram.XgramSettings xs = com.fahadali.xgram.XgramSettings.instance();
+    final boolean extras = !plain && xs.cameraXTest();
+    final List<Quality> qualities = extras && xs.cameraVideo4k() ?
+      Arrays.asList(Quality.UHD, Quality.FHD, Quality.HD, Quality.SD) :
+      Arrays.asList(Quality.FHD, Quality.HD, Quality.SD);
+    QualitySelector qualitySelector = QualitySelector.fromOrderedList(qualities, FallbackStrategy.lowerQualityOrHigherThan(Quality.SD));
+    Recorder.Builder recorder = new Recorder.Builder()
+      .setQualitySelector(qualitySelector);
+    if (!plain) {
+      switch (Settings.instance().getCameraAspectRatioMode()) {
+        case Settings.CAMERA_RATIO_FULL_SCREEN:
+        case Settings.CAMERA_RATIO_16_9:
+          recorder.setAspectRatio(AspectRatio.RATIO_16_9);
+          break;
+        default:
+          recorder.setAspectRatio(AspectRatio.RATIO_4_3);
+          break;
+      }
+    }
+    VideoCapture.Builder<Recorder> builder = new VideoCapture.Builder<>(recorder.build())
       .setCaptureType(UseCaseConfigFactory.CaptureType.VIDEO_CAPTURE)
-      .setTargetRotation(getSurfaceRotation())
-      .setResolutionSelector(resolutionSelector)
-      .build();
+      .setTargetRotation(getSurfaceRotation());
+    if (extras) {
+      if (xs.cameraVideo60()) {
+        builder.setTargetFrameRate(new android.util.Range<>(60, 60));
+      }
+      try {
+        if (camera != null && Recorder.getVideoCapabilities(camera.getCameraInfo()).isStabilizationSupported()) {
+          builder.setVideoStabilizationEnabled(true);
+        }
+      } catch (Throwable t) {
+        Log.w(Log.TAG_CAMERA, "XGram: no video stabilisation", t);
+      }
+    }
+    xgramVideoPlain = plain;
+    return builder.build();
   }
+
+  private boolean xgramVideoPlain;
 
   private @Nullable ResolutionSelector xgramVideoResolution;
   private @Nullable CameraSelector xgramBoundSelector;
@@ -756,6 +788,18 @@ public class CameraManagerX extends CameraManager<PreviewView> {
       return true;
     } catch (Throwable t) {
       Log.e(Log.TAG_CAMERA, "XGram: cannot bind VideoCapture", t);
+      if (!xgramVideoPlain && xgramVideoResolution != null) {
+        // The ratio, 4K, 60 fps or stabilisation may be what the camera can't do together: the plain one records
+        videoCapture = xgramNewVideoCapture(xgramVideoResolution, true);
+        try {
+          cameraProvider.bindToLifecycle((LifecycleOwner) context, xgramBoundSelector, videoCapture);
+          xgramVideoCaptureBound = true;
+          xgramRestoreFocusLock();
+          return true;
+        } catch (Throwable t2) {
+          Log.e(Log.TAG_CAMERA, "XGram: cannot bind the plain VideoCapture either", t2);
+        }
+      }
       return false;
     }
   }
@@ -771,7 +815,7 @@ public class CameraManagerX extends CameraManager<PreviewView> {
         cameraProvider.unbind(videoCapture);
         xgramRestoreFocusLock();
         if (xgramVideoResolution != null) {
-          videoCapture = xgramNewVideoCapture(xgramVideoResolution); // a fresh Recorder for the next recording
+          videoCapture = xgramNewVideoCapture(xgramVideoResolution, false); // a fresh Recorder for the next recording
         }
       } catch (Throwable t) {
         Log.w(Log.TAG_CAMERA, "XGram: cannot unbind VideoCapture", t);
