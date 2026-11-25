@@ -195,6 +195,7 @@ public final class XgramHeaderMenuIcons {
       id == R.id.more_btn_report ||
       id == R.id.btn_messageReport ||
       id == R.id.btn_xgramDeleteMyMessages ||
+      id == R.id.btn_xgramFindDelete ||
       id == R.id.btn_deleteThread ||
       id == R.id.btn_destroyChat ||
       id == R.id.more_btn_delete ||

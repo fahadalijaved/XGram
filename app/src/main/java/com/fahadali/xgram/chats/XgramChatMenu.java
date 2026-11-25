@@ -74,6 +74,7 @@ public final class XgramChatMenu {
     new Option("export", R.string.XgramExportChat, R.drawable.baseline_file_download_24, R.id.btn_xgramExportChat),
     new Option("recent_actions", R.string.EventLog, R.drawable.baseline_assignment_24, R.id.btn_xgramRecentActions),
     new Option("delete_my_messages", R.string.XgramDeleteMyMessages, R.drawable.baseline_delete_sweep_24, R.id.btn_xgramDeleteMyMessages),
+    new Option("find_delete", R.string.XgramFindDelete, R.drawable.baseline_delete_sweep_24, R.id.btn_xgramFindDelete),
     new Option("ghost", R.string.XgramGhostExcludeChat, R.drawable.baseline_ghost_24, R.id.btn_xgramGhostExclude),
     new Option("undo_send", R.string.XgramUndoSendExclude, R.drawable.baseline_undo_24, R.id.btn_xgramUndoSendExclude),
     new Option("check_in", R.string.XgramCheckIn, R.drawable.baseline_location_on_24, R.id.btn_xgramCheckIn),

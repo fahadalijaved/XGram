@@ -2805,6 +2805,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
       if (chat != null) {
         com.fahadali.xgram.chats.XgramMessageActions.confirmDeleteMyMessages(this, chat.id); // XGram
       }
+    } else if (id == R.id.btn_xgramFindDelete) {
+      if (chat != null) {
+        com.fahadali.xgram.chats.XgramFindDelete.show(this, chat.id); // XGram: Find and delete
+      }
     } else if (id == R.id.btn_xgramGhostExclude) {
       // XGram: reading starts or stops right away, so reopen the history in place.
       if (chat != null) {
@@ -5417,6 +5421,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (com.fahadali.xgram.chats.XgramMessageActions.canDeleteMyMessages(tdlib, chat.id)) {
       ids.append(R.id.btn_xgramDeleteMyMessages); // XGram
       strings.append(R.string.XgramDeleteMyMessages);
+    }
+
+    if (com.fahadali.xgram.chats.XgramFindDelete.canUse(tdlib, chat.id)) {
+      ids.append(R.id.btn_xgramFindDelete); // XGram: Find and delete
+      strings.append(R.string.XgramFindDelete);
     }
 
     if (com.fahadali.xgram.ghost.XgramGhost.canExclude(tdlib, chat.id)) {

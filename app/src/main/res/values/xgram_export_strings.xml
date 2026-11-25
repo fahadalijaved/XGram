@@ -49,4 +49,18 @@
   <string name="XgramExportPartial">Android\'s time limit for background work stopped the export. What was exported so far is saved.</string>
   <string name="XgramExportFailedNamed">Couldn\'t export %1$s</string>
   <string name="XgramExportStoppedEarly">Android\'s time limit for background work stopped the export before anything was written. Open XGram and try again.</string>
+  <!-- Find and delete (chat menu, XgramFindDelete): finds messages by sender and words, deletes them for everyone -->
+  <string name="XgramFindDelete">Find and delete</string>
+  <string name="XgramFindDeleteInfo">Find messages from some people, or with some words, and delete them all for everyone. In groups, deleting other people\'s messages needs the right to delete messages.</string>
+  <string name="XgramFindDeleteFind">Find</string>
+  <string name="XgramFindDeleteNeedFilter">Pick people or type words to find first</string>
+  <string name="XgramFindDeleteSearching">Searching…</string>
+  <string name="XgramFindDeleteSearchingAll">Searching the whole chat, this can take a while…</string>
+  <string name="XgramFindDeleteNone">No messages found</string>
+  <string name="XgramFindDeleteConfirm">Found %1$s. Delete them for everyone? This can\'t be undone.</string>
+  <string name="XgramFindDeleteDelete">Delete %1$s</string>
+  <string name="XgramFindDeleteShow">Show the newest one</string>
+  <string name="XgramFindDeleteDeleting">Deleting…</string>
+  <string name="XgramFindDeleteDone">Deleted %1$s</string>
+  <string name="XgramFindDeleteDonePartly">%1$s. %2$s couldn\'t be deleted</string>
 </resources>

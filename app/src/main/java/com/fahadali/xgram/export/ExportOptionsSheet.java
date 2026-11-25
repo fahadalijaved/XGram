@@ -41,7 +41,7 @@ import java.util.concurrent.TimeUnit;
  * Files as in Desktop, the date range (From / To with XGram's date picker) and, opened in a topic, "Only this topic".
  * The types and the size limit are remembered; Export hands the options on.
  */
-final class ExportOptionsSheet {
+public final class ExportOptionsSheet {
   private ExportOptionsSheet () { }
 
   interface Callback {
@@ -150,7 +150,7 @@ final class ExportOptionsSheet {
   // Export filters (also Find and delete's)
 
   /** "Everyone", one name, or the first name and how many more. */
-  static String sendersLabel (ViewController<?> c, List<TdApi.MessageSender> senders) {
+  public static String sendersLabel (ViewController<?> c, List<TdApi.MessageSender> senders) {
     if (senders.isEmpty()) {
       return Lang.getString(R.string.XgramExportEveryone);
     }
@@ -162,7 +162,7 @@ final class ExportOptionsSheet {
    * Sent by: in a private chat, you and them; elsewhere a name search among the members (an empty search lists recent
    * ones), then a sheet of the results with the people already picked on top, checked. Searching again adds more.
    */
-  static void pickSenders (ViewController<?> c, long chatId, List<TdApi.MessageSender> picked, Runnable after) {
+  public static void pickSenders (ViewController<?> c, long chatId, List<TdApi.MessageSender> picked, Runnable after) {
     final org.thunderdog.challegram.telegram.Tdlib tdlib = c.tdlib();
     if (tgx.td.ChatId.isUserChat(chatId)) {
       final List<TdApi.MessageSender> candidates = new ArrayList<>();
@@ -231,12 +231,12 @@ final class ExportOptionsSheet {
     return false;
   }
 
-  interface TextCallback {
+  public interface TextCallback {
     void onText (String typed);
   }
 
   /** Containing: words, * for any letters in a word; empty for any message. */
-  static void pickContaining (ViewController<?> c, String current, TextCallback callback) {
+  public static void pickContaining (ViewController<?> c, String current, TextCallback callback) {
     c.openInputAlert(Lang.getString(R.string.XgramExportContaining), Lang.getString(R.string.XgramExportContainingHint), R.string.Done, R.string.Cancel, current, (inputView, result) -> {
       callback.onText(result.trim());
       return true;

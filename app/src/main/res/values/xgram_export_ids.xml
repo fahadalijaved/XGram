@@ -8,4 +8,7 @@
   <item type="id" name="btn_xgramExportSentBy" />
   <item type="id" name="btn_xgramExportContaining" />
   <item type="id" name="btn_xgramExportOnlyTopic" />
+  <!-- Find and delete (chat menu, XgramFindDelete) -->
+  <item type="id" name="btn_xgramFindDelete" />
+  <item type="id" name="btn_xgramFindDeleteShow" />
 </resources>
