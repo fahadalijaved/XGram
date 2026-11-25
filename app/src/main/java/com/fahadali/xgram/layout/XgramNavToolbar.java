@@ -4524,8 +4524,8 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       }
       slideDest = tab.dest;
       com.fahadali.xgram.XgramHaptics.slideTick(this); // a tick on each tab the finger reaches
-      if (tab.dest != DEST_SAVED && tab.dest != selectedDest) {
-        setTarget(tab.dest, true);
+      if (tab.dest != DEST_SAVED && tab.dest != selectedDest && !(com.fahadali.xgram.appearance.XgramGlass.on() && !preview)) {
+        setTarget(tab.dest, true); // Liquid glass: the tabs hold still under the lens; the selection moves on release
       }
     }
 
@@ -4571,9 +4571,8 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       // lets go (a tap on another tab: it glides there as it comes down)
       switch (e.getActionMasked()) {
         case MotionEvent.ACTION_DOWN:
-          if (canSlide()) {
-            liftGlass(true, e.getX());
-          }
+          // No lift on a tap: the tabs resize as the selection moves (the label grows in), and a lens over that
+          // looked jumpy. The lens is for a slide (liftSlide), over tabs that hold still until the finger lets go.
           break;
         case MotionEvent.ACTION_MOVE:
           if (glassHeld) {
