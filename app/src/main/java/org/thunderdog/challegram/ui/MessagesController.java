@@ -1803,8 +1803,15 @@ public class MessagesController extends ViewController<MessagesController.Argume
       contentView.addView(replyBarView);
     }
     contentView.addView(bottomSpace);
-    contentView.addView(bottomWrap);
-    contentView.addView(messagesView);
+    if (xgramGlassComposer) {
+      // XGram Liquid glass: the messages under the composer (they run on behind it), so it gets its touches and its
+      // glass field sees them
+      contentView.addView(messagesView);
+      contentView.addView(bottomWrap);
+    } else {
+      contentView.addView(bottomWrap);
+      contentView.addView(messagesView);
+    }
     contentView.addView(xgramSideTabs); // XGram
     contentView.addView(bottomShadowView);
 
