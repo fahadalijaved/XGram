@@ -4095,7 +4095,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       }
       // Liquid glass: while a finger holds or slides, the selection is a glass lens that rises over the bar and bends
       // its tabs; the bar's own content is drawn once into a node so the lens can show it
-      final float lift = glassLift.getValue();
+      final float lift = glassLift;
       if (glass && lift > .002f && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         drawWithLens(c, width, height, lift);
       } else {
@@ -4113,10 +4113,50 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
 
     // Liquid glass: the selection as a lifted lens (after BitChord's floating tab bar, github.com/kushagrasinghx/BitChord)
 
-    /** 0 at rest, 1 lifted (an under-damped spring: it overshoots as it rises and dips as it lands). */
-    private final XgramExpressive.Spring glassLift = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> invalidate()).setThreshold(.002f);
-    /** Where the lifted lens is centred while held (the finger), and where it was let go. */
-    private float glassFingerX = -1f;
+    // The lens' physics (BitChord's GlassPillMotion): its centre chases the finger (a 50 ms follow) while held and springs
+    // home to the selected tab once let go; the lift is an under-damped spring (it overshoots rising and dips landing);
+    // speed stretches it wide and flat. One frame loop, stepped in 1/240 s substeps so a long frame can't blow it up.
+    private float glassLift, glassLiftVel, glassPos = -1f, glassVel, glassFingerX = -1f;
+    private boolean glassHeld, glassRunning;
+    private long glassLastFrame;
+    private final Runnable glassFrame = this::glassStep;
+
+    private void glassStep () {
+      final long now = System.nanoTime();
+      float dt = glassLastFrame == 0 ? 1f / 60f : Math.min(.05f, (now - glassLastFrame) / 1e9f);
+      glassLastFrame = now;
+      final float home = (innerL + innerR) / 2f;
+      if (glassPos < 0f) {
+        glassPos = home;
+      }
+      while (dt > 0f) {
+        final float step = Math.min(dt, 1f / 240f);
+        if (glassHeld && glassFingerX >= 0f) {
+          final float before = glassPos;
+          glassPos += (glassFingerX - glassPos) * (1f - (float) Math.exp(-step / .05f));
+          glassVel = (glassPos - before) / step;
+        } else {
+          final float accel = -280f * (glassPos - home) - 31.4f * glassVel;
+          glassVel += accel * step;
+          glassPos += glassVel * step;
+        }
+        final float target = glassHeld ? 1f : 0f;
+        final float liftAccel = -250f * (glassLift - target) - 19f * glassLiftVel;
+        glassLiftVel += liftAccel * step;
+        glassLift += glassLiftVel * step;
+        dt -= step;
+      }
+      final boolean settled = !glassHeld && Math.abs(glassLift) < .002f && Math.abs(glassLiftVel) < .02f && Math.abs(glassPos - home) < .5f && Math.abs(glassVel) < 2f;
+      if (settled) {
+        glassLift = glassLiftVel = glassVel = 0f;
+        glassPos = -1f;
+        glassRunning = false;
+        glassLastFrame = 0;
+      } else {
+        postOnAnimation(glassFrame);
+      }
+      invalidate();
+    }
     @Nullable private Object glassContentNode, glassLensNode;
     private final Object[] glassLensShader = new Object[1];
     private final RectF glassPillRect = new RectF();
@@ -4128,8 +4168,12 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       if (x >= 0f) {
         glassFingerX = x;
       }
-      glassLift.animateTo(lift ? 1f : 0f);
-      invalidate();
+      glassHeld = lift;
+      if (!glassRunning) {
+        glassRunning = true;
+        glassLastFrame = 0;
+        postOnAnimation(glassFrame);
+      }
     }
 
     @android.annotation.TargetApi(Build.VERSION_CODES.TIRAMISU)
@@ -4154,10 +4198,12 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       final float pillH = pillHeightIn(height), pad = Screen.dpf(PAD);
       final float restW = Math.max(innerR - innerL, pillH - 2f * pad), restH = pillH - 2f * pad;
       final float liftClamped = Math.max(0f, Math.min(1.2f, lift));
-      final float w = restW + Screen.dpf(14f) * lift, h = restH + (height - restH) * Math.min(1f, liftClamped) + Screen.dpf(9f) * lift;
-      final float home = (innerL + innerR) / 2f;
-      final float finger = glassFingerX >= 0f ? Math.max(w / 2f, Math.min(width - w / 2f, glassFingerX)) : home;
-      final float cx = home + (finger - home) * Math.max(0f, Math.min(1f, lift)), cy = pillH / 2f;
+      // Speed stretches it: wider and flatter the faster it moves (BitChord's squash, from velocity here)
+      final float stretch = Math.min(.22f, Math.abs(glassVel) / 9000f);
+      final float w = (restW + Screen.dpf(14f) * lift) * (1f + stretch);
+      final float h = (restH + (height - restH) * Math.min(1f, liftClamped) + Screen.dpf(9f) * lift) * (1f - stretch * .6f);
+      final float pos = glassPos >= 0f ? glassPos : (innerL + innerR) / 2f;
+      final float cx = Math.max(w / 2f, Math.min(width - w / 2f, pos)), cy = pillH / 2f;
       glassPillRect.set(cx - w / 2f, cy - h / 2f, cx + w / 2f, cy + h / 2f);
       final float radius = h / 2f;
 
@@ -4200,7 +4246,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       // Inner pill: 8dp in from the pill's top and bottom, whatever its height now (48dp items, 40dp compact)
       final float pillH = pillHeightIn(height), pad = Screen.dpf(PAD);
       final float itemTop = pad, itemBottom = itemTop + (pillH - 2f * pad);
-      if (innerVisible && innerAlpha > 0f) {
+      if (innerVisible && innerAlpha > 0f && glassLift < .05f) { // Liquid glass: the lifted lens is the selection then
         fillPaint.setColor(XgramExpressive.withAlpha(indicatorColor(), innerAlpha));
         rect.set(innerL, itemTop, innerR, itemBottom);
         c.drawRoundRect(rect, innerCorner, innerCorner, fillPaint);
@@ -4503,6 +4549,11 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
             liftGlass(true, e.getX());
           }
           break;
+        case MotionEvent.ACTION_MOVE:
+          if (glassHeld) {
+            glassFingerX = e.getX();
+          }
+          break;
         case MotionEvent.ACTION_UP:
         case MotionEvent.ACTION_CANCEL:
           liftGlass(false, -1f);
@@ -4543,9 +4594,8 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
         switch (e.getActionMasked()) {
           case MotionEvent.ACTION_MOVE:
             slideTo(e.getX());
-            if (glassLift.getTarget() > 0f) {
+            if (glassHeld) {
               glassFingerX = e.getX();
-              invalidate();
             }
             break;
           case MotionEvent.ACTION_UP:
