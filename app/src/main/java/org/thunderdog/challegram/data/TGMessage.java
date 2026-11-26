@@ -1212,7 +1212,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       height += getBubbleReplyOffset();
     }
     if (needName(true) && (flags & FLAG_HEADER_ENABLED) != 0) {
-      height += getBubbleNameHeight();
+      height += xgramBubbleNameHeight();
       if (isPsa()) {
         height += getPsaTitleHeight();
       }
@@ -1348,7 +1348,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         pContentY += getBubbleReplyOffset();
       }
       if (needName(true) && (flags & FLAG_HEADER_ENABLED) != 0) {
-        pContentY += getBubbleNameHeight();
+        pContentY += xgramBubbleNameHeight();
         if (isPsa()) {
           pContentY += getPsaTitleHeight();
         }
@@ -2328,10 +2328,15 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         if (needName(true) && hAuthorNameT != null) {
           if (xgramNameOverContent()) {
             // XGram: no bubble behind the name: a pill of the bubble's color around the avatar and the name
-            final int pillLeft = getActualLeftContentEdge() + xBubblePadding + xBubblePaddingSmall - Screen.dp(4f);
+            // (starts at the content's edge, like the reply and the sticker below it; the admin title sits inside it)
+            final int pillLeft = getActualLeftContentEdge();
             final int pillTop = topContentEdge + Screen.dp(9f) - Screen.dp(4f);
+            int pillRight = xgramNameLeft() + getAuthorWidth() + Screen.dp(10f);
+            if (needAdminSign() && hAdminNameT != null) {
+              pillRight += Screen.dp(6f) + hAdminNameT.getWidth();
+            }
             RectF pill = Paints.getRectF();
-            pill.set(pillLeft, pillTop, pillLeft + Screen.dp(8f) + getAuthorWidth(), pillTop + hAuthorNameT.getLineHeight(false) + Screen.dp(8f));
+            pill.set(pillLeft, pillTop, pillRight, pillTop + hAuthorNameT.getLineHeight(false) + Screen.dp(8f));
             c.drawRoundRect(pill, pill.height() / 2f, pill.height() / 2f, Paints.fillingPaint(Theme.getColor(ColorId.bubbleIn_background)));
           }
           xgramLayoutInlineAvatar(avatarReceiver);
@@ -2355,7 +2360,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
       // Author
       if (needName(true)) {
-        int left = useBubbles ? getActualLeftContentEdge() + xBubblePadding + xBubblePaddingSmall + (hAuthorNameT != null ? xgramInlineAvatarRoom() : 0) : xContentLeft;
+        int left = useBubbles ? xgramNameLeft() + (hAuthorNameT != null ? xgramInlineAvatarRoom() : 0) : xContentLeft;
         int top = useBubbles ? topContentEdge + xBubbleNameTop : xNameTop + getHeaderPadding();
         boolean isPsa = isPsa() && forceForwardOrImportInfo();
         if (hAuthorNameT != null) {
@@ -2379,7 +2384,10 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
           }
         }
         int right = getActualRightContentEdge() - xBubblePadding - xBubblePaddingSmall;
-        if (useBubbles && needAdminSign() && hAdminNameT != null) {
+        if (useBubbles && needAdminSign() && hAdminNameT != null && xgramNameOverContent()) {
+          // XGram: no bubble to align it to: right after the name, inside the pill
+          hAdminNameT.draw(c, left - (hAuthorNameT != null ? xgramInlineAvatarRoom() : 0) + getAuthorWidth() + Screen.dp(6f), top - Screen.dp(12f));
+        } else if (useBubbles && needAdminSign() && hAdminNameT != null) {
           right -= hAdminNameT.getWidth();
           int y = top - Screen.dp(1.5f);
           hAdminNameT.draw(c, right, top - Screen.dp(12f));
@@ -2652,7 +2660,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       int lineWidth = Screen.dp(3f);
 
       if (useBubbles) {
-        lineTop = replyData != null ? (topContentEdge + (useBubble() ? xBubblePadding + xBubblePaddingSmall : Screen.dp(8f)) + (useBubbleName() ? getBubbleNameHeight() : 0)) : forwardY;
+        lineTop = replyData != null ? (topContentEdge + (useBubble() ? xBubblePadding + xBubblePaddingSmall : Screen.dp(8f)) + (useBubbleName() ? xgramBubbleNameHeight() : 0)) : forwardY;
         lineBottom = bottomContentEdge - xBubblePadding - xBubblePaddingSmall - (useBubbleTime() ? getBubbleTimePartHeight() : 0);
         if (useReactionBubbles) {
           lineBottom = (int) (lineBottom - (messageReactions.getAnimatedHeight() + xReactionBubblePaddingTop * messageReactions.getVisibility()) + (getBubbleTimePartHeight() * (1f - messageReactions.getTimeHeightExpand()) * messageReactions.getVisibility())); // - xReactionBubblePaddingBottom * messageReactions.getVisibility());
@@ -2703,7 +2711,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       int width = replyData.width(useBubbles && !useBubble());
 
       if (useBubbles) {
-        top = topContentEdge + (useBubble() ? xBubblePadding + xBubblePaddingSmall : Screen.dp(8f)) + (useBubbleName() ? getBubbleNameHeight() : 0);
+        top = topContentEdge + (useBubble() ? xBubblePadding + xBubblePaddingSmall : Screen.dp(8f)) + (useBubbleName() ? xgramBubbleNameHeight() : 0);
         if (isOutgoing() && (!useBubble() || separateReplyFromBubble())) {
           startX = getActualRightContentEdge() - width;
           endX = getInternalBubbleEndX();
@@ -3684,7 +3692,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       pTimeWidth = measureBubbleTimeWidth();
 
       // header part
-      int maxWidth = (allowMessageHorizontalExtend() ? pRealContentMaxWidth : getContentWidth()) + getBubblePaddingRight() + getBubblePaddingRight() - (xBubblePadding + xBubblePaddingSmall) * 2;
+      int maxWidth = (allowMessageHorizontalExtend() || xgramNameOverContent() ? pRealContentMaxWidth : getContentWidth()) + getBubblePaddingRight() + getBubblePaddingRight() - (xBubblePadding + xBubblePaddingSmall) * 2;
 
       if (needAdminSign()) {
         hAdminNameT = new Text.Builder(getAdministratorSign(), maxWidth, getTimeTextStyleProvider(), getDecentColorSet()).singleLine().build();
@@ -4675,6 +4683,16 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
    * reply sits outside it) gets the name line too, in a small pill above it, as there is no avatar column to say who
    * sent it.
    */
+  /** Where the avatar and name start: inside the bubble, or inside the pill when there is no bubble. */
+  private int xgramNameLeft () {
+    return xgramNameOverContent() ? getActualLeftContentEdge() + Screen.dp(4f) : getActualLeftContentEdge() + xBubblePadding + xBubblePaddingSmall;
+  }
+
+  /** The name line, plus a gap under the pill when there is no bubble, so the reply or sticker below doesn't touch it. */
+  private int xgramBubbleNameHeight () {
+    return getBubbleNameHeight() + (xgramNameOverContent() ? Screen.dp(6f) : 0);
+  }
+
   private boolean xgramNameOverContent () {
     if (!useBubbles() || isOutgoing() || (useBubble() && !separateReplyFromBubble()) || !com.fahadali.xgram.XgramSettings.instance().avatarInline() || chat == null) {
       return false;
@@ -4696,7 +4714,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   /** Where the name line starts (the avatar sits at its start, the name after it): see the header drawing. */
   private void xgramLayoutInlineAvatar (AvatarReceiver receiver) {
     final int size = Screen.dp(XGRAM_INLINE_AVATAR_DP);
-    final int left = getActualLeftContentEdge() + xBubblePadding + xBubblePaddingSmall;
+    final int left = xgramNameLeft();
     int top = topContentEdge + Screen.dp(9f);
     if (isPsa() && forceForwardOrImportInfo() && hPsaTextT != null) {
       top += getPsaTitleHeight();
