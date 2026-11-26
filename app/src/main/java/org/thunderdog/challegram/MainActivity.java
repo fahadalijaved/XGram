@@ -1173,6 +1173,14 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
         Uri data = intent.getData();
         if (data == null || StringUtils.isEmpty(data.getScheme()))
           return false;
+        if (com.fahadali.xgram.XgramBackupFile.isBackupUri(this, data, intent.getType())) {
+          // XGram: a settings backup opened with XGram from another app: read, then the import is confirmed
+          if (navigation.isEmpty()) {
+            initMainController(null, null, null);
+          }
+          com.fahadali.xgram.XgramBackupFile.importUri(data);
+          return true;
+        }
         String url = data.toString();
         if (account.tdlib().ui().needViewInBrowser(url) && Intents.openUriInBrowser(data)) {
           return false;

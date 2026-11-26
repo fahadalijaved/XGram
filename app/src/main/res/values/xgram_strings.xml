@@ -291,7 +291,11 @@
   <string name="XgramImportSettings">Import settings</string>
   <string name="XgramResetSettings">Reset XGram settings</string>
   <string name="XgramResetSettingsConfirm">Reset every XGram setting to its default? Your chats, login and the deleted and edited messages XGram kept stay. The app restarts.</string>
-  <string name="XgramBackupInfo">Exports every XGram setting, including local names, filters and hidden people, as text. Copy that text, then tap Import settings to restore it.</string>
+  <string name="XgramBackupInfo">Export saves every XGram setting, including local names, filters and hidden people, as a .xgram file in Downloads/XGram and lets you send it anywhere, such as Saved Messages or a cloud drive. To restore, tap Import settings and pick the file, or tap the file in a chat.</string>
+  <string name="XgramBackupSavedTo">Saved to %1$s</string>
+  <string name="XgramBackupExportFailed">Couldn\'t make the backup file</string>
+  <string name="XgramBackupNotABackup">This isn\'t an XGram settings backup</string>
+  <string name="XgramBackupImportConfirm">Import the XGram settings in %1$s? They replace your current XGram settings, and XGram restarts.</string>
   <string name="XgramSettingsCopied">Settings copied</string>
   <string name="XgramImportFailed">The clipboard doesn\'t contain exported XGram settings</string>
   <string name="XgramImportDone">Settings imported, restarting…</string>
@@ -686,8 +690,8 @@
   <string name="XgramChatListFoldersInfo">Shows only the main chat list. Folders are not changed and stay on your other devices.</string>
   <string name="XgramDownloadBoostSub">Prioritize active downloads</string>
   <string name="XgramPreferIpv6Sub">When available</string>
-  <string name="XgramExportSettingsSub">Copy as text</string>
-  <string name="XgramImportSettingsSub">From the clipboard</string>
+  <string name="XgramExportSettingsSub">Save a backup file and share it</string>
+  <string name="XgramImportSettingsSub">From a backup file</string>
   <!-- In-app updates (Settings → App updates, and Settings → XGram → About → Version) -->
   <string name="XgramUpdates">App updates</string>
   <string name="XgramUpdateChannel">Update channel</string>

@@ -175,6 +175,7 @@ public final class XgramBackup {
     XgramSettings.KEY_COLOR_SOURCE, XgramSettings.KEY_COLOR_SEED, XgramSettings.KEY_COLOR_STYLE, // Colours (Appearance)
     XgramSettings.KEY_FORWARD_SENDER, // Forwarding (Messages)
     XgramSettings.KEY_MENU_STYLE, // Menus (Appearance): Sheets or Compact popups
+    XgramSettings.KEY_NIGHT_SURFACES, // Pure black or Night blue (Appearance)
     // Chat export's last media types and size limit: the exact keys (a bare "xgram_export_" prefix would read the
     // running export's string key as an int)
     com.fahadali.xgram.export.ExportOptions.KEY_TYPES, com.fahadali.xgram.export.ExportOptions.KEY_SIZE_MB};
@@ -246,6 +247,15 @@ public final class XgramBackup {
     return false;
   }
 
+  /** {@code json} is a settings backup made by {@link #export} (the app marker), without importing anything. */
+  public static boolean isBackup (String json) {
+    try {
+      return "XGram".equals(new JSONObject(json.trim()).optString("app"));
+    } catch (Throwable t) {
+      return false;
+    }
+  }
+
   /** Imports settings exported by {@link #export}. Returns the number of values set, or -1 if it isn't a backup. */
   public static int importJson (String json) {
     try {
@@ -291,6 +301,7 @@ public final class XgramBackup {
             key.equals(XgramSettings.KEY_COLOR_SOURCE) || key.equals(XgramSettings.KEY_COLOR_SEED) || key.equals(XgramSettings.KEY_COLOR_STYLE) || // Colours
             key.equals(XgramSettings.KEY_FORWARD_SENDER) || // Forwarding
             key.equals(XgramSettings.KEY_MENU_STYLE) || // Menus
+            key.equals(XgramSettings.KEY_NIGHT_SURFACES) || // Pure black or Night blue
             key.equals(com.fahadali.xgram.export.ExportOptions.KEY_TYPES) || key.equals(com.fahadali.xgram.export.ExportOptions.KEY_SIZE_MB)) { // Chat export
             pmc().putInt(key, ints.getInt(key));
             count++;

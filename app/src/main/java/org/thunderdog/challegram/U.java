@@ -1333,6 +1333,10 @@ public class U {
   }
 
   public static void openFile (TdlibDelegate context, String displayName, File file, String mimeType, int viewCount) {
+    if (com.fahadali.xgram.XgramBackupFile.isBackupName(displayName) || com.fahadali.xgram.XgramBackupFile.isBackupName(file.getName())) {
+      com.fahadali.xgram.XgramBackupFile.importFile(file, displayName); // XGram: a settings backup offers its import
+      return;
+    }
     String extension = getExtension(file.getPath());
     if (StringUtils.isEmpty(mimeType)) {
       mimeType = U.resolveMimeType(file.getPath(), extension);

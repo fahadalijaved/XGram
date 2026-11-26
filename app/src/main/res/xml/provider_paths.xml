@@ -12,5 +12,7 @@
   <files-path name="xgram_qr" path="xgram_qr/" />
   <!-- XGram: the log file made by Share logs (XgramLogs), handed to the share sheet -->
   <files-path name="xgram_logs_share" path="xgram_logs_share/" />
+  <!-- XGram: the settings backup file made by Export settings (XgramBackupFile), handed to the share sheet -->
+  <files-path name="xgram_backup" path="xgram_backup/" />
 
 </paths>

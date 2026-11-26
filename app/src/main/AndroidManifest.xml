@@ -446,6 +446,27 @@
 
       <!-- XGram: sharing from other apps is on the launcher icon aliases below, so the share sheet shows the icon the user chose. -->
 
+      <!-- XGram: a settings backup (.xgram, XgramBackupFile) opened from a file manager or another app -->
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <data android:scheme="content" />
+        <data android:scheme="file" />
+        <data android:mimeType="application/vnd.xgram.settings" />
+      </intent-filter>
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <data android:scheme="content" />
+        <data android:scheme="file" />
+        <data android:host="*" />
+        <data android:mimeType="application/octet-stream" />
+        <data android:mimeType="application/json" />
+        <data android:pathPattern=".*\\.xgram" />
+        <data android:pathPattern=".*\\..*\\.xgram" />
+        <data android:pathPattern=".*\\..*\\..*\\.xgram" />
+      </intent-filter>
+
       <!-- Telegram URLs -->
       <intent-filter android:autoVerify="true">
         <action android:name="android.intent.action.VIEW" />

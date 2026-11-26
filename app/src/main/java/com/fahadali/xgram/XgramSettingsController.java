@@ -1317,7 +1317,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
     addRows(items,
       link(R.id.btn_xgramExportSettings, R.drawable.baseline_share_24, R.string.XgramExportSettings, R.string.XgramExportSettingsSub),
-      link(R.id.btn_xgramImportSettings, R.drawable.baseline_content_paste_24, R.string.XgramImportSettings, R.string.XgramImportSettingsSub)
+      link(R.id.btn_xgramImportSettings, R.drawable.baseline_file_download_24, R.string.XgramImportSettings, R.string.XgramImportSettingsSub)
     );
     items.add(description(R.string.XgramBackupInfo));
     addRows(items, new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramResetSettings, R.drawable.baseline_delete_24, R.string.XgramResetSettings).setTextColorId(org.thunderdog.challegram.theme.ColorId.textNegative));
@@ -2290,23 +2290,10 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       }
       return;
     } else if (id == R.id.btn_xgramExportSettings) {
-      String json = XgramBackup.export();
-      org.thunderdog.challegram.tool.UI.copyText(json, R.string.XgramSettingsCopied);
-      org.thunderdog.challegram.tool.Intents.shareText(json);
+      XgramBackupFile.export(); // a .xgram file: a copy in Downloads/XGram, then the share sheet
       return;
     } else if (id == R.id.btn_xgramImportSettings) {
-      android.content.ClipboardManager clipboard = (android.content.ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
-      CharSequence text = null;
-      if (clipboard != null && clipboard.hasPrimaryClip() && clipboard.getPrimaryClip() != null && clipboard.getPrimaryClip().getItemCount() > 0) {
-        text = clipboard.getPrimaryClip().getItemAt(0).coerceToText(context);
-      }
-      int count = text != null ? XgramBackup.importJson(text.toString()) : -1;
-      if (count < 0) {
-        org.thunderdog.challegram.tool.UI.showToast(R.string.XgramImportFailed, android.widget.Toast.LENGTH_LONG);
-      } else {
-        org.thunderdog.challegram.tool.UI.showToast(R.string.XgramImportDone, android.widget.Toast.LENGTH_SHORT);
-        org.thunderdog.challegram.tool.UI.post(() -> XgramApp.restart(context), 800);
-      }
+      XgramBackupFile.pickAndImport(context); // Android's file picker, then a confirmation
       return;
     } else if (id == R.id.btn_xgramAboutSupport) {
       tdlib.ui().openUrl(this, "https://paypal.me/fahadalijaved23", new org.thunderdog.challegram.telegram.TdlibUi.UrlOpenParameters().disableInstantView());
