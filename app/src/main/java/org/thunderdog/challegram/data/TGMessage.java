@@ -2329,7 +2329,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
           if (xgramNameOverContent()) {
             // XGram: no bubble behind the name: a pill of the bubble's color around the avatar and the name
             // (starts at the content's edge, like the reply and the sticker below it; the admin title sits inside it)
-            final int pillLeft = getActualLeftContentEdge();
+            final int pillLeft = xgramPillLeft();
             final int pillTop = topContentEdge + Screen.dp(9f) - Screen.dp(4f);
             int pillRight = xgramNameLeft() + getAuthorWidth() + Screen.dp(10f);
             if (needAdminSign() && hAdminNameT != null) {
@@ -4685,12 +4685,23 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
    */
   /** Where the avatar and name start: inside the bubble, or inside the pill when there is no bubble. */
   private int xgramNameLeft () {
-    return xgramNameOverContent() ? getActualLeftContentEdge() + Screen.dp(4f) : getActualLeftContentEdge() + xBubblePadding + xBubblePaddingSmall;
+    return xgramNameOverContent() ? xgramPillLeft() + Screen.dp(4f) : getActualLeftContentEdge() + xBubblePadding + xBubblePaddingSmall;
+  }
+
+  /** The pill's left edge: the reply's box (it reaches 12dp past its text) or the sticker's edge. */
+  private int xgramPillLeft () {
+    return replyData != null && !alignReplyHorizontally() ? getInternalBubbleStartX() - Screen.dp(12f) : getActualLeftContentEdge();
   }
 
   /** The name line, plus a gap under the pill when there is no bubble, so the reply or sticker below doesn't touch it. */
   private int xgramBubbleNameHeight () {
-    return getBubbleNameHeight() + (xgramNameOverContent() ? Screen.dp(6f) : 0);
+    if (!xgramNameOverContent()) {
+      return getBubbleNameHeight();
+    }
+    // the pill reaches from 5dp to its line height + 13dp; the reply's box starts 8dp above its text, which sits
+    // 8dp below the name height, so the name height itself is where the box starts: keep 6dp of air above it
+    final int lineHeight = hAuthorNameT != null ? hAuthorNameT.getLineHeight(false) : Screen.dp(20f);
+    return Math.max(getBubbleNameHeight(), Screen.dp(5f) + lineHeight + Screen.dp(8f) + Screen.dp(6f));
   }
 
   private boolean xgramNameOverContent () {
