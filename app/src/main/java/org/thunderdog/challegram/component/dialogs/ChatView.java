@@ -1218,7 +1218,10 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
 
     final int cutOutColor = xgramCutOut != 0 ? xgramCutOut : Theme.fillingColor();
     // XGram: the schedule clock and the selection check at the photo's scale (3/4 with the one line photo)
-    DrawAlgorithms.drawIcon(c, avatarReceiver, 315f, chat.getScheduleAnimator().getFloatValue(), cutOutColor, getSparseDrawable(R.drawable.baseline_watch_later_10, ColorId.badgeMuted), PorterDuffPaint.get(ColorId.badgeMuted, chat.getScheduleAnimator().getFloatValue()), xgramMetrics.badgeScale);
+    // (Expressive: the muted badge color is the surface's highest container, close to the row behind it, so the clock
+    // takes the outline color the mute icon uses, readable in light and dark)
+    final int scheduleColorId = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.chatListMute : ColorId.badgeMuted;
+    DrawAlgorithms.drawIcon(c, avatarReceiver, 315f, chat.getScheduleAnimator().getFloatValue(), cutOutColor, getSparseDrawable(R.drawable.baseline_watch_later_10, scheduleColorId), PorterDuffPaint.get(scheduleColorId, chat.getScheduleAnimator().getFloatValue()), xgramMetrics.badgeScale);
     DrawAlgorithms.drawSimplestCheckBox(c, avatarReceiver, isSelected.getFloatValue(), cutOutColor, xgramMetrics.badgeScale);
 
     if (xgramArchivePull != null && chat.isArchive() && xgramArchivePull.isDrawing()) {
