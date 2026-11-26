@@ -658,7 +658,7 @@ public class WallpaperAdapter extends RecyclerView.Adapter<WallpaperAdapter.View
       xgramRect.set(stroke / 2f, stroke / 2f, width - stroke / 2f, height - stroke / 2f);
       final float radius = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L) - stroke / 2f;
       c.drawRoundRect(xgramRect, radius, radius, xgramStroke);
-      final boolean pureBlack = com.fahadali.xgram.appearance.XgramAmoled.isActive();
+      final boolean pureBlack = com.fahadali.xgram.appearance.XgramAmoled.isBlackActive();
       final int content = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
       xgramDrawIconLabel(c, pureBlack ? R.drawable.baseline_brightness_2_24 : R.drawable.baseline_block_24, Lang.getString(pureBlack ? R.string.XgramPureBlack : R.string.XgramWallpaperNone), content);
     }
@@ -796,7 +796,7 @@ public class WallpaperAdapter extends RecyclerView.Adapter<WallpaperAdapter.View
       this.xgramSurface = surface;
       if (xgramM3) {
         // The labelled tiles say what they are to TalkBack too
-        setContentDescription(surface ? Lang.getString(com.fahadali.xgram.appearance.XgramAmoled.isActive() ? R.string.XgramPureBlack : R.string.XgramWallpaperNone) : wallpaper != null && wallpaper.isCustom() ? Lang.getString(R.string.Gallery) : null);
+        setContentDescription(surface ? Lang.getString(com.fahadali.xgram.appearance.XgramAmoled.isBlackActive() ? R.string.XgramPureBlack : R.string.XgramWallpaperNone) : wallpaper != null && wallpaper.isCustom() ? Lang.getString(R.string.Gallery) : null);
       }
       if (wallpaper != null && !surface) {
         if (wallpaper.isPattern()) {

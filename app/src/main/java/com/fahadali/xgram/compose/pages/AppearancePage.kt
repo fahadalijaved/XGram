@@ -104,9 +104,17 @@ fun AppearancePage() {
           // Black Material You surfaces in night mode; the whole app (this page too) repaints at once.
           switch(
             R.id.btn_xgramPureBlack, s(R.string.XgramPureBlack), s(R.string.XgramPureBlackSub),
-            checked = XgramAmoled.isSaved()
+            checked = XgramAmoled.savedStyle() == XgramAmoled.STYLE_PURE_BLACK
           ) {
-            XgramAmoled.setEnabled(it)
+            XgramAmoled.setStyle(if (it) XgramAmoled.STYLE_PURE_BLACK else XgramAmoled.STYLE_DEFAULT)
+            host.themeChanged()
+          }
+          // Telegram X's Night Blue backgrounds instead (turning one on turns the other off)
+          switch(
+            R.id.btn_xgramNightBlue, s(R.string.XgramNightBlue), s(R.string.XgramNightBlueSub),
+            checked = XgramAmoled.savedStyle() == XgramAmoled.STYLE_NIGHT_BLUE
+          ) {
+            XgramAmoled.setStyle(if (it) XgramAmoled.STYLE_NIGHT_BLUE else XgramAmoled.STYLE_DEFAULT)
             host.themeChanged()
           }
         }

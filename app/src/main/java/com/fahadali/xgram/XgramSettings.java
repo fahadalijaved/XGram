@@ -2034,6 +2034,21 @@ public final class XgramSettings {
     put(KEY_PURE_BLACK, value);
   }
 
+  // Night surfaces (Appearance, under Expressive design; see XgramAmoled): 0 the Material You ones, 1 Pure black,
+  // 2 Night blue (Telegram X's Night Blue theme's blue-grey). Before Night blue, only the Pure black switch was saved.
+
+  public static final String KEY_NIGHT_SURFACES = "xgram_night_surfaces";
+
+  public int nightSurfaces () {
+    int value = pmc().getInt(KEY_NIGHT_SURFACES, -1);
+    return value != -1 ? value : pureBlack() ? 1 : 0;
+  }
+
+  public void setNightSurfaces (int value) {
+    putInt(KEY_NIGHT_SURFACES, value);
+    setPureBlack(value == 1);
+  }
+
   // Colours (Appearance, under Expressive design; see com.fahadali.xgram.appearance.XgramColorSource): where Expressive
   // design's colours come from, the wallpaper (the default) or a colour picked in XGram, and the style of the scheme
   // made from it. Cached: read while colours are resolved.

@@ -844,7 +844,7 @@ public final class XgramLogs {
     row(b, "Expressive design", onOff(XgramExpressive.isEnabled()));
     row(b, "Two panes", twoPanes(c));
     row(b, "Dark theme", onOff(Theme.isDark()));
-    row(b, "Pure black", onOff(XgramAmoled.isEnabled()));
+    row(b, "Night surfaces", XgramAmoled.isEnabled() ? (XgramAmoled.isNightBlue() ? "Night blue" : "Pure black") : "Material You");
     row(b, "Material You", onOff(XgramMaterialYou.isEnabled()));
     row(b, "Language", Lang.packId() + (Lang.rtl() ? ", right to left" : ""));
 

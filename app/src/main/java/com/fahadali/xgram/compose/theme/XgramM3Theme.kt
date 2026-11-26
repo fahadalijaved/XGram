@@ -112,6 +112,6 @@ private fun pureBlackScheme(s: ColorScheme): ColorScheme {
     surfaceContainerHigh = step(XgramExpressive.SURFACE_CONTAINER_HIGH, s.surfaceContainerHigh),
     surfaceContainerHighest = step(XgramExpressive.SURFACE_CONTAINER_HIGHEST, s.surfaceContainerHighest),
     surfaceBright = step(XgramExpressive.SURFACE_BRIGHT, s.surfaceBright),
-    surfaceTint = Color.Black
+    surfaceTint = step(XgramExpressive.SURFACE, s.surface) // black, or Night blue's page
   )
 }

@@ -345,8 +345,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.setEnabled(!locked);
         } else if (id == R.id.btn_xgramAutoNightMode) {
           view.setData(XgramSettingDeps.autoNightModeName());
-        } else if (id == R.id.btn_xgramPureBlack) {
-          view.getToggler().setRadioEnabled(com.fahadali.xgram.appearance.XgramAmoled.isSaved(), isUpdate);
+        } else if (id == R.id.btn_xgramPureBlack || id == R.id.btn_xgramNightBlue) {
+          final int style = id == R.id.btn_xgramPureBlack ? com.fahadali.xgram.appearance.XgramAmoled.STYLE_PURE_BLACK : com.fahadali.xgram.appearance.XgramAmoled.STYLE_NIGHT_BLUE;
+          view.getToggler().setRadioEnabled(com.fahadali.xgram.appearance.XgramAmoled.savedStyle() == style, isUpdate);
           view.setEnabled(com.fahadali.xgram.appearance.XgramAmoled.isAvailable());
         } else if (id == R.id.btn_xgramExpressive) {
           view.getToggler().setRadioEnabled(com.fahadali.xgram.appearance.XgramExpressive.isEnabled(), isUpdate);
@@ -850,6 +851,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       night.add(link(R.id.btn_xgramAutoNightMode, R.string.XgramAutoNightMode));
       if (com.fahadali.xgram.appearance.XgramAmoled.isAvailable()) {
         night.add(toggle(R.id.btn_xgramPureBlack, R.string.XgramPureBlack, R.string.XgramPureBlackSub)); // black Material You surfaces at night
+        night.add(toggle(R.id.btn_xgramNightBlue, R.string.XgramNightBlue, R.string.XgramNightBlueSub)); // or Telegram X's Night Blue ones
       }
       addRows(items, night.toArray(new ListItem[0]));
       items.add(description(R.string.XgramThemeExpressiveInfo));
@@ -2419,6 +2421,14 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       }
       // Applies at once: the role colors are dropped and the app repaints (this list too).
       com.fahadali.xgram.appearance.XgramAmoled.setEnabled(adapter.toggleView(v));
+      adapter.updateValuedSettingById(R.id.btn_xgramNightBlue);
+      return;
+    } else if (id == R.id.btn_xgramNightBlue) {
+      if (!com.fahadali.xgram.appearance.XgramAmoled.isAvailable()) {
+        return;
+      }
+      com.fahadali.xgram.appearance.XgramAmoled.setStyle(adapter.toggleView(v) ? com.fahadali.xgram.appearance.XgramAmoled.STYLE_NIGHT_BLUE : com.fahadali.xgram.appearance.XgramAmoled.STYLE_DEFAULT);
+      adapter.updateValuedSettingById(R.id.btn_xgramPureBlack);
       return;
     } else if (id == R.id.btn_xgramSectionAppearance) {
       navigateTo(section(context, tdlib, SECTION_APPEARANCE));

@@ -31,7 +31,10 @@ public final class XgramAmoled {
 
   // Switch
 
-  /** -1: not read yet, 0: off, 1: on. */
+  /** Night surfaces: the Material You ones, Pure black, or Night blue (Telegram X's Night Blue theme's blue-grey). */
+  public static final int STYLE_DEFAULT = 0, STYLE_PURE_BLACK = 1, STYLE_NIGHT_BLUE = 2;
+
+  /** -1: not read yet, else the style. */
   private static volatile int savedState = -1;
 
   /** The switch is only offered with Expressive design: its colors are the ones made black. */
@@ -39,14 +42,35 @@ public final class XgramAmoled {
     return XgramExpressive.isEnabled();
   }
 
-  /** The saved choice, kept while Expressive design is off. Cached. */
-  public static boolean isSaved () {
+  /** The saved style, kept while Expressive design is off. Cached. */
+  public static int savedStyle () {
     int state = savedState;
     if (state == -1) {
-      state = XgramSettings.instance().pureBlack() ? 1 : 0;
+      state = XgramSettings.instance().nightSurfaces();
+      if (state != STYLE_PURE_BLACK && state != STYLE_NIGHT_BLUE) {
+        state = STYLE_DEFAULT;
+      }
       savedState = state;
     }
-    return state == 1;
+    return state;
+  }
+
+  /**
+   * Pure black or Night blue is saved: both fold the surface roles into the same three levels (page, card, chip),
+   * black and near-black or Telegram X's Night Blue, so everything placed by level works the same with either.
+   */
+  public static boolean isSaved () {
+    return savedStyle() != STYLE_DEFAULT;
+  }
+
+  /** Night blue is the saved style (it then draws whenever {@link #isActive()}). */
+  public static boolean isNightBlue () {
+    return savedStyle() == STYLE_NIGHT_BLUE;
+  }
+
+  /** Pure black itself is drawing: for the few spots that are black on purpose (the splash, the maps' land). */
+  public static boolean isBlackActive () {
+    return isActive() && !isNightBlue();
   }
 
   /** Pure black applies to the dark scheme: Expressive design and the switch are on. Cheap, safe in onDraw. */
@@ -84,8 +108,13 @@ public final class XgramAmoled {
    * caches are dropped and every theme listener (views, bars, Compose pages) is told the colors changed.
    */
   public static void setEnabled (boolean on) {
-    XgramSettings.instance().setPureBlack(on);
-    savedState = on ? 1 : 0;
+    setStyle(on ? STYLE_PURE_BLACK : STYLE_DEFAULT);
+  }
+
+  /** As {@link #setEnabled}, for any style: Pure black and Night blue exclude each other. */
+  public static void setStyle (int style) {
+    XgramSettings.instance().setNightSurfaces(style);
+    savedState = style;
     XgramExpressive.invalidateColors();
     try {
       ThemeManager.xgramNotifyColorsChanged();
@@ -101,6 +130,12 @@ public final class XgramAmoled {
 
   /** The three pure black levels (sRGB grey): the page, a card on it, a chip inside a card. */
   private static final int GREY_PAGE = 0x00, GREY_CARD = 0x12, GREY_CHIP = 0x1E;
+
+  /**
+   * Night blue's three levels, Telegram X's Night Blue theme: the page its chat and page background (#151D26), the card
+   * its list rows and incoming bubbles (#1C2733), the chip its header (#222E3C).
+   */
+  private static final int BLUE_PAGE = 0xff151d26, BLUE_CARD = 0xff1c2733, BLUE_CHIP = 0xff222e3c;
 
   /**
    * The grey level (sRGB, the same in red, green and blue) of each surface role with pure black, or -1 where the role
@@ -184,6 +219,9 @@ public final class XgramAmoled {
     int grey = greyOf(role);
     if (grey == -1) {
       return dynamicColor;
+    }
+    if (isNightBlue()) {
+      return grey == GREY_PAGE ? BLUE_PAGE : grey == GREY_CARD ? BLUE_CARD : BLUE_CHIP;
     }
     if (grey == 0) {
       return 0xff000000;

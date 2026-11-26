@@ -33,7 +33,7 @@ internal object XgramSearchIndex {
 
   /** Extra words of an XGram row, by its id. */
   fun keywords(id: Int): IntArray = when (id) {
-    R.id.btn_xgramPureBlack -> intArrayOf(R.string.XgramSearchKwDark, R.string.XgramSearchKwPower)
+    R.id.btn_xgramPureBlack, R.id.btn_xgramNightBlue -> intArrayOf(R.string.XgramSearchKwDark, R.string.XgramSearchKwPower)
     R.id.btn_xgramMaterialYou -> intArrayOf(R.string.XgramSearchKwDark, R.string.XgramSearchKwMaterialYou)
     R.id.btn_xgramAutoNightMode, R.id.btn_xgramThemes -> intArrayOf(R.string.XgramSearchKwDark)
     R.id.btn_xgramGhostMode, R.id.btn_xgramGhostOffline, R.id.btn_xgramGhostDontRead, R.id.btn_xgramGhostReadOnSend,

@@ -4,4 +4,8 @@
   <item type="id" name="btn_xgramPureBlack" />
   <string name="XgramPureBlack">Pure black</string>
   <string name="XgramPureBlackSub">Black backgrounds in night mode, for OLED screens</string>
+  <!-- Night blue: Telegram X's Night Blue theme's blue-grey backgrounds in night mode (XgramAmoled.STYLE_NIGHT_BLUE) -->
+  <item type="id" name="btn_xgramNightBlue" />
+  <string name="XgramNightBlue">Night blue</string>
+  <string name="XgramNightBlueSub">Blue-grey backgrounds in night mode, like Telegram X\'s Night Blue theme</string>
 </resources>

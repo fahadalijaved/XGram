@@ -167,7 +167,7 @@ public final class XgramR6B7Places {
   @NonNull
   public static String nightMapStyle () {
     final boolean themeDark = Theme.isDark();
-    final boolean pureBlack = XgramAmoled.isActive();
+    final boolean pureBlack = XgramAmoled.isBlackActive(); // Night blue takes its levels from the roles below
     final int land = pureBlack ? 0xff000000 : dark(XgramExpressive.SURFACE_CONTAINER_LOW, themeDark);
     final int landAlt = pureBlack ? 0xff0b0b0b : dark(XgramExpressive.SURFACE_CONTAINER, themeDark);
     final int road = pureBlack ? 0xff1e1e1e : dark(XgramExpressive.SURFACE_CONTAINER_HIGHEST, themeDark);

@@ -726,7 +726,7 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
       final int theme;
       if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
         theme = android.content.res.Resources.ID_NULL;
-      } else if (com.fahadali.xgram.appearance.XgramAmoled.isActive()) {
+      } else if (com.fahadali.xgram.appearance.XgramAmoled.isBlackActive()) {
         theme = R.style.XgramR5SecuritySplashBlack;
       } else {
         theme = org.thunderdog.challegram.theme.ThemeManager.instance().isCurrentThemeDark() ? R.style.XgramR5SecuritySplashDark : R.style.XgramR5SecuritySplashLight;
