@@ -1660,6 +1660,9 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       ((flags & FLAG_SELF_CHAT) != 0 && !isOutgoing())))) {
       return true;
     }
+    if (xgramNameOverContent()) {
+      return true; // XGram: Avatar next to the name
+    }
     if (!useBubble() || separateReplyFromBubble()) {
       return false;
     }
@@ -2323,6 +2326,14 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       // Avatar
       if (xgramInlineAvatarRoom() > 0) {
         if (needName(true) && hAuthorNameT != null) {
+          if (xgramNameOverContent()) {
+            // XGram: no bubble behind the name: a pill of the bubble's color around the avatar and the name
+            final int pillLeft = getActualLeftContentEdge() + xBubblePadding + xBubblePaddingSmall - Screen.dp(4f);
+            final int pillTop = topContentEdge + Screen.dp(9f) - Screen.dp(4f);
+            RectF pill = Paints.getRectF();
+            pill.set(pillLeft, pillTop, pillLeft + Screen.dp(8f) + getAuthorWidth(), pillTop + hAuthorNameT.getLineHeight(false) + Screen.dp(8f));
+            c.drawRoundRect(pill, pill.height() / 2f, pill.height() / 2f, Paints.fillingPaint(Theme.getColor(ColorId.bubbleIn_background)));
+          }
           xgramLayoutInlineAvatar(avatarReceiver);
           if (avatarReceiver.needPlaceholder())
             avatarReceiver.drawPlaceholder(c);
@@ -4656,7 +4667,25 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   private static final float XGRAM_INLINE_AVATAR_DP = 20f, XGRAM_INLINE_AVATAR_GAP_DP = 6f;
 
   private boolean xgramAvatarInline () {
-    return useBubbles() && com.fahadali.xgram.XgramSettings.instance().avatarInline() && needName(true);
+    return useBubbles() && com.fahadali.xgram.XgramSettings.instance().avatarInline();
+  }
+
+  /**
+   * Avatar next to the name, in groups: a message without a bubble of its own (a sticker, a round video, one whose
+   * reply sits outside it) gets the name line too, in a small pill above it, as there is no avatar column to say who
+   * sent it.
+   */
+  private boolean xgramNameOverContent () {
+    if (!useBubbles() || isOutgoing() || (useBubble() && !separateReplyFromBubble()) || !com.fahadali.xgram.XgramSettings.instance().avatarInline() || chat == null) {
+      return false;
+    }
+    switch (chat.type.getConstructor()) {
+      case TdApi.ChatTypeBasicGroup.CONSTRUCTOR:
+        return true;
+      case TdApi.ChatTypeSupergroup.CONSTRUCTOR:
+        return !((TdApi.ChatTypeSupergroup) chat.type).isChannel;
+    }
+    return false;
   }
 
   /** The room an inline avatar takes before the name (0 without one). */
