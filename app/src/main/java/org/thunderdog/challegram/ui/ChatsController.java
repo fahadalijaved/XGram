@@ -771,8 +771,8 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     int canArchive = 0, canUnarchive = 0;
     for (int i = 0; i < getSelectedChatCount(); i++) {
       TdApi.Chat chat = selectedChats.valueAt(i);
-      if (tdlib.canArchiveOrUnarchiveChat(chat)) {
-        if (ChatPosition.isArchived(chat)) {
+      if (tdlib.canArchiveOrUnarchiveChat(chat) || com.fahadali.xgram.chats.XgramLocalArchive.canArchiveLocally(tdlib, chat)) {
+        if (ChatPosition.isArchived(chat) || com.fahadali.xgram.chats.XgramLocalArchive.isArchived(tdlib, chat.id)) {
           canUnarchive++;
         } else {
           canArchive++;
@@ -1145,7 +1145,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
                 ChangeFlags.ITEM_MOVED
             )) {
               runOnUiThreadOptional(() -> {
-                adapter.setNeedArchive(chatList.totalCount() > 0);
+                adapter.setNeedArchive(chatList.totalCount() > 0 || com.fahadali.xgram.chats.XgramLocalArchive.hasAny(tdlib));
                 scheduleArchiveUpdate(ChatsAdapter.ArchiveUpdate.ALL);
               });
             }
@@ -1174,8 +1174,9 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
             );
           }
         };
-        adapter.setNeedArchive(archiveList.totalCount() > 0);
+        adapter.setNeedArchive(archiveList.totalCount() > 0 || com.fahadali.xgram.chats.XgramLocalArchive.hasAny(tdlib));
         archiveList.subscribeToUpdates(archiveListListener);
+        com.fahadali.xgram.chats.XgramLocalArchive.addListener(xgramLocalArchiveListener); // XGram: the row for a chat archived on this phone
         archiveList.loadAtLeast(null, 3, null);
         tdlib.settings().addUserPreferenceChangeListener(this);
       }
@@ -1273,6 +1274,16 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
   private boolean hideArchive, archiveCollapsed;
   private TdlibChatList archiveList;
   private ChatListListener archiveListListener;
+  private final com.fahadali.xgram.chats.XgramLocalArchive.Listener xgramLocalArchiveListener = (accountId, chatId, archived) -> {
+    if (accountId == tdlib.id()) {
+      runOnUiThreadOptional(() -> {
+        if (adapter != null && archiveList != null) {
+          adapter.setNeedArchive(archiveList.totalCount() > 0 || com.fahadali.xgram.chats.XgramLocalArchive.hasAny(tdlib));
+          scheduleArchiveUpdate(ChatsAdapter.ArchiveUpdate.ALL);
+        }
+      });
+    }
+  };
 
   /** XGram Later: the archive row is pulled up out of sight (Hide archive). */
   public boolean xgramArchiveCollapsed () {
@@ -2107,8 +2118,8 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
       int canClearHistory = 0;
       for (int i = 0; i < selectedChats.size(); i++) {
         TdApi.Chat chat = selectedChats.valueAt(i);
-        if (tdlib.canArchiveOrUnarchiveChat(chat)) {
-          if (ChatPosition.isArchived(chat)) {
+        if (tdlib.canArchiveOrUnarchiveChat(chat) || com.fahadali.xgram.chats.XgramLocalArchive.canArchiveLocally(tdlib, chat)) {
+          if (ChatPosition.isArchived(chat) || com.fahadali.xgram.chats.XgramLocalArchive.isArchived(tdlib, chat.id)) {
             canUnarchive++;
           } else {
             canArchive++;
@@ -2617,6 +2628,13 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
               if (optionId == R.id.btn_archiveUnarchiveChat) {
                 TdApi.ChatList chatList = isUnarchive ? new TdApi.ChatListMain() : new TdApi.ChatListArchive();
                 for (int i = 0; i < selectedChats.size(); i++) {
+                  TdApi.Chat xgramChat = selectedChats.valueAt(i);
+                  if (com.fahadali.xgram.chats.XgramLocalArchive.canArchiveLocally(tdlib, xgramChat) && !tdlib.canArchiveOrUnarchiveChat(xgramChat)) {
+                    // XGram: Telegram won't archive this one, it is archived on this phone
+                    com.fahadali.xgram.chats.XgramLocalArchive.setArchived(tdlib, xgramChat.id, !isUnarchive);
+                    after.run();
+                    continue;
+                  }
                   tdlib.client().send(new TdApi.AddChatToList(selectedChats.keyAt(i), chatList), result -> {
                     switch (result.getConstructor()) {
                       case TdApi.Ok.CONSTRUCTOR:
@@ -3655,6 +3673,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     }
     if (archiveList != null) {
       archiveList.unsubscribeFromUpdates(archiveListListener);
+      com.fahadali.xgram.chats.XgramLocalArchive.removeListener(xgramLocalArchiveListener);
     }
     if (adapter != null) {
       List<TGChat> chats = adapter.getChats();

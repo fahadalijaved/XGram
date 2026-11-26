@@ -5533,8 +5533,8 @@ public class TdlibUi extends Handler {
       icons.append(position.isPinned ? R.drawable.deproko_baseline_pin_undo_24 : R.drawable.deproko_baseline_pin_24);
     }
 
-    if (tdlib.canArchiveOrUnarchiveChat(chat)) {
-      boolean isArchived = tdlib.chatArchived(chat);
+    if (tdlib.canArchiveOrUnarchiveChat(chat) || com.fahadali.xgram.chats.XgramLocalArchive.canArchiveLocally(tdlib, chat)) { // XGram: or on this phone
+      boolean isArchived = com.fahadali.xgram.chats.XgramLocalArchive.chatArchived(tdlib, chat);
       ids.append(isArchived ? R.id.btn_unarchiveChat : R.id.btn_archiveChat);
       strings.append(isArchived ? R.string.UnarchiveChat : R.string.ArchiveChat);
       colors.append(ViewController.OptionColor.NORMAL);
@@ -5657,7 +5657,7 @@ public class TdlibUi extends Handler {
   }
 
   private void showArchiveUnarchiveChat (ViewController<?> context, final TdApi.ChatList chatList, final long chatId, TdApi.MessageSource source, @Nullable Runnable after) {
-    boolean isUnarchive = tdlib.chatArchived(chatId);
+    boolean isUnarchive = com.fahadali.xgram.chats.XgramLocalArchive.chatArchived(tdlib, chatId); // XGram: or on this phone
     String title = tdlib.chatTitleShort(chatId);
     boolean isUserChat = tdlib.isUserChat(chatId);
     checkNeedArchiveInFolderHint(chatList, isUnarchive, needHint -> {
@@ -6001,6 +6001,15 @@ public class TdlibUi extends Handler {
       return true;
     } else if (actionId == R.id.btn_archiveChat || actionId == R.id.btn_unarchiveChat) {
       boolean isUnarchive = actionId == R.id.btn_unarchiveChat;
+      if (com.fahadali.xgram.chats.XgramLocalArchive.canArchiveLocally(tdlib, chat) && !tdlib.canArchiveOrUnarchiveChat(chat)) {
+        // XGram: Telegram won't archive this chat (its own "Telegram" chat): archived on this phone instead
+        com.fahadali.xgram.chats.XgramLocalArchive.setArchived(tdlib, chatId, !isUnarchive);
+        showArchiveHint(chatList, 1, isUnarchive);
+        if (after != null) {
+          after.run();
+        }
+        return true;
+      }
       TdApi.ChatList targetChatList = isUnarchive ? ChatPosition.CHAT_LIST_MAIN : ChatPosition.CHAT_LIST_ARCHIVE;
       tdlib.send(new TdApi.AddChatToList(chatId, targetChatList), tdlib.typedOkHandler(() -> {
         showArchiveHint(chatList, 1, isUnarchive);
@@ -6128,8 +6137,8 @@ public class TdlibUi extends Handler {
         strings.append(canRead ? R.string.MarkAsRead : R.string.MarkAsUnread);
         icons.append(canRead ? Config.ICON_MARK_AS_READ : Config.ICON_MARK_AS_UNREAD);
 
-        if (tdlib.canArchiveOrUnarchiveChat(chat)) {
-          boolean isArchived = tdlib.chatArchived(chat);
+        if (tdlib.canArchiveOrUnarchiveChat(chat) || com.fahadali.xgram.chats.XgramLocalArchive.canArchiveLocally(tdlib, chat)) { // XGram: or on this phone
+          boolean isArchived = com.fahadali.xgram.chats.XgramLocalArchive.chatArchived(tdlib, chat);
           ids.append(R.id.btn_archiveUnarchiveChat);
           strings.append(isArchived ? R.string.Unarchive : R.string.Archive);
           icons.append(isArchived ? R.drawable.baseline_unarchive_24 : R.drawable.baseline_archive_24);

@@ -39,6 +39,7 @@ public final class XgramAccountData {
     // Undo send: waiting messages (journal), "your message is back" hints, chats where messages don't wait
     "xgram_usq_", "xgram_usqh_", XgramSettings.KEY_UNDO_SEND_EXCLUDE,
     com.fahadali.xgram.later.XgramLaterRecord.PREFIX, // Later
+    com.fahadali.xgram.chats.XgramLocalArchive.PREFIX, // Archive on this phone
     "xgram_ci_" // Check In's live state (com.fahadali.xgram.checkin)
   };
 
@@ -61,6 +62,7 @@ public final class XgramAccountData {
       XgramGhost.forgetAccount(accountId);
       com.fahadali.xgram.chats.XgramAutoTranslate.forgetAccount(accountId);
       XgramFilters.forgetAccount(accountId);
+      com.fahadali.xgram.chats.XgramLocalArchive.forgetAccount(accountId);
       XgramDeleted.forgetAccount(accountId);
       XgramLocalRead.forgetAccount(accountId);
       com.fahadali.xgram.topics.XgramForumUnread.forgetAccount(accountId);

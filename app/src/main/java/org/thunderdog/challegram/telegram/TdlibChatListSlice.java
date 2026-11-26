@@ -102,6 +102,8 @@ public final class TdlibChatListSlice implements Destroyable {
     this.keepPositions = keepPositions;
     this.haveCustomModifications = keepPositions;
     this.modifier = modifier;
+    // XGram: chats archived on this phone leave the user's lists other than the Archive (sorted, so indexes stay right)
+    this.xgramLocalSorted = chatList.chatList().getConstructor() != TdApi.ChatListArchive.CONSTRUCTOR && com.fahadali.xgram.chats.XgramLocalArchive.hasAny(tdlib);
   }
 
   private int loadedCount () {
@@ -191,6 +193,9 @@ public final class TdlibChatListSlice implements Destroyable {
         if (filter != null) {
           if (!filter.accept(chat))
             return;
+        }
+        if (xgramLocalHidden(chat)) {
+          return; // XGram: archived on this phone
         }
         if (xgramMerge) {
           // XGram: a community shows as one row; the member may already be there as its front.
@@ -302,7 +307,7 @@ public final class TdlibChatListSlice implements Destroyable {
         ensureTdlibThreadAndList(chatList);
         final int existingIndex = indexOfChat(chat.id);
         if (existingIndex == -1) {
-          if (filter != null && filter.accept(chat)) { // chat became unfiltered
+          if (filter != null && filter.accept(chat) && !xgramHidden(chat)) { // chat became unfiltered
             TdApi.ChatPosition position = ChatPosition.findPosition(chat, chatList.chatList());
             if (position != null && position.order != 0) {
               final Entry entry = new Entry(chat, chatList.chatList(), position, keepPositions);
@@ -375,6 +380,7 @@ public final class TdlibChatListSlice implements Destroyable {
     sourceList.initializeList(filter, listener, callback, this.maxSize = initialChunkSize, () -> {
       loadingInitialChunk = false;
       xgramReady = true;
+      xgramLocalSyncAll(); // XGram: Archive on this phone
       dispatchChats(0);
       if (!isDestroyed() && onLoadInitialChunk != null) {
         onLoadInitialChunk.run();
@@ -441,6 +447,10 @@ public final class TdlibChatListSlice implements Destroyable {
       if (xgramMerge) {
         com.fahadali.xgram.chats.XgramCommunities.removeListener(xgramListener);
         com.fahadali.xgram.later.XgramLater.removeListener(xgramLaterListener);
+        com.fahadali.xgram.chats.XgramLocalArchive.removeListener(xgramLocalArchiveListener);
+        if (xgramMainList != null) {
+          xgramMainList.unsubscribeFromUpdates(xgramMainListener);
+        }
       }
     }
   }
@@ -448,7 +458,7 @@ public final class TdlibChatListSlice implements Destroyable {
   private boolean haveCustomModifications;
 
   private boolean needSort () {
-    return filter != null || haveCustomModifications || xgramMerge;
+    return filter != null || haveCustomModifications || xgramMerge || xgramLocalSorted;
   }
 
   // XGram: one row per Telegram community (see XgramCommunities). Only for the user's own chat lists, not pickers.
@@ -481,11 +491,157 @@ public final class TdlibChatListSlice implements Destroyable {
         }
       };
       com.fahadali.xgram.later.XgramLater.addListener(xgramLaterListener);
+      // XGram: Archive on this phone. The Archive takes those chats from All chats; the other lists let them go.
+      xgramLocalArchiveListener = (accountId, chatId, archived) -> {
+        if (accountId == tdlib.id()) {
+          tdlib.runOnTdlibThread(() -> {
+            if (xgramIsArchive()) {
+              xgramLocalSync(chatId);
+            } else {
+              xgramOnLaterChanged(new long[] {chatId}, com.fahadali.xgram.later.XgramLater.EVENT_HIDDEN);
+            }
+          });
+        }
+      };
+      com.fahadali.xgram.chats.XgramLocalArchive.addListener(xgramLocalArchiveListener);
+      if (xgramIsArchive()) {
+        xgramMainList = tdlib.chatList(ChatPosition.CHAT_LIST_MAIN);
+        xgramMainListener = new ChatListListener() {
+          @Override
+          public void onChatAdded (TdlibChatList chatList, TdApi.Chat chat, int atIndex, Tdlib.ChatChange changeInfo) {
+            xgramLocalSyncIfArchived(chat.id);
+          }
+
+          @Override
+          public void onChatRemoved (TdlibChatList chatList, TdApi.Chat chat, int fromIndex, Tdlib.ChatChange changeInfo) {
+            xgramLocalSyncIfArchived(chat.id);
+          }
+
+          @Override
+          public void onChatMoved (TdlibChatList chatList, TdApi.Chat chat, int fromIndex, int toIndex, Tdlib.ChatChange changeInfo) {
+            xgramLocalSyncIfArchived(chat.id);
+          }
+
+          @Override
+          public void onChatChanged (TdlibChatList chatList, TdApi.Chat chat, int index, Tdlib.ChatChange changeInfo) {
+            xgramLocalSyncIfArchived(chat.id);
+          }
+        };
+        xgramMainList.subscribeToUpdates(xgramMainListener);
+      }
     }
   }
 
+  // XGram: Archive on this phone (XgramLocalArchive)
+
+  private final boolean xgramLocalSorted;
+  private com.fahadali.xgram.chats.XgramLocalArchive.Listener xgramLocalArchiveListener;
+  private TdlibChatList xgramMainList;
+  private ChatListListener xgramMainListener;
+
+  private boolean xgramIsArchive () {
+    return sourceList.chatList().getConstructor() == TdApi.ChatListArchive.CONSTRUCTOR;
+  }
+
+  /** A chat archived on this phone, in a list that lets it go (every list but the Archive). */
+  private boolean xgramLocalHidden (TdApi.Chat chat) {
+    return (xgramLocalSorted || xgramMerge) && !xgramIsArchive() && com.fahadali.xgram.chats.XgramLocalArchive.isArchived(tdlib, chat.id);
+  }
+
+  @TdlibThread
+  private void xgramLocalSyncIfArchived (long chatId) {
+    if (com.fahadali.xgram.chats.XgramLocalArchive.isArchived(tdlib, chatId) || indexOfChat(chatId) != -1 && tdlib.isServiceNotificationsChat(chatId)) {
+      xgramLocalSync(chatId);
+    }
+  }
+
+  /** Every chat of All chats archived on this phone, put in the Archive once its own chats are in. */
+  @TdlibThread
+  private void xgramLocalSyncAll () {
+    if (!xgramMerge || !xgramIsArchive()) {
+      return;
+    }
+    long chatId = tdlib.serviceNotificationsChatId();
+    if (com.fahadali.xgram.chats.XgramLocalArchive.isArchived(tdlib, chatId)) {
+      xgramLocalSync(chatId);
+    }
+  }
+
+  /**
+   * The Archive: puts a chat archived on this phone in its place by its order in All chats, moves it when that order
+   * changes, or takes it out when it is unarchived or leaves All chats.
+   */
+  @TdlibThread
+  private void xgramLocalSync (long chatId) {
+    if (!xgramMerge || !xgramReady || subListener == null || isDestroyed() || !xgramIsArchive()) {
+      return;
+    }
+    TdApi.Chat chat = tdlib.chat(chatId);
+    TdApi.ChatPosition main = chat != null ? ChatPosition.findPosition(chat, ChatPosition.CHAT_LIST_MAIN) : null;
+    boolean want = main != null && main.order != 0 && com.fahadali.xgram.chats.XgramLocalArchive.isArchived(tdlib, chatId) &&
+      ChatPosition.findPosition(chat, sourceList.chatList()) == null;
+    synchronized (filteredList) {
+      int fromIndex = indexOfChat(chatId);
+      if (fromIndex != -1 && ChatPosition.findPosition(filteredList.get(fromIndex).chat, sourceList.chatList()) != null) {
+        return; // archived by Telegram after all: the Archive's own entry
+      }
+      if (fromIndex == -1 && !want) {
+        return;
+      }
+      if (fromIndex != -1 && !want) {
+        Entry entry = filteredList.remove(fromIndex);
+        if (fromIndex < displayCount) {
+          subListener.onChatRemoved(sourceList, entry.chat, fromIndex, new Tdlib.ChatChange(entry.effectivePosition, Tdlib.ChatChange.ALL));
+          displayCount--;
+          subListener.onChatListChanged(sourceList, ChatListListener.ChangeFlags.ITEM_REMOVED);
+        }
+      } else if (fromIndex == -1) {
+        Entry entry = new Entry(chat, sourceList.chatList(), new TdApi.ChatPosition(sourceList.chatList(), main.order, false, null), false);
+        int atIndex = findInsertIndex(entry);
+        filteredList.add(atIndex, entry);
+        if (atIndex < displayCount) {
+          subListener.onChatAdded(sourceList, chat, atIndex, new Tdlib.ChatChange(entry.effectivePosition, Tdlib.ChatChange.ALL));
+          displayCount++;
+          subListener.onChatListChanged(sourceList, ChatListListener.ChangeFlags.ITEM_ADDED);
+        }
+      } else {
+        Entry entry = filteredList.get(fromIndex);
+        Tdlib.ChatChange change = new Tdlib.ChatChange(entry.effectivePosition, Tdlib.ChatChange.ALL);
+        if (entry.effectivePosition.order == main.order) {
+          if (fromIndex < displayCount) {
+            subListener.onChatChanged(sourceList, chat, fromIndex, change);
+            subListener.onChatListChanged(sourceList, ChatListListener.ChangeFlags.ITEM_METADATA_CHANGED);
+          }
+          return;
+        }
+        filteredList.remove(fromIndex);
+        entry.effectivePosition.order = main.order;
+        int toIndex = findInsertIndex(entry);
+        filteredList.add(toIndex, entry);
+        if (fromIndex < displayCount && toIndex < displayCount) {
+          if (toIndex != fromIndex) {
+            subListener.onChatMoved(sourceList, chat, fromIndex, toIndex, change);
+            subListener.onChatListChanged(sourceList, ChatListListener.ChangeFlags.ITEM_MOVED);
+          } else {
+            subListener.onChatChanged(sourceList, chat, toIndex, change);
+            subListener.onChatListChanged(sourceList, ChatListListener.ChangeFlags.ITEM_METADATA_CHANGED);
+          }
+        } else if (fromIndex < displayCount) {
+          subListener.onChatRemoved(sourceList, chat, fromIndex, change);
+          displayCount--;
+          subListener.onChatListChanged(sourceList, ChatListListener.ChangeFlags.ITEM_REMOVED);
+        } else if (toIndex < displayCount) {
+          subListener.onChatAdded(sourceList, chat, toIndex, change);
+          displayCount++;
+          subListener.onChatListChanged(sourceList, ChatListListener.ChangeFlags.ITEM_ADDED);
+        }
+      }
+    }
+    dispatchChats(0);
+  }
+
   private boolean xgramHidden (TdApi.Chat chat) {
-    return xgramMerge && (com.fahadali.xgram.chats.XgramCommunities.isHidden(tdlib, chat, sourceList.chatList()) || com.fahadali.xgram.later.XgramLater.isChatHidden(tdlib, chat));
+    return xgramLocalHidden(chat) || xgramMerge && (com.fahadali.xgram.chats.XgramCommunities.isHidden(tdlib, chat, sourceList.chatList()) || com.fahadali.xgram.later.XgramLater.isChatHidden(tdlib, chat));
   }
 
   /** XGram Later: chats snoozed or woken (out of the list or back in), or moved up or back. */
