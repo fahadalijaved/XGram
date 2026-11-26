@@ -85,6 +85,19 @@ public final class TdlibChatList implements Comparator<TdlibChatList.Entry> {
   private int xgramLoadRetries;
   private final List<RunnableData<TdApi.Chat>> perChatCallbacks = new ArrayList<>();
 
+  /** XGram: the list's kind for the safety log, without names (main, archive, folder:id). */
+  private String xgramListName () {
+    switch (chatList.getConstructor()) {
+      case TdApi.ChatListMain.CONSTRUCTOR:
+        return "main";
+      case TdApi.ChatListArchive.CONSTRUCTOR:
+        return "archive";
+      case TdApi.ChatListFolder.CONSTRUCTOR:
+        return "folder:" + ((TdApi.ChatListFolder) chatList).chatFolderId;
+    }
+    return chatList.getClass().getSimpleName();
+  }
+
   private @State int state = State.END_NOT_REACHED;
 
   private final RuntimeException origin;
@@ -334,6 +347,8 @@ public final class TdlibChatList implements Comparator<TdlibChatList.Entry> {
       if (result.getConstructor() == TdApi.Error.CONSTRUCTOR && ((TdApi.Error) result).code != 404) {
         setState(State.END_NOT_REACHED);
         final int attempt = Math.min(xgramLoadRetries++, 5);
+        // (in the always-on safety log, for "chats go missing" reports: which list, what TDLib said, which retry)
+        Log.w("Chat list %s: loading failed, retry %d: %s", xgramListName(), attempt + 1, TD.toErrorString(result));
         tdlib.runOnTdlibThread(() -> {
           if (state != State.END_REACHED && state != State.LOADING) {
             loadMore(limit, null);
@@ -343,6 +358,9 @@ public final class TdlibChatList implements Comparator<TdlibChatList.Entry> {
       }
       xgramLoadRetries = 0;
       boolean endReached = result.getConstructor() == TdApi.Error.CONSTRUCTOR;
+      if (endReached) {
+        Log.w("Chat list %s: all loaded, %d chats", xgramListName(), list.size()); // XGram: safety log, once per list
+      }
       setState(endReached ? State.END_REACHED : State.END_NOT_REACHED);
       if (!onLoadMore.isEmpty()) {
         List<Runnable> callbacks = new ArrayList<>(onLoadMore);
