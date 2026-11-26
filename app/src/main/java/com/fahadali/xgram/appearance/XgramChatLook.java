@@ -54,9 +54,10 @@ import me.vkryl.core.ColorUtils;
 public final class XgramChatLook {
   private XgramChatLook () { }
 
-  public static final int[] STICKER_SCALES = {50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 165, 180, 200};
-  /** 0: emoji stay text-sized inside the bubble (Telegram X's "Big emoji" off). */
-  public static final int[] EMOJI_SCALES = {0, 50, 75, 100, 125, 150, 175, 200, 250, 300};
+  /** Even steps of 10%, so every stop moves the preview by the same amount. */
+  public static final int[] STICKER_SCALES = {50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200};
+  /** 0: emoji stay text-sized inside the bubble (Telegram X's "Big emoji" off); then even steps of 25%. */
+  public static final int[] EMOJI_SCALES = {0, 50, 75, 100, 125, 150, 175, 200, 225, 250, 275, 300};
   /** -1: the theme's corners. */
   public static final int[] BUBBLE_RADII = {-1, 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24};
 
@@ -233,6 +234,7 @@ public final class XgramChatLook {
     SliderView slider = new SliderView(context);
     c.addThemeInvalidateListener(slider);
     slider.setSlideEnabled(true, false);
+    slider.xgramSetTouchAnywhere(true); // a tap or drag anywhere on the track, and the preview follows it live
     slider.setValueCount(values.length);
     slider.setValue((float) indexOf(values, setting.get()) / (float) (values.length - 1));
     slider.setListener(new SliderView.Listener() {

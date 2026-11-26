@@ -354,6 +354,30 @@ public class SliderView extends View implements FactorAnimator.Target {
     }
   }
 
+  /**
+   * XGram: a touch anywhere on the slider takes it (a Material slider): the value jumps under the finger and follows
+   * it, and a scrolling parent leaves the gesture alone. Off (Telegram X's way), only a touch on the handle drags it.
+   */
+  private boolean xgramTouchAnywhere;
+
+  public void xgramSetTouchAnywhere (boolean touchAnywhere) {
+    this.xgramTouchAnywhere = touchAnywhere;
+  }
+
+  /** XGram: the value under {@code x}, as a drag sets it. */
+  private float xgramFactorAt (float x) {
+    int left = getTotalPaddingLeft();
+    int width = (getMeasuredWidth() - getTotalPaddingRight() - left);
+    if (width <= 0) {
+      return value;
+    }
+    if (anchorMode == ANCHOR_MODE_CENTER) {
+      int centerX = left + width / 2;
+      return Math.max(-1f, Math.min(1f, (x - centerX) / (float) (width / 2)));
+    }
+    return Math.max(0f, Math.min(1f, (x - left) / (float) width));
+  }
+
   @Override
   public boolean onTouchEvent (MotionEvent e) {
     float x = e.getX();
@@ -361,6 +385,20 @@ public class SliderView extends View implements FactorAnimator.Target {
 
     switch (e.getAction()) {
       case MotionEvent.ACTION_DOWN: {
+        if (xgramTouchAnywhere && slideEnabled && (listener == null || listener.allowSliderChanges(this))) {
+          if (changeAnimator != null) {
+            changeAnimator.cancel();
+          }
+          diffX = 0;
+          xgramHapticStop = xgramStopOf(value);
+          setIsUp(true);
+          if (getParent() != null) {
+            getParent().requestDisallowInterceptTouchEvent(true);
+          }
+          changeValue(xgramFactorAt(x));
+          xgramStepHaptic();
+          return true;
+        }
         int cx = findCenterX();
         int cy = findCenterY();
 

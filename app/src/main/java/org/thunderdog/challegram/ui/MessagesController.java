@@ -1651,6 +1651,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
           fontSliderView = new SliderView(context);
           addThemeInvalidateListener(fontSliderView);
           fontSliderView.setSlideEnabled(true, false);
+          fontSliderView.xgramSetTouchAnywhere(true); // XGram: a tap or drag anywhere on the track
           fontSliderView.setValueCount(Settings.CHAT_FONT_SIZES.length);
           updateFontSliderValue(fontSliderView);
           fontSliderView.setListener(new SliderView.Listener() {
@@ -1683,8 +1684,23 @@ public class MessagesController extends ViewController<MessagesController.Argume
           fontSliderView.setColorId(ColorId.sliderActive, false);
           textWrap.addView(fontSliderView);
 
-          bottomWrap.addView(textWrap);
-          com.fahadali.xgram.appearance.XgramChatLook.addRows(this, bottomWrap, () -> { // XGram: stickers, emoji, bubbles
+          // XGram: the controls scroll in a panel of at most 42% of the window, so the preview above keeps most of the
+          // chat in sight while they change it
+          final LinearLayout xgramPanel = new LinearLayout(context);
+          xgramPanel.setOrientation(LinearLayout.VERTICAL);
+          final android.widget.ScrollView xgramPanelScroll = new android.widget.ScrollView(context) {
+            @Override
+            protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
+              final int max = Math.round(getResources().getDisplayMetrics().heightPixels * .42f);
+              super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(max, MeasureSpec.AT_MOST));
+            }
+          };
+          xgramPanelScroll.setVerticalScrollBarEnabled(false);
+          xgramPanelScroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+          xgramPanelScroll.addView(xgramPanel, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+          bottomWrap.addView(xgramPanelScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+          xgramPanel.addView(textWrap);
+          com.fahadali.xgram.appearance.XgramChatLook.addRows(this, xgramPanel, () -> { // XGram: stickers, emoji, bubbles
             manager.onUpdateTextSize();
             manager.rebuildLayouts();
             xgramPreviewToBottom();
