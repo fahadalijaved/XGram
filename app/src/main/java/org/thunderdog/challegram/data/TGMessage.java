@@ -4649,12 +4649,14 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   }
 
   // XGram: Chat look → Avatar next to the name: a small avatar before the sender's name inside the bubble (no avatar
-  // column, bubbles start at the screen's edge). Messages without a name line (a sticker, a group's later bubbles) have none.
+  // column, bubbles start at the screen's edge). A group's later bubbles have none. Messages that never have a name
+  // line (a sticker, a round video, a message whose reply sits outside it) keep the usual avatar beside them, or nothing
+  // would say who sent them.
 
   private static final float XGRAM_INLINE_AVATAR_DP = 20f, XGRAM_INLINE_AVATAR_GAP_DP = 6f;
 
   private boolean xgramAvatarInline () {
-    return useBubbles() && com.fahadali.xgram.XgramSettings.instance().avatarInline();
+    return useBubbles() && com.fahadali.xgram.XgramSettings.instance().avatarInline() && needName(true);
   }
 
   /** The room an inline avatar takes before the name (0 without one). */
