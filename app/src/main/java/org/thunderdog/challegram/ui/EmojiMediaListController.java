@@ -161,6 +161,56 @@ public class EmojiMediaListController extends ViewController<EmojiLayout> implem
   private MediaGifsAdapter gifsAdapter;
   private RecyclerView gifsView;
 
+  /**
+   * XGram: the GIF grid with Swipe between Stickers and GIFs (com.fahadali.xgram.chats.XgramEmojiCategorySwipe), wired
+   * as the emoji grid is (EmojiLayoutRecyclerController): the swipe sees every touch first, and once it owns one the
+   * grid's own scroll gets a cancel.
+   */
+  private static final class XgramSwipeGrid extends org.thunderdog.challegram.v.CustomRecyclerView {
+    private final com.fahadali.xgram.chats.XgramEmojiCategorySwipe swipe;
+
+    XgramSwipeGrid (Context context, com.fahadali.xgram.chats.XgramEmojiCategorySwipe.Delegate delegate) {
+      super(context);
+      this.swipe = new com.fahadali.xgram.chats.XgramEmojiCategorySwipe(this, delegate);
+    }
+
+    @Override
+    public boolean onInterceptTouchEvent (android.view.MotionEvent e) {
+      if (swipe.onInterceptTouchEvent(e)) {
+        letGo(e);
+        return true;
+      }
+      return super.onInterceptTouchEvent(e);
+    }
+
+    @Override
+    public boolean onTouchEvent (android.view.MotionEvent e) {
+      final boolean swiping = swipe.onTouchEvent(e);
+      if (e.getActionMasked() == android.view.MotionEvent.ACTION_DOWN) {
+        return super.onTouchEvent(e) || swiping;
+      }
+      if (swiping) {
+        letGo(e);
+        return true;
+      }
+      return super.onTouchEvent(e);
+    }
+
+    @Override
+    public boolean canScrollHorizontally (int direction) {
+      return super.canScrollHorizontally(direction) || swipe.canScrollHorizontally(direction);
+    }
+
+    private void letGo (android.view.MotionEvent e) {
+      if (swipe.takeClaimed()) {
+        final android.view.MotionEvent cancel = android.view.MotionEvent.obtain(e);
+        cancel.setAction(android.view.MotionEvent.ACTION_CANCEL);
+        super.onTouchEvent(cancel);
+        cancel.recycle();
+      }
+    }
+  }
+
   private int xgramTopClearance;
   private @Nullable com.fahadali.xgram.appearance.XgramScrollIndicator xgramStickersIndicator, xgramGifsIndicator;
 
@@ -225,6 +275,9 @@ public class EmojiMediaListController extends ViewController<EmojiLayout> implem
     };
     stickersAdapter.xgramSetTopClearance(xgramTopClearance); // XGram
     stickersController.setArguments(getArguments());
+    if (getArguments() != null) {
+      stickersController.xgramSetMediaSwipe(getArguments().xgramMediaSwipeDelegate(false)); // XGram: swipe to GIFs
+    }
     stickersController.setAdapter(stickersAdapter);
     stickersController.setSpanCount(spanCount);
 
@@ -463,7 +516,7 @@ public class EmojiMediaListController extends ViewController<EmojiLayout> implem
         }
       });
 
-      gifsView = new RecyclerView(context()); // (RecyclerView) Views.inflate(R.layout.recycler, contentView);
+      gifsView = getArguments() != null ? new XgramSwipeGrid(context(), getArguments().xgramMediaSwipeDelegate(true)) : new RecyclerView(context()); // (RecyclerView) Views.inflate(R.layout.recycler, contentView); XGram: swipe to Stickers
       gifsView.setItemAnimator(null);
       Views.applyBottomInset(gifsView, extraBottomInset);
       gifsView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));

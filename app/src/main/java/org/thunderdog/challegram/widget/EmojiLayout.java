@@ -791,6 +791,44 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
     return true;
   }
 
+  /**
+   * XGram: Swipe between Stickers and GIFs, on the media page's grids (com.fahadali.xgram.chats.XgramEmojiCategorySwipe
+   * with GIFs as the stickers grid's next category and Stickers as the GIF grid's previous one). It switches as a tap on
+   * the switch does. A swipe from Stickers toward Emoji stays the pager's. Only with the media page at rest on screen,
+   * the switch shown, and the grid's own section showing (not Trending, not mid slide).
+   */
+  public com.fahadali.xgram.chats.XgramEmojiCategorySwipe.Delegate xgramMediaSwipeDelegate (final boolean gifs) {
+    return new com.fahadali.xgram.chats.XgramEmojiCategorySwipe.Delegate() {
+      @Override
+      public boolean canSwipeCategories () {
+        if (xgramTypeGroup == null || !allowMedia || animatedEmojiOnly || pager == null || adapter == null) {
+          return false;
+        }
+        if (pager.getCurrentItem() != 1 || scrollState != ViewPager.SCROLL_STATE_IDLE || Math.abs(currentPageFactor - 1f) >= .001f) {
+          return false;
+        }
+        final EmojiMediaListController media = xgramMedia();
+        return media != null && media.xgramIsSectionSettled() && !media.xgramIsTrending() &&
+          media.getMediaSection() == (gifs ? EmojiMediaType.GIF : EmojiMediaType.STICKER);
+      }
+
+      @Override
+      public boolean hasCategory (int step) {
+        return gifs ? step < 0 : step > 0;
+      }
+
+      @Override
+      public void showCategory (int step) {
+        xgramOnTypeSelected(gifs ? XGRAM_TYPE_STICKERS : XGRAM_TYPE_GIFS);
+      }
+
+      @Override
+      public boolean showNextPage () {
+        return false;
+      }
+    };
+  }
+
   private void xgramOnTypeSelected (int type) {
     if (xgramTypeGroup == null || pager == null || adapter == null || !allowMedia) {
       return;

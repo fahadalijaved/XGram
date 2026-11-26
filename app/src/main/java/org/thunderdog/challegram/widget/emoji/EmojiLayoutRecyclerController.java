@@ -81,6 +81,15 @@ public class EmojiLayoutRecyclerController extends ViewController<EmojiLayoutRec
 
   /** XGram: Swipe between emoji categories, on the emoji page's grid (EmojiLayout.EMOJI_INSTALLED_CONTROLLER_ID) only. */
   private @Nullable com.fahadali.xgram.chats.XgramEmojiCategorySwipe xgramCategorySwipe;
+  /** XGram: Swipe between Stickers and GIFs (the stickers grid on the media page; EmojiLayout.xgramMediaSwipeDelegate). */
+  private @Nullable com.fahadali.xgram.chats.XgramEmojiCategorySwipe.Delegate xgramMediaSwipe;
+
+  public void xgramSetMediaSwipe (@NonNull com.fahadali.xgram.chats.XgramEmojiCategorySwipe.Delegate delegate) {
+    xgramMediaSwipe = delegate;
+    if (recyclerView != null && xgramCategorySwipe == null && controllerId != EmojiLayout.EMOJI_INSTALLED_CONTROLLER_ID) {
+      xgramCategorySwipe = new com.fahadali.xgram.chats.XgramEmojiCategorySwipe(recyclerView, delegate);
+    }
+  }
   /**
    * XGram: the section the last jump went to (scrollToStickerSet), until the user scrolls the grid: the tabs light it
    * (also when the grid's end keeps it from the top) and a category swipe steps from it, so quick swipes keep going.
@@ -206,6 +215,8 @@ public class EmojiLayoutRecyclerController extends ViewController<EmojiLayoutRec
           }
         }
       });
+    } else if (xgramMediaSwipe != null) {
+      xgramCategorySwipe = new com.fahadali.xgram.chats.XgramEmojiCategorySwipe(recyclerView, xgramMediaSwipe); // XGram: to GIFs
     }
     Views.applyBottomInset(recyclerView, extraBottomInset);
     recyclerView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -645,7 +656,7 @@ public class EmojiLayoutRecyclerController extends ViewController<EmojiLayoutRec
     if (futureSection == -1) {
       return;
     }
-    if (xgramCategorySwipe != null && stickerSets != null && futureSection < stickerSets.size()) {
+    if (xgramCategorySwipe != null && controllerId == EmojiLayout.EMOJI_INSTALLED_CONTROLLER_ID && stickerSets != null && futureSection < stickerSets.size()) {
       xgramJumpTarget = stickerSets.get(futureSection); // XGram: where a category swipe steps from (the emoji grid only)
     }
 
