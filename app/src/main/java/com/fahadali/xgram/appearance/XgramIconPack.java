@@ -51,6 +51,32 @@ public final class XgramIconPack {
   /** The Expressive switch the map was built for: the Classic table depends on it (XgramIconPackTable.classic). */
   private static volatile boolean mapExpressive;
 
+  /**
+   * The chat list's verified badge: Telegram X's glyph is about 14dp in its 24dp box (as are Line's and Duotone's);
+   * the Solar, Phosphor, MingCute and Pixel badges fill 18-22dp of it and stood out next to a name.
+   */
+  public static float chatVerifyScale () {
+    float scale = chatVerifyScale;
+    if (scale == 0f) {
+      // Read once: a pack change applies after the restart it asks for, as the drawables do
+      switch (current()) {
+        case PACK_SOLAR:
+        case PACK_PHOSPHOR:
+        case PACK_MINGCUTE:
+        case PACK_PIXEL:
+          scale = .7f;
+          break;
+        default:
+          scale = 1f;
+          break;
+      }
+      chatVerifyScale = scale;
+    }
+    return scale;
+  }
+
+  private static volatile float chatVerifyScale;
+
   public static int current () {
     int pack = Settings.instance().pmc().getInt(KEY, PACK_DEFAULT);
     return pack >= PACK_TELEGRAM_X && pack <= PACK_DUOTONE ? pack : PACK_DEFAULT;

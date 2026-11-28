@@ -976,7 +976,19 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
 
     final int muteTop = Math.round(xgramMetrics.muteTop);
     if (chat.showVerify()) {
-      Drawables.drawRtl(c, Icons.getChatVerifyDrawable(), chat.getVerifyLeft() + titleDx, muteTop, Paints.getVerifyPaint(), viewWidth, rtl);
+      // XGram: an icon pack whose badge fills its 24dp box drawn at Telegram X's badge size, around the box's centre
+      final android.graphics.drawable.Drawable verify = Icons.getChatVerifyDrawable();
+      final float verifyScale = com.fahadali.xgram.appearance.XgramIconPack.chatVerifyScale();
+      if (verifyScale != 1f) {
+        final int verifyLeft = chat.getVerifyLeft() + titleDx;
+        final float cx = rtl ? viewWidth - verifyLeft - verify.getMinimumWidth() / 2f : verifyLeft + verify.getMinimumWidth() / 2f;
+        final int saveCount = c.save();
+        c.scale(verifyScale, verifyScale, cx, muteTop + verify.getMinimumHeight() / 2f);
+        Drawables.drawRtl(c, verify, verifyLeft, muteTop, Paints.getVerifyPaint(), viewWidth, rtl);
+        c.restoreToCount(saveCount);
+      } else {
+        Drawables.drawRtl(c, verify, chat.getVerifyLeft() + titleDx, muteTop, Paints.getVerifyPaint(), viewWidth, rtl);
+      }
     }
 
     if ((chat.showScam() || chat.showFake()) && chat.getChatMark() != null) {
