@@ -131,7 +131,7 @@ public class SettingsFoldersController extends RecyclerViewController<Void> impl
   // XGram M3E: a folder row ends with its icon buttons (invite links, the tab's eye) and, when it can move, a drag
   // handle that starts the drag on touch.
   private final com.fahadali.xgram.appearance.XgramR6B6Lists.DragHandleModifier xgramHandle = new com.fahadali.xgram.appearance.XgramR6B6Lists.DragHandleModifier(com.fahadali.xgram.appearance.XgramR6B6Lists.DRAG_HANDLE_CENTER);
-  private static final float XGRAM_HANDLE_ZONE = 52f, XGRAM_ICON_BUTTON = 48f, XGRAM_LOCK_ZONE = 44f;
+  private static final float XGRAM_HANDLE_ZONE = 52f, XGRAM_ICON_BUTTON = 48f, XGRAM_LOCK_ZONE = XGRAM_HANDLE_ZONE; // the eyes line up whether a lock or a handle ends the row
 
   @Override
   protected void onCreateView (Context context, CustomRecyclerView recyclerView) {
@@ -351,6 +351,9 @@ public class SettingsFoldersController extends RecyclerViewController<Void> impl
           View button = settingView.findViewById(R.id.btn_double);
           button.setEnabled(true);
           button.setTag(item.getData());
+          // XGram M3E: a recycled row comes back with its button at rest (a tap on Add left its pill squared)
+          button.setPressed(false);
+          button.jumpDrawablesToCurrentState();
         } else {
           throw new IllegalArgumentException("customViewType=" + customViewType);
         }

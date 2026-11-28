@@ -622,8 +622,9 @@ public final class XgramR6B6Lists {
       super.onDraw(c);
       if (icon != null && icon.getMinimumWidth() > 0) {
         final float size = Screen.dp(XgramM3Sheets.BUTTON_ICON_SIZE);
-        final float cx = Lang.rtl() ? getWidth() - Screen.dp(12f) - size / 2f : Screen.dp(12f) + size / 2f;
-        final float cy = getHeight() / 2f;
+        // the canvas comes scrolled as the label is (a single centred line can scroll it): the icon stays put
+        final float cx = getScrollX() + (Lang.rtl() ? getWidth() - Screen.dp(12f) - size / 2f : Screen.dp(12f) + size / 2f);
+        final float cy = getScrollY() + getHeight() / 2f;
         final float scale = size / icon.getMinimumWidth();
         final int saveCount = c.save();
         c.scale(scale, scale, cx, cy);
