@@ -393,6 +393,12 @@ public class TextWrapper implements ListAnimator.Measurable, Destroyable, Text.T
     return text != null && text.endsWithCodeBlock();
   }
 
+  /** XGram: see {@link Text#xgramEndsWithBlock}. */
+  public boolean xgramEndsWithBlock () {
+    final Text text = getCurrent();
+    return text != null && text.xgramEndsWithBlock();
+  }
+
   public boolean endsWithExpandableQuote () {
     final Text text = getCurrent();
     return text != null && text.endsWithExpandableQuote();

@@ -2746,6 +2746,12 @@ public class Text implements Runnable, Emoji.CountLimiter, CounterTextPart, List
     return codeBlockEnd;
   }
 
+  /** XGram: the text ends inside a quote or code block, whose box reaches past the last line's words. */
+  public boolean xgramEndsWithBlock () {
+    final QuoteBackground lastQuote = quotes.isEmpty() ? null : quotes.get(quotes.size() - 1);
+    return lastQuote != null && lastQuote.partEnd == parts.size();
+  }
+
   public boolean endsWithExpandableQuote () {
     final QuoteBackground lastQuote = quotes.isEmpty() ? null : quotes.get(quotes.size() - 1);
     return lastQuote != null && lastQuote.canCollapse() && lastQuote.partEnd == parts.size();

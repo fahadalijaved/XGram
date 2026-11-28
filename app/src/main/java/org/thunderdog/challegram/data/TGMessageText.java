@@ -695,6 +695,12 @@ public class TGMessageText extends TGMessage {
   }
 
   @Override
+  protected boolean xgramLastLineInBlock () {
+    // XGram: a link preview below the text ends the message instead
+    return effectiveWrapper != null && effectiveWrapper.xgramEndsWithBlock() && (linkPreview == null || linkPreviewAboveText.getFloatValue() == 1f);
+  }
+
+  @Override
   protected int getBottomLineContentWidth () {
     if (isTimeAfterSwitchingText()) {
       return BOTTOM_LINE_DEFINE_BY_FACTOR;

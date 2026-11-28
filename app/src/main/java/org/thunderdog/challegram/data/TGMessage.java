@@ -1490,6 +1490,11 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     return Screen.dp(20f);
   }
 
+  /** The content's last line is inside a box (a quote or code block) wider than its words. */
+  protected boolean xgramLastLineInBlock () {
+    return false;
+  }
+
   /** The content's last line leaves room for the time and its counters on its right. */
   private boolean xgramPlainTimeFitsLastLine () {
     if (hasFooter() || Lang.rtl()) {
@@ -1498,6 +1503,9 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     final int lastLine = getBottomLineContentWidth();
     if (lastLine < 0) {
       return false; // nothing to share the line with (media, a link preview's picture), or it animates
+    }
+    if (xgramLastLineInBlock()) {
+      return false; // a quote's box runs past its words: the time on its line ran over the quote
     }
     final int stripLeft = pTimeLeft + pTimeWidth - xgramPlainInfoWidth;
     return getContentX() + lastLine + Screen.dp(12f) <= stripLeft;
