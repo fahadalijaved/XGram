@@ -635,6 +635,19 @@ public class EditEnabledReactionsController extends EditBaseController<EditEnabl
               final TdApi.ReactionType picked = tgReaction.type;
               xgramDefaultReaction = picked;
               checked = true;
+              // XGram: and the first quick reaction (Stickers and emoji), the same choice
+              final String pickedKey = TD.makeReactionKey(picked);
+              final ArrayList<String> quick = new ArrayList<>();
+              quick.add(pickedKey);
+              for (String key : Settings.instance().getQuickReactions(tdlib)) {
+                if (!pickedKey.equals(key)) {
+                  quick.add(key);
+                }
+              }
+              while (quick.size() > 4) { // the quick reactions' limit
+                quick.remove(quick.size() - 1);
+              }
+              Settings.instance().setQuickReactions(quick.toArray(new String[0]));
               tdlib.xgramSetDefaultReactionType(picked, isSet -> {
                 if (!isSet && !isDestroyed() && Td.equalsTo(xgramDefaultReaction, picked)) {
                   xgramDefaultReaction = previous;
@@ -743,7 +756,13 @@ public class EditEnabledReactionsController extends EditBaseController<EditEnabl
   }
 
   private void updateQuickReactionsSettings () {
+    final String[] previous = Settings.instance().getQuickReactions(tdlib);
     Settings.instance().setQuickReactions(quickReactions.toArray(new String[0]));
+    // XGram: Quick reaction and Double tap reaction are one choice: the first quick reaction becomes the account's
+    // default reaction, which a double tap sends (it went on sending ❤️ with 👍 picked here)
+    if (!quickReactions.isEmpty() && (previous == null || previous.length == 0 || !quickReactions.get(0).equals(previous[0]))) {
+      tdlib.xgramSetDefaultReactionType(TD.toReactionType(quickReactions.get(0)), null);
+    }
   }
 
   // StickerView Callback
