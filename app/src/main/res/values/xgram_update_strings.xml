@@ -90,6 +90,8 @@
   <string name="XgramUpdSelfCloses">XGram will close to finish updating.</string>
   <string name="XgramUpdSelfConfirmTitle">Tap to finish updating XGram</string>
   <string name="XgramUpdSelfConfirmText">Android asks you to confirm the update.</string>
+  <string name="XgramUpdSelfInstallingTitle">Updating XGram…</string>
+  <string name="XgramUpdSelfInstallingText">XGram closes while it installs and lets you know when it\'s done.</string>
   <string name="XgramUpdSelfDoneTitle">XGram updated to %1$s</string>
   <string name="XgramUpdSelfDoneText">Tap to open</string>
 </resources>

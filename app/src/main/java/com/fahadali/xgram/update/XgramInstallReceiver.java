@@ -56,6 +56,13 @@ public final class XgramInstallReceiver extends BroadcastReceiver {
   /** "Tap to finish updating" (the session's id as id) and "XGram updated" (one id): tagged, apart from the others. */
   private static final String TAG_CONFIRM = "xgram_self_update_confirm", TAG_DONE = "xgram_self_update_done";
   private static final int ID_DONE = 1;
+  /** "Updating XGram…" from the "Update" tap until this process ends (the new one takes it away). */
+  private static final String TAG_INSTALLING = "xgram_self_update_installing";
+  private static final int ID_INSTALLING = 1;
+  /** After the confirmation closes: how long a Cancel has to arrive (as "aborted") before it counts as "Update". */
+  private static final long CONFIRM_CLOSED_CHECK_MS = 800L;
+  /** The session whose confirmation is (or was) on screen, until it ends. */
+  private static int confirmShownSessionId = -1;
   private static final long DONE_TIMEOUT_MS = 2L * 60L * 1000L;
   /** After the direct start: how long XGram has to come up before the notification shows instead. */
   private static final long REOPEN_CHECK_MS = 4000L;
@@ -88,6 +95,7 @@ public final class XgramInstallReceiver extends BroadcastReceiver {
           // From the activity on screen (the user just tapped Install)
           try {
             activity.startActivity(confirm);
+            confirmShownSessionId = sessionId;
           } catch (Throwable t) {
             Log.e(XgramSelfInstaller.TAG, "cannot open the install confirmation", t);
             abandon(context, sessionId);
@@ -104,7 +112,7 @@ public final class XgramInstallReceiver extends BroadcastReceiver {
         break;
       }
       case PackageInstaller.STATUS_SUCCESS: {
-        finished(context, sessionId);
+        finished(context, sessionId); // also takes away the old version's "Updating XGram…"
         onUpdated(context.getApplicationContext());
         break;
       }
@@ -131,6 +139,7 @@ public final class XgramInstallReceiver extends BroadcastReceiver {
     }
     final Intent confirm = pendingConfirm;
     if (confirm == null) {
+      checkInstalling(activity);
       return;
     }
     final int sessionId = pendingSessionId;
@@ -141,6 +150,7 @@ public final class XgramInstallReceiver extends BroadcastReceiver {
     cancel(activity, TAG_CONFIRM, sessionId);
     try {
       activity.startActivity(confirm);
+      confirmShownSessionId = sessionId;
     } catch (Throwable t) {
       Log.e(XgramSelfInstaller.TAG, "cannot open the install confirmation", t);
       abandon(activity, sessionId);
@@ -156,6 +166,39 @@ public final class XgramInstallReceiver extends BroadcastReceiver {
       pendingPath = null;
     }
     cancel(context, TAG_CONFIRM, sessionId);
+    if (confirmShownSessionId == sessionId) {
+      confirmShownSessionId = -1;
+    }
+    cancel(context, TAG_INSTALLING, ID_INSTALLING); // canceled or failed; installed, the new process takes it away
+  }
+
+  /**
+   * XGram is back on screen after the system's confirmation: unless a Cancel arrives in a moment, "Update" was tapped
+   * and Android installs now, closing XGram without a word. Said in XGram and in a notification that stays until the new
+   * version starts, so it is clear the update is still going.
+   */
+  private static void checkInstalling (@NonNull BaseActivity activity) {
+    final int sessionId = confirmShownSessionId;
+    if (sessionId == -1) {
+      return;
+    }
+    final Context context = activity.getApplicationContext();
+    UI.post(() -> {
+      if (confirmShownSessionId != sessionId || !sessionExists(context, sessionId)) {
+        return;
+      }
+      confirmShownSessionId = -1; // once per update
+      notifyInstalling(context);
+      com.fahadali.xgram.appearance.XgramR6B3Shell.snackbar(Lang.getString(R.string.XgramUpdSelfInstallingText), true);
+    }, CONFIRM_CLOSED_CHECK_MS);
+  }
+
+  private static boolean sessionExists (@NonNull Context context, int sessionId) {
+    try {
+      return context.getPackageManager().getPackageInstaller().getSessionInfo(sessionId) != null;
+    } catch (Throwable t) {
+      return false;
+    }
   }
 
   /**
@@ -247,6 +290,25 @@ public final class XgramInstallReceiver extends BroadcastReceiver {
       }
     } catch (Throwable t) {
       Log.w(XgramSelfInstaller.TAG, "cannot post the install confirmation", t);
+    }
+  }
+
+  /** "Updating XGram…" with a running bar, until the new version starts (or the install fails). */
+  private static void notifyInstalling (@NonNull Context context) {
+    try {
+      final NotificationCompat.Builder b = builder(context)
+        .setContentTitle(Lang.getString(R.string.XgramUpdSelfInstallingTitle))
+        .setContentText(Lang.getString(R.string.XgramUpdSelfInstallingText))
+        .setProgress(0, 0, true)
+        .setOngoing(true)
+        .setAutoCancel(false)
+        .setTimeoutAfter(DONE_TIMEOUT_MS); // never stuck if the new version doesn't start
+      final NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+      if (manager != null) {
+        manager.notify(TAG_INSTALLING, ID_INSTALLING, b.build());
+      }
+    } catch (Throwable t) {
+      Log.w(XgramSelfInstaller.TAG, "cannot post the installing notification", t);
     }
   }
 
