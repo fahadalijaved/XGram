@@ -172,6 +172,11 @@ public class EmojiStatusHelper implements Destroyable {
     return emojiStatusDrawable != null ? emojiStatusDrawable.getWidth(offset) : 0;
   }
 
+  /** XGram: the height of the box {@link #draw} fills from its top, to centre it on a line of text. */
+  public int xgramDrawHeight () {
+    return emojiStatusDrawable != null ? emojiStatusDrawable.xgramDrawHeight() : 0;
+  }
+
   public void draw (Canvas c, int startX, int startY) {
     draw(c, startX, startY, 1f);
   }
@@ -342,6 +347,17 @@ public class EmojiStatusHelper implements Destroyable {
         return emojiStatus.getWidth();
       } else if (needDrawEmojiStatus) {
         return Screen.dp(18);
+      }
+      return 0;
+    }
+
+    int xgramDrawHeight () {
+      if (imageReceiver != null) {
+        return Screen.dp(EmojiStatusHelper.textSizeToEmojiSize(textSize));
+      } else if (emojiStatus != null) {
+        return emojiStatus.getHeight();
+      } else if (needDrawEmojiStatus) {
+        return Screen.dp(textSize + 2); // the star is centred in this box
       }
       return 0;
     }

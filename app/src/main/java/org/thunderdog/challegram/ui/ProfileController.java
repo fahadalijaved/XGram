@@ -3022,6 +3022,14 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     return new ListItem(ListItem.TYPE_INFO_MULTILINE, R.id.btn_description, R.drawable.baseline_info_24, TD.isBot(user) ? R.string.BotInfo : isUserMode() ? R.string.UserBio : R.string.Description);
   }
 
+  /** XGram: a user's profile shows the ID as its last top row, so rows added later go before it. */
+  private boolean xgramPeerIdLast;
+
+  /** XGram: the ID row is shown and comes before the other top rows (chats; a user's ID comes last). */
+  private boolean xgramPeerIdLeads () {
+    return !xgramPeerIdLast && Settings.instance().showPeerIds() && baseAdapter.indexOfViewById(R.id.btn_peer_id) != -1;
+  }
+
   private ListItem newPeerIdItem () {
     // XGram M3E: with the Telegram X icons, a Material "badge" glyph in place of the custom "ID" letters
     final int icon = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && com.fahadali.xgram.appearance.XgramIconPack.current() == com.fahadali.xgram.appearance.XgramIconPack.PACK_TELEGRAM_X ? R.drawable.xgram_m3e_s4_badge_24 : R.drawable.baseline_identifier_24;
@@ -3043,10 +3051,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     xgramAddActions(items);
 
     int addedCount = 0;
-    if (Settings.instance().showPeerIds()) {
-      items.add(newPeerIdItem());
-      addedCount++;
-    }
+    // XGram: a user's ID goes last (after username, birthday, bio and phone, as official Telegram puts the
+    // important rows first); a 10-digit ID on top read like a phone number
+    xgramPeerIdLast = true;
 
     if (Td.hasUsername(user)) {
       final ListItem usernameItem = newUsernameItem();
@@ -3091,6 +3098,14 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         items.add(newEncryptionKeyItem());
         addedCount++;
       }
+    }
+
+    if (Settings.instance().showPeerIds()) {
+      if (addedCount > 0) {
+        items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+      }
+      items.add(newPeerIdItem());
+      addedCount++;
     }
 
     this.baseHeaderItemCount = addedCount;
@@ -3197,7 +3212,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         removeTopItem(index);
       } else {
         index = 0;
-        if (Settings.instance().showPeerIds() && baseAdapter.indexOfViewById(R.id.btn_peer_id) != -1) {
+        if (xgramPeerIdLeads()) {
           index++;
         }
         if (baseAdapter.indexOfViewById(R.id.btn_username) != -1) {
@@ -3387,7 +3402,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         removeTopItem(foundIndex);
       } else {
         int index = 0;
-        if (Settings.instance().showPeerIds() && baseAdapter.indexOfViewById(R.id.btn_peer_id) != -1) {
+        if (xgramPeerIdLeads()) {
           index++;
         }
         if (baseAdapter.indexOfViewById(R.id.btn_username) != -1) {
@@ -3414,7 +3429,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         setDescription();
 
         int index = 0;
-        if (Settings.instance().showPeerIds() && baseAdapter.indexOfViewById(R.id.btn_peer_id) != -1) {
+        if (xgramPeerIdLeads()) {
           index++;
         }
         if (baseAdapter.indexOfViewById(R.id.btn_username) != -1) {
@@ -3454,6 +3469,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
           if (before == id) {
             break;
           }
+          if (before == R.id.btn_peer_id && xgramPeerIdLast) {
+            continue;
+          }
           if (baseAdapter.indexOfViewById(before) != -1) {
             index++;
           }
@@ -3484,7 +3502,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
           removeTopItem(foundIndex);
         } else {
           int index = 0;
-          if (Settings.instance().showPeerIds() && baseAdapter.indexOfViewById(R.id.btn_peer_id) != -1) {
+          if (xgramPeerIdLeads()) {
             index++;
           }
           if (baseAdapter.indexOfViewById(R.id.btn_username) != -1) {
@@ -3545,7 +3563,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         ListItem usernameItem = newUsernameItem();
         if (usernameItem != null) {
           int index = 0;
-          if (Settings.instance().showPeerIds() && baseAdapter.indexOfViewById(R.id.btn_peer_id) != -1) {
+          if (xgramPeerIdLeads()) {
             index++;
           }
           addTopItem(usernameItem, index);

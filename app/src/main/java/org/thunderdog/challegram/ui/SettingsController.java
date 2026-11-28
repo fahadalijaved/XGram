@@ -798,18 +798,19 @@ public class SettingsController extends ViewController<Void> implements
       items.add(new ListItem(ListItem.TYPE_CUSTOM - XGRAM_TYPE_SEARCH_PILL, R.id.btn_xgramSettingsSearch));
       items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     }
-    if (Settings.instance().showPeerIds()) {
-      // XGram M3E: with the Telegram X icons, a Material "badge" glyph in place of the custom "ID" letters
-      final int xgramPeerIdIcon = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && com.fahadali.xgram.appearance.XgramIconPack.current() == com.fahadali.xgram.appearance.XgramIconPack.PACK_TELEGRAM_X ? R.drawable.xgram_m3e_s4_badge_24 : R.drawable.baseline_identifier_24;
-      items.add(new ListItem(ListItem.TYPE_INFO_SETTING, R.id.btn_peer_id, xgramPeerIdIcon, R.string.UserId).setContentStrings(R.string.LoadingInformation, R.string.LoadingInformation));
-      items.add(new ListItem(ListItem.TYPE_SEPARATOR));
-    }
     items.add(new ListItem(ListItem.TYPE_INFO_SETTING, R.id.btn_username, R.drawable.baseline_alternate_email_24, R.string.Username).setContentStrings(R.string.LoadingUsername, R.string.SetUpUsername));
     items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     items.add(new ListItem(ListItem.TYPE_INFO_SETTING, R.id.btn_phone, R.drawable.baseline_phone_24, R.string.Phone));
     if (userFull != null && userFull.birthdate != null) {
       items.add(new ListItem(ListItem.TYPE_SEPARATOR));
       items.add(newBirthdateItem());
+    }
+    if (Settings.instance().showPeerIds()) {
+      // XGram: the ID after username, phone and birthday (a 10-digit ID first read like a phone number);
+      // with the Telegram X icons in M3E, a Material "badge" glyph in place of the custom "ID" letters
+      final int xgramPeerIdIcon = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && com.fahadali.xgram.appearance.XgramIconPack.current() == com.fahadali.xgram.appearance.XgramIconPack.PACK_TELEGRAM_X ? R.drawable.xgram_m3e_s4_badge_24 : R.drawable.baseline_identifier_24;
+      items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+      items.add(new ListItem(ListItem.TYPE_INFO_SETTING, R.id.btn_peer_id, xgramPeerIdIcon, R.string.UserId).setContentStrings(R.string.LoadingInformation, R.string.LoadingInformation));
     }
     items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     items.add(new ListItem(ListItem.TYPE_INFO_MULTILINE, R.id.btn_bio, R.drawable.baseline_info_24, R.string.UserBio).setContentStrings(R.string.LoadingInformation, R.string.BioNone));

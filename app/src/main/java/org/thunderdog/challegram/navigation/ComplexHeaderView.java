@@ -1187,13 +1187,16 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
 
         c.restore();
         int statusDrawLeft = (int) (baseTextLeft + (trimmedTitle.getWidth() + Screen.dp(6)) * textScaleFactor) + (showLock ? Screen.dp(16f) : 0);
-        int statusDrawTop = (int) baseTitleTop;
+        // XGram: the star / emoji status centred on the name's line (it sat at the line's top, above the letters)
+        final int xgramStatusSize = emojiStatusHelper.xgramDrawHeight();
+        int statusDrawTop = (int) (baseTitleTop + Math.max(0, trimmedTitle.getLineHeight(false) - xgramStatusSize) / 2f * textScaleFactor);
         if (trimmedTitleExpanded != null && avatarExpandFactor > 0f) {
           if (avatarExpandFactor < 1f) {
             emojiStatusHelper.draw(c, statusDrawLeft, statusDrawTop, 1f - avatarExpandFactor, textScaleFactor);
           }
           int statusDrawLeft2 = (int) (baseTextLeft + (trimmedTitleExpanded.getLastLineWidth() + Screen.dp(6)) * textScaleFactor) + (showLock ? Screen.dp(16f) : 0);
-          int statusDrawTop2 = (int) (baseTitleTop + (trimmedTitleExpanded.getNextLineHeight() - trimmedTitleExpanded.getLineHeight(trimmedTitleExpanded.getLineCount() - 1)) * textScaleFactor);
+          final int xgramLastLine = trimmedTitleExpanded.getLineHeight(trimmedTitleExpanded.getLineCount() - 1);
+          int statusDrawTop2 = (int) (baseTitleTop + (trimmedTitleExpanded.getNextLineHeight() - xgramLastLine + Math.max(0, xgramLastLine - xgramStatusSize) / 2f) * textScaleFactor);
           emojiStatusHelper.draw(c, statusDrawLeft2, statusDrawTop2, avatarExpandFactor, textScaleFactor);
         } else {
           emojiStatusHelper.draw(c, statusDrawLeft, statusDrawTop, 1f, textScaleFactor);
@@ -1337,12 +1340,19 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
     if (!StringUtils.isEmpty(username)) {
       builder.item(new ViewController.OptionItem(R.id.btn_copyUsername, Lang.getString(R.string.CopyUsername), ViewController.OptionColor.NORMAL, R.drawable.baseline_content_copy_24));
     }
+    // XGram: a user's or bot's ID too, now that its row sits at the bottom of the profile
+    final long userId = chatId != 0 ? tdlib.chatUserId(chatId) : 0;
+    if (userId != 0) {
+      builder.item(new ViewController.OptionItem(R.id.btn_peer_id_copy, Lang.getString(R.string.XgramCopyUserId), ViewController.OptionColor.NORMAL, R.drawable.baseline_content_copy_24));
+    }
 
     setAllowTitleClick(builder::build, (itemView, id) -> {
       if (id == R.id.btn_copyText) {
         UI.copyText(title, R.string.CopiedDisplayName);
       } else if (id == R.id.btn_copyUsername) {
         UI.copyText('@' + username, R.string.CopiedUsername);
+      } else if (id == R.id.btn_peer_id_copy) {
+        UI.copyText(Long.toString(userId), R.string.XgramCopiedUserId);
       }
       return true;
     });

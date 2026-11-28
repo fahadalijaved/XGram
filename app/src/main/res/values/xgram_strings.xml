@@ -911,4 +911,6 @@
   <string name="XgramReactionBarInfo">Where the quick reactions show when you long-press a message. Bottom puts them under the options, above Delete. With Off, who reacted and who viewed stay at the top.</string>
   <string name="XgramReactionBarPopupInfo">In the popup menu the quick reactions show above the message. With Off, who reacted and who viewed stay at the end of the menu.</string>
   <string name="XgramMoreReactions">More reactions</string>
+  <string name="XgramCopyUserId">Copy user ID</string>
+  <string name="XgramCopiedUserId">User ID copied</string>
 </resources>
