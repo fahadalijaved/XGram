@@ -21,6 +21,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDecay
 import androidx.compose.animation.core.animateTo
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
@@ -70,6 +71,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -168,13 +170,21 @@ internal fun SettingsTopAppBar(
           actions()
         }
       }
+      // One line, shrunk down to 24sp when it doesn't fit (a big display size): a wrapped title lost its second line
+      // when the bar rested half collapsed ("Chats and messages" showed "Chats and")
       Text(
         title,
         modifier = Modifier.layoutId(BarTitle).semantics { heading() },
         color = cs.onSurface,
-        maxLines = 2,
+        maxLines = 1,
         overflow = TextOverflow.Ellipsis,
-        style = titleStyle
+        style = titleStyle,
+        autoSize = TextAutoSize.StepBased(
+          minFontSize = minOf(TitleMinFontSize.value, titleStyle.fontSize.value).sp,
+          maxFontSize = titleStyle.fontSize,
+          stepSize = 1.sp
+        ),
+        onTextLayout = { morph.titleShrunk = it.layoutInput.style.fontSize.value < titleStyle.fontSize.value - 0.5f }
       )
       if (subtitle != null) {
         Text(
@@ -238,6 +248,8 @@ internal fun SettingsTopAppBar(
 @Stable
 private class BarMorph {
   var crossfade by mutableStateOf(false)
+  /** The expanded title came out smaller than its style (autoSize), set while it is measured: not state. */
+  var titleShrunk = false
 }
 
 private fun settingsBarMeasurePolicy(
@@ -291,7 +303,8 @@ private fun settingsBarMeasurePolicy(
   val height = inset + collapsedPx + rowHeight + offset.roundToInt()
 
   val oneLine = baselineOf(title, FirstBaseline) == baselineOf(title, LastBaseline)
-  val crossfade = !oneLine || title.width * titleScale > collapsedWidth ||
+  // A shrunk title would glide into the row smaller than the collapsed title: it crossfades instead
+  val crossfade = !oneLine || morph.titleShrunk || title.width * titleScale > collapsedWidth ||
     (subtitle != null && subtitle.width * subtitleScale > collapsedWidth)
   if (morph.crossfade != crossfade) {
     morph.crossfade = crossfade
@@ -337,6 +350,9 @@ private fun baselineOf(p: Placeable, line: AlignmentLine): Int {
   val b = p[line]
   return if (b == AlignmentLine.Unspecified) p.height else b
 }
+
+/** The smallest the expanded title shrinks to before it ends with an ellipsis (headlineSmall's size). */
+private val TitleMinFontSize = 24.sp
 
 private fun fontRatio(small: Float, big: Float, valid: Boolean): Float =
   if (valid && big > 0f && small > 0f) small / big else 1f
